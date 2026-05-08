@@ -1,0 +1,9 @@
+{
+  "name": "tb-care-link",
+  "version": "1.0.0",
+  "description": "TB-CARE LINK Dashboard",
+  "scripts": {
+    "dev": "python3 -m http.server 3000",
+    "start": "python3 -m http.server 3000"
+  }
+}

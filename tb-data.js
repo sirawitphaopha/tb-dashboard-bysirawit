@@ -86,7 +86,8 @@ window.crClStage = function(crcl) {
 window.generateAlerts = function(patients) {
   var alerts = [];
   patients.forEach(function(p) {
-    var last = p.labs[p.labs.length-1];
+    var labs = p.labs || [];
+    var last = labs[labs.length-1];
     if (last && last.alt > 120)
       alerts.push({id:'alt-'+p.id,type:'critical',patient:p.name,msg:'ALT สูง '+last.alt+' U/L — ควรหยุดยาทันที',time:'ล่าสุด'});
     if (last && last.ua > 9)

@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs cat)",
+      "Bash(npx next *)",
+      "Bash(timeout 15 npm run dev)",
+      "Bash(kill 15272)",
+      "Bash(nohup npm run dev)",
+      "Bash(echo \"Started PID: $!\")",
+      "Read(//tmp/**)",
+      "Bash(kill 21474)"
+    ]
+  }
+}

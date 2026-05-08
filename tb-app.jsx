@@ -16,6 +16,7 @@ function Dashboard({ patients }) {
   const criticals = patients.filter(p => p.status === 'critical');
   const intensive = patients.filter(p => p.phase === 'Intensive').length;
   const cont = patients.filter(p => p.phase === 'Continuation').length;
+  const mdr = patients.filter(p => p.hasResistance || (p.sputum||[]).some(s => s.rifResult==='RIF resistant' || s.inhResult==='INH resistant')).length;
 
   useEffect(() => {
     if (!barRef.current) return;
@@ -31,11 +32,11 @@ function Dashboard({ patients }) {
     if (!pieRef.current) return;
     const c = new Chart(pieRef.current, {
       type: 'doughnut',
-      data: { labels:['Intensive','Continuation','MDR-TB'], datasets:[{ data:[intensive,cont,0], backgroundColor:['#f59e0b','#10b981','#ef4444'], borderWidth:0, hoverOffset:4 }] },
+      data: { labels:['Intensive','Continuation','MDR-TB'], datasets:[{ data:[intensive,cont,mdr], backgroundColor:['#f59e0b','#10b981','#ef4444'], borderWidth:0, hoverOffset:4 }] },
       options: { responsive:true, maintainAspectRatio:false, cutout:'72%', plugins:{legend:{position:'right',labels:{font:{size:11},boxWidth:10,padding:8}}} }
     });
     return () => c.destroy();
-  }, [intensive, cont]);
+  }, [intensive, cont, mdr]);
 
   const kpis = [
     { label:'ขึ้นทะเบียนทั้งหมด', value:(2538+patients.length).toLocaleString(), icon:'fa-users', color:'bg-blue-50 text-blue-600' },
@@ -68,7 +69,7 @@ function Dashboard({ patients }) {
         <div className="bg-red-50 border border-red-200 p-5 rounded-2xl">
           <h3 className="font-bold text-red-700 text-sm mb-3"><i className="fa-solid fa-triangle-exclamation mr-2"></i>เคสที่ต้องดูแลด่วน ({criticals.length} ราย)</h3>
           <div className="space-y-2">
-            {criticals.map(p => { const last = p.labs[p.labs.length-1]; return (
+            {criticals.map(p => { const pLabs = p.labs||[]; const last = pLabs[pLabs.length-1]; return (
               <div key={p.id} className="bg-white border border-red-100 p-3 rounded-xl flex justify-between items-center">
                 <div><p className="font-bold text-gray-800 text-sm">{p.name}</p><p className="text-xs text-red-600 mt-0.5">ALT {last?.alt} U/L · นัด {p.nextAppt}</p></div>
                 <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full font-bold">ด่วน</span>
@@ -82,10 +83,12 @@ function Dashboard({ patients }) {
 }
 
 // ===================== PATIENT LIST =====================
-function PatientList({ patients, onAdd, onOpen, settings }) {
-  const [search, setSearch] = useState('');
+function PatientList({ patients, onAdd, onOpen, settings, quickSearch = '' }) {
+  const [search, setSearch] = useState(quickSearch);
   const [filter, setFilter] = useState('all');
   const [showAdd, setShowAdd] = useState(false);
+
+  useEffect(() => { setSearch(quickSearch); }, [quickSearch]);
 
   const filtered = patients.filter(p => {
     const q = search.toLowerCase();
@@ -173,7 +176,7 @@ function PatientList({ patients, onAdd, onOpen, settings }) {
 
 // ===================== WEEKLY PREP =====================
 function WeeklyPrep({ patients, onOpen }) {
-  const upcoming = patients.filter(p => p.daysUntil <= 7).sort((a, b) => a.daysUntil - b.daysUntil);
+  const upcoming = patients.filter(p => p.daysUntil >= 0 && p.daysUntil <= 7).sort((a, b) => a.daysUntil - b.daysUntil);
   const [printed, setPrinted] = useState(false);
   return (
     <div className="space-y-5 tb-fade">
@@ -193,7 +196,7 @@ function WeeklyPrep({ patients, onOpen }) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {upcoming.map(p => {
             const doses = calcDoses(p.weight, p.regimen, p.customDoses);
-            const last = p.labs[p.labs.length-1];
+            const wLabs = p.labs||[]; const last = wLabs[wLabs.length-1];
             const isCrit = p.status === 'critical';
             return (
               <div key={p.id} className={`bg-white p-5 rounded-2xl shadow-sm border space-y-4 relative overflow-hidden ${isCrit?'border-red-200':'border-gray-200'}`}>
@@ -701,9 +704,11 @@ function App() {
   const [showNotifs, setShowNotifs] = useState(false);
   const [loggingIn, setLoggingIn] = useState(false);
   const [settings, setSettings] = useState({ comorbidities: DEFAULT_COMORBIDITIES, drugs: DEFAULT_DRUGS, labGroups: null, customDrugInteractions: [] });
+  const [quickSearch, setQuickSearch] = useState('');
   const alerts = generateAlerts(patients);
 
   const login = e => { e.preventDefault(); setLoggingIn(true); setTimeout(() => { setPage('app'); setLoggingIn(false); }, 700); };
+  const handleQuickSearch = val => { setQuickSearch(val); if (val.trim()) setNav('patient-list'); };
   const addPatient = p => setPatients(ps => [...ps, p]);
   const updatePatient = updated => {
     setPatients(ps => ps.map(p => p.id===updated.id ? updated : p));
@@ -738,25 +743,27 @@ function App() {
 
   return (
     <div className="flex h-screen bg-slate-100 overflow-hidden">
-      <aside className="w-60 bg-white flex flex-col shadow-lg z-20 flex-shrink-0">
-        <div className="flex items-center px-5 py-4 border-b border-gray-100 h-16">
-          <i className="fa-solid fa-lungs-virus text-2xl text-teal-600 mr-3"></i>
-          <span className="text-lg font-bold text-teal-800 tracking-tight">TB-CARE LINK</span>
+      <aside className="w-60 flex flex-col z-20 flex-shrink-0 bg-white border-r border-teal-100">
+        <div className="flex flex-col items-center px-5 pb-2.5 pt-4 border-b border-teal-100">
+          <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-white mb-2 border-2" style={{borderColor:'#51ccb4'}}>
+            <i className="fa-solid fa-lungs-virus text-xl" style={{color:'#568c41'}}></i>
+          </div>
+          <span className="text-base font-extrabold text-teal-800 tracking-widest uppercase leading-none">TB-CARE LINK</span>
         </div>
-        <nav className="flex-1 px-3 py-4 overflow-y-auto">
+        <nav className="flex-1 px-3 pt-2.5 pb-5 overflow-y-auto space-y-1">
           {navItems.map(n => (
             <div key={n.id}>
-              {n.divider && <div className="my-2 border-t border-gray-100"></div>}
+              {n.divider && <div className="my-3 border-t border-teal-100"></div>}
               <button onClick={() => setNav(n.id)}
-                className={`flex w-full items-center gap-3 px-4 py-3 rounded-xl transition-all text-sm font-semibold mb-0.5 ${nav===n.id?'bg-teal-900 text-white shadow-inner':'text-gray-600 hover:bg-teal-50 hover:text-teal-700'}`}
+                className={`flex w-full items-center gap-3 px-4 py-3.5 rounded-xl transition-all text-sm font-semibold ${nav===n.id?'bg-teal-500 text-white shadow-sm':'text-gray-600 hover:bg-teal-50 hover:text-teal-700'}`}
               ><i className={`fa-solid ${n.icon} w-4 text-sm`}></i>{n.label}</button>
             </div>
           ))}
         </nav>
-        <div className="p-4 border-t border-gray-100 bg-gray-50/50">
-          <div className="flex items-center p-2 rounded-xl hover:bg-white transition-all cursor-pointer gap-3">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-teal-400 to-teal-600 text-white flex items-center justify-center font-bold text-xs shadow flex-shrink-0">ภก</div>
-            <div className="text-xs flex-1 min-w-0"><p className="font-bold text-gray-800 truncate">ภก.สิรวิชญ์ เผ่าผา</p><p className="text-teal-600 font-medium">Pharmacist</p></div>
+        <div className="p-4 border-t border-teal-100">
+          <div className="flex items-center p-2 rounded-xl hover:bg-teal-50 transition-all cursor-pointer gap-3">
+            <div className="w-9 h-9 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-xs flex-shrink-0">ภก</div>
+            <div className="text-xs flex-1 min-w-0"><p className="font-bold text-gray-800 truncate">ภก.สิรวิชญ์ เผ่าผา</p><p className="text-teal-500 font-medium">Pharmacist</p></div>
           </div>
         </div>
       </aside>
@@ -766,7 +773,7 @@ function App() {
           <h1 className="text-lg font-bold text-gray-800 truncate">{titles[nav]}</h1>
           <div className="flex items-center gap-4 flex-shrink-0">
             <div className="relative hidden md:block">
-              <input type="text" placeholder="ค้นหาด่วน..." className="w-48 p-2 pl-9 bg-gray-100 rounded-full text-sm focus:ring-2 focus:ring-teal-200 outline-none"/>
+              <input type="text" value={quickSearch} onChange={e => handleQuickSearch(e.target.value)} placeholder="ค้นหาด่วน..." className="w-48 p-2 pl-9 bg-gray-100 rounded-full text-sm focus:ring-2 focus:ring-teal-200 outline-none"/>
               <i className="fa-solid fa-search absolute left-3 top-2.5 text-gray-400 text-xs"></i>
             </div>
             <div className="relative">
@@ -781,7 +788,7 @@ function App() {
 
         <div className="flex-1 p-6 overflow-y-auto">
           {nav==='dashboard'     && <Dashboard patients={patients}/>}
-          {nav==='patient-list'  && <PatientList patients={patients} onAdd={addPatient} onOpen={setClinical} settings={settings}/>}
+          {nav==='patient-list'  && <PatientList patients={patients} onAdd={addPatient} onOpen={setClinical} settings={settings} quickSearch={quickSearch}/>}
           {nav==='weekly-prep'   && <WeeklyPrep patients={patients} onOpen={setClinical}/>}
           {nav==='reports'       && <Reports patients={patients}/>}
           {nav==='settings'      && <AdminSettings settings={settings} setSettings={setSettings}/>}
