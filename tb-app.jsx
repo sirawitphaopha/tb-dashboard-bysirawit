@@ -744,9 +744,12 @@ function App() {
   return (
     <div className="flex h-screen bg-slate-100 overflow-hidden">
       <aside className="w-60 bg-white flex flex-col shadow-lg z-20 flex-shrink-0">
-        <div className="flex items-center px-5 py-4 border-b border-gray-100 h-16">
-          <i className="fa-solid fa-lungs-virus text-2xl text-teal-600 mr-3"></i>
-          <span className="text-lg font-bold text-teal-800 tracking-tight">TB-CARE LINK</span>
+        <div className="flex flex-col items-center px-5 py-5 border-b border-gray-100">
+          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-teal-600 mb-2">
+            <i className="fa-solid fa-lungs-virus text-white text-lg"></i>
+          </div>
+          <span className="text-sm font-bold text-teal-800 tracking-widest uppercase">TB-CARE LINK</span>
+          <span className="text-xs text-gray-400 mt-0.5">ระบบติดตามผู้ป่วยวัณโรค</span>
         </div>
         <nav className="flex-1 px-3 py-5 overflow-y-auto space-y-1">
           {navItems.map(n => (
