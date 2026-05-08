@@ -744,14 +744,13 @@ function App() {
   return (
     <div className="flex h-screen bg-slate-100 overflow-hidden">
       <aside className="w-60 flex flex-col z-20 flex-shrink-0 bg-white border-r border-teal-100">
-        <div className="flex flex-col items-center px-5 pb-3.5 pt-6 border-b border-teal-100">
-          <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-teal-50 mb-3 border border-teal-200">
-            <i className="fa-solid fa-lungs-virus text-teal-600 text-xl"></i>
+        <div className="flex flex-col items-center px-5 pb-2.5 pt-4 border-b border-teal-100">
+          <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-white mb-2 border-2" style={{borderColor:'#51ccb4'}}>
+            <i className="fa-solid fa-lungs-virus text-xl" style={{color:'#568c41'}}></i>
           </div>
-          <span className="text-sm font-bold text-teal-800 tracking-widest uppercase">TB-CARE LINK</span>
-          <span className="text-xs text-teal-400 mt-1">ระบบติดตามผู้ป่วยวัณโรค</span>
+          <span className="text-base font-extrabold text-teal-800 tracking-widest uppercase leading-none">TB-CARE LINK</span>
         </div>
-        <nav className="flex-1 px-3 pt-2 pb-5 overflow-y-auto space-y-1">
+        <nav className="flex-1 px-3 pt-2.5 pb-5 overflow-y-auto space-y-1">
           {navItems.map(n => (
             <div key={n.id}>
               {n.divider && <div className="my-3 border-t border-teal-100"></div>}
