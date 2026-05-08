@@ -343,7 +343,7 @@ function Reports({ patients }) {
         <div className="bg-white p-6 rounded-2xl border border-teal-200 flex flex-col justify-between">
           <div>
             <div className="w-12 h-12 bg-teal-100 text-teal-600 rounded-xl flex items-center justify-center text-xl mb-4"><i className="fa-solid fa-microscope"></i></div>
-            <h3 className="font-bold text-gray-800">ส่งออกผล Diagnosis ทุก��คส</h3>
+            <h3 className="font-bold text-gray-800">ส่งออกผล Diagnosis ทุกเคส</h3>
             <p className="text-sm text-gray-500 mt-2">AFB, GeneXpert-PCR, RIF/INH Resistance, SLD ทุกผู้ป่วย</p>
             <div className="mt-3 bg-teal-50 p-3 rounded-xl grid grid-cols-2 gap-2 text-sm">
               <div className="text-gray-500">ผู้ป่วยที่มีผล Dx: <strong className="text-teal-700">{patients.filter(p=>(p.sputum||[]).length>0).length} ราย</strong></div>
