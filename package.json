@@ -1,12 +1,38 @@
 {
-  "name": "tb-dashboard",
-  "version": "1.0.0",
-  "description": "TB-CARE LINK Dashboard",
+  "name": "tb-care-link",
+  "version": "2.0.0",
+  "description": "TB-CARE LINK Dashboard - Modern Healthcare Dashboard",
   "scripts": {
-    "dev": "python3 -m http.server 3000",
-    "start": "python3 -m http.server 3000"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
   },
-  "keywords": ["tb", "dashboard", "healthcare"],
+  "keywords": [
+    "tb",
+    "dashboard",
+    "healthcare",
+    "next.js"
+  ],
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "lucide-react": "^1.14.0",
+    "next": "^16.2.6",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "recharts": "^3.8.1",
+    "tailwind-merge": "^3.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.18",
+    "@types/react": "^19.2.14",
+    "autoprefixer": "^10.5.0",
+    "postcss": "^8.5.14",
+    "tailwindcss": "^3.4.19",
+    "typescript": "^5.9.3"
+  }
 }
