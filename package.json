@@ -1,9 +1,9 @@
 {
-  "name": "tb-care-link",
+  "name": "tb-care-link-dashboard",
   "version": "2.0.1",
   "description": "TB-CARE LINK Dashboard - Modern Healthcare Dashboard",
   "scripts": {
-    "dev": "next dev --port 3000",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
