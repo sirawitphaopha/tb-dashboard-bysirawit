@@ -743,28 +743,28 @@ function App() {
 
   return (
     <div className="flex h-screen bg-slate-100 overflow-hidden">
-      <aside className="w-60 flex flex-col z-20 flex-shrink-0" style={{background:'linear-gradient(180deg,#0f4c4c 0%,#0d6e6e 60%,#0e8080 100%)'}}>
-        <div className="flex flex-col items-center px-5 pb-3.5 pt-6 border-b border-white/10">
-          <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-white/20 backdrop-blur mb-3">
-            <i className="fa-solid fa-lungs-virus text-white text-xl"></i>
+      <aside className="w-60 flex flex-col z-20 flex-shrink-0 bg-white border-r border-teal-100">
+        <div className="flex flex-col items-center px-5 pb-3.5 pt-6 border-b border-teal-100">
+          <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-teal-50 mb-3 border border-teal-200">
+            <i className="fa-solid fa-lungs-virus text-teal-600 text-xl"></i>
           </div>
-          <span className="text-sm font-bold text-white tracking-widest uppercase">TB-CARE LINK</span>
-          <span className="text-xs text-teal-200 mt-1">ระบบติดตามผู้ป่วยวัณโรค</span>
+          <span className="text-sm font-bold text-teal-800 tracking-widest uppercase">TB-CARE LINK</span>
+          <span className="text-xs text-teal-400 mt-1">ระบบติดตามผู้ป่วยวัณโรค</span>
         </div>
         <nav className="flex-1 px-3 pt-2 pb-5 overflow-y-auto space-y-1">
           {navItems.map(n => (
             <div key={n.id}>
-              {n.divider && <div className="my-3 border-t border-white/10"></div>}
+              {n.divider && <div className="my-3 border-t border-teal-100"></div>}
               <button onClick={() => setNav(n.id)}
-                className={`flex w-full items-center gap-3 px-4 py-3.5 rounded-xl transition-all text-sm font-semibold ${nav===n.id?'bg-white/20 text-white shadow-sm':'text-teal-100 hover:bg-white/10 hover:text-white'}`}
+                className={`flex w-full items-center gap-3 px-4 py-3.5 rounded-xl transition-all text-sm font-semibold ${nav===n.id?'bg-teal-500 text-white shadow-sm':'text-gray-600 hover:bg-teal-50 hover:text-teal-700'}`}
               ><i className={`fa-solid ${n.icon} w-4 text-sm`}></i>{n.label}</button>
             </div>
           ))}
         </nav>
-        <div className="p-4 border-t border-white/10">
-          <div className="flex items-center p-2 rounded-xl hover:bg-white/10 transition-all cursor-pointer gap-3">
-            <div className="w-9 h-9 rounded-full bg-white/20 text-white flex items-center justify-center font-bold text-xs flex-shrink-0">ภก</div>
-            <div className="text-xs flex-1 min-w-0"><p className="font-bold text-white truncate">ภก.สิรวิชญ์ เผ่าผา</p><p className="text-teal-200 font-medium">Pharmacist</p></div>
+        <div className="p-4 border-t border-teal-100">
+          <div className="flex items-center p-2 rounded-xl hover:bg-teal-50 transition-all cursor-pointer gap-3">
+            <div className="w-9 h-9 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-xs flex-shrink-0">ภก</div>
+            <div className="text-xs flex-1 min-w-0"><p className="font-bold text-gray-800 truncate">ภก.สิรวิชญ์ เผ่าผา</p><p className="text-teal-500 font-medium">Pharmacist</p></div>
           </div>
         </div>
       </aside>
