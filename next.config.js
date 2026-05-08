@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  allowedDevOrigins: ['*.vusercontent.net', '*.vercel.app', '*.vercel-preview.com'],
   async redirects() {
     return [
       {
