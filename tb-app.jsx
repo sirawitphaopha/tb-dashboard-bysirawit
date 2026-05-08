@@ -744,14 +744,14 @@ function App() {
   return (
     <div className="flex h-screen bg-slate-100 overflow-hidden">
       <aside className="w-60 flex flex-col z-20 flex-shrink-0" style={{background:'linear-gradient(180deg,#0f4c4c 0%,#0d6e6e 60%,#0e8080 100%)'}}>
-        <div className="flex flex-col items-center px-5 py-6 border-b border-white/10">
+        <div className="flex flex-col items-center px-5 pb-3.5 pt-6 border-b border-white/10">
           <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-white/20 backdrop-blur mb-3">
             <i className="fa-solid fa-lungs-virus text-white text-xl"></i>
           </div>
           <span className="text-sm font-bold text-white tracking-widest uppercase">TB-CARE LINK</span>
           <span className="text-xs text-teal-200 mt-1">ระบบติดตามผู้ป่วยวัณโรค</span>
         </div>
-        <nav className="flex-1 px-3 py-5 overflow-y-auto space-y-1">
+        <nav className="flex-1 px-3 pt-2 pb-5 overflow-y-auto space-y-1">
           {navItems.map(n => (
             <div key={n.id}>
               {n.divider && <div className="my-3 border-t border-white/10"></div>}
