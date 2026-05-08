@@ -756,7 +756,7 @@ function App() {
             <div key={n.id}>
               {n.divider && <div className="my-3 border-t border-gray-100"></div>}
               <button onClick={() => setNav(n.id)}
-                className={`flex w-full items-center gap-3 px-4 py-3.5 rounded-xl transition-all text-sm font-semibold ${nav===n.id?'bg-teal-900 text-white shadow-inner':'text-gray-600 hover:bg-teal-50 hover:text-teal-700'}`}
+                className={`flex w-full items-center gap-3 px-4 py-3.5 rounded-xl transition-all text-sm font-semibold ${nav===n.id?'bg-teal-500 text-white shadow-sm':'text-gray-600 hover:bg-teal-50 hover:text-teal-600'}`}
               ><i className={`fa-solid ${n.icon} w-4 text-sm`}></i>{n.label}</button>
             </div>
           ))}
