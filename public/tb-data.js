@@ -3,7 +3,7 @@
 window.TAMBONS = ['พิมาย','พิมายเหนือ','กู่','ตูม','สำโรงปราสาท','โพธิ์ศรี','สมอ','ดวนใหญ่','บ้านไทย','ไพรขลา'];
 window.REGIMENS = ['2HRZE/4HR','2HRZE/7HR','2HRE/7HR','2HRZE/10HR','6-9H','3HR'];
 window.EXTRA_PULMONARY_TYPES = ['TB Lymphadenitis','TB Pleural','TB Meningitis','TB Cutaneous','TB Spine','TB Skeletal','TB Colon','อื่นๆ (Other)'];
-window.PATIENT_TYPES = ['New','Relapse','Treatment Failure','Default'];
+window.PATIENT_TYPES = ['New','Relapse','Treatment Failure'];
 window.DISEASE_LOCATIONS = ['LTBI','Pulmonary','Extra-pulmonary'];
 window.PREFIXES = ['นาย','นาง','นางสาว','เด็กชาย','เด็กหญิง'];
 
@@ -15,10 +15,36 @@ window.DRUG_RANGES = {
 };
 
 window.DEFAULT_COMORBIDITIES = [
-  'เบาหวาน (DM)','ความดันโลหิตสูง (HT)','HIV/AIDS',
-  'โรคไตเรื้อรัง (CKD)','ตับแข็ง (Liver Cirrhosis)','ถุงลมโป่งพอง (COPD)',
-  'มะเร็ง (Cancer)','ภาวะขาดสารอาหาร','ยากดภูมิ (Immunosuppressive)',
-  'โรคข้ออักเสบรูมาตอยด์ (RA)','โรคหัวใจ (CVD)'
+  { name:'เบาหวาน',                  abbr:'DM'        },
+  { name:'ความดันโลหิตสูง',           abbr:'HT'        },
+  { name:'HIV/AIDS',                  abbr:'HIV'       },
+  { name:'โรคไตเรื้อรัง',             abbr:'CKD'       },
+  { name:'ตับแข็ง',                   abbr:'Cirrhosis' },
+  { name:'ถุงลมโป่งพอง',              abbr:'COPD'      },
+  { name:'มะเร็ง',                    abbr:'Cancer'    },
+  { name:'ภาวะขาดสารอาหาร',           abbr:'Malnutr'   },
+  { name:'ยากดภูมิคุ้มกัน',           abbr:'Immuno'    },
+  { name:'โรคข้ออักเสบรูมาตอยด์',     abbr:'RA'        },
+  { name:'โรคหัวใจ',                  abbr:'CVD'       },
+  { name:'ภาวะไขมันในเลือดสูง',       abbr:'DLP'       },
+  { name:'โรคหลอดเลือดสมอง',          abbr:'Stroke'    },
+  { name:'ตับอักเสบ B เรื้อรัง',      abbr:'HBV'       },
+  { name:'ตับอักเสบ C เรื้อรัง',      abbr:'HCV'       },
+  { name:'AF (หัวใจเต้นผิดจังหวะ)',    abbr:'AF'        },
+  { name:'ใช้ยา Warfarin',            abbr:'Warfarin'  },
+  { name:'ดื่มแอลกอฮอล์',             abbr:'EtOH'      },
+  { name:'ตั้งครรภ์',                 abbr:'Preg'      },
+];
+
+window.DEFAULT_RESTART_REASONS = [
+  'เริ่มรักษาครั้งแรก (Original)',
+  'กลับเป็นซ้ำ (Relapse)',
+  'รักษาล้มเหลว (Treatment Failure)',
+  'หยุดยาและกลับมารักษาใหม่ (Re-treatment after Default)',
+  'เริ่มใหม่หลัง DILI / Hepatotoxicity',
+  'เริ่มใหม่หลัง ADR / Re-challenge ผื่น',
+  'ปรับสูตรยา (Regimen Change)',
+  'อื่นๆ',
 ];
 window.DEFAULT_DRUGS = [
   'Metformin','Glipizide','Insulin','Amlodipine','Enalapril','Losartan',
@@ -87,14 +113,30 @@ window.generateAlerts = function(patients) {
   var alerts = [];
   patients.forEach(function(p) {
     var last = p.labs[p.labs.length-1];
-    if (last && last.alt > 120)
-      alerts.push({id:'alt-'+p.id,type:'critical',patient:p.name,msg:'ALT สูง '+last.alt+' U/L — ควรหยุดยาทันที',time:'ล่าสุด'});
-    if (last && last.ua > 9)
-      alerts.push({id:'ua-'+p.id,type:'warning',patient:p.name,msg:'Uric Acid สูง '+last.ua+' mg/dL',time:'ล่าสุด'});
-    if (p.daysUntil <= 1)
-      alerts.push({id:'appt-'+p.id,type:'info',patient:p.name,msg:'มีนัดพรุ่งนี้ ('+p.nextAppt+')',time:'วันนี้'});
+    if (last) {
+      LAB_GROUPS.forEach(function(grp) {
+        grp.fields.forEach(function(f) {
+          if (!f.critical) return;
+          var val = grp.id === 'cbc' ? (last.cbc||{})[f.key] : last[f.key];
+          if (val === undefined || val === null || val === '') return;
+          if (getLabStatus(val, f) === 'critical') {
+            var dir = f.lowBad ? 'ต่ำวิกฤต' : 'สูงวิกฤต';
+            alerts.push({id:f.key+'-'+p.id,type:'critical',patient:p.name,patientId:p.id,msg:f.label+' '+val+' '+f.unit+' — '+dir,time:'ล่าสุด'});
+          }
+        });
+      });
+      if (last.ua > 9 && last.ua <= 10)
+        alerts.push({id:'ua-'+p.id,type:'warning',patient:p.name,patientId:p.id,msg:'Uric Acid สูง '+last.ua+' mg/dL',time:'ล่าสุด'});
+    }
+    if (p.daysUntil != null && p.daysUntil <= 1)
+      alerts.push({id:'appt-'+p.id,type:'info',patient:p.name,patientId:p.id,msg:'มีนัดพรุ่งนี้ ('+p.nextAppt+')',time:'วันนี้'});
     if ((p.comorbidities||[]).join(' ').includes('HIV'))
-      alerts.push({id:'hiv-'+p.id,type:'warning',patient:p.name,msg:'ระวัง Drug Interaction: Rifampicin + ARV',time:'แจ้งเตือนต่อเนื่อง'});
+      alerts.push({id:'hiv-'+p.id,type:'warning',patient:p.name,patientId:p.id,msg:'ระวัง Drug Interaction: Rifampicin + ARV',time:'แจ้งเตือนต่อเนื่อง'});
+    if (last && last.scr) {
+      var crcl = calcCrCl(p.age, p.weight, last.scr, p.gender);
+      if (crcl !== null && crcl < 30)
+        alerts.push({id:'crcl-'+p.id,type:'critical',patient:p.name,patientId:p.id,msg:'CrCl ต่ำ '+crcl+' mL/min — ควรปรับขนาด EMB/PZA หรือพิจารณาหยุด (เสี่ยง Optic Neuritis และ UA สูง)',time:'ล่าสุด'});
+    }
   });
   return alerts;
 };
@@ -143,7 +185,7 @@ window.LAB_GROUPS = [
     {key:'tbili',label:'T.Bili',   unit:'mg/dL', lo:0.2, hi:1.2, critical:3},
     {key:'dbili',label:'D.Bili',   unit:'mg/dL', lo:0,   hi:0.3, critical:null},
     {key:'ibili',label:'I.Bili',   unit:'mg/dL', lo:0.1, hi:1.0, critical:null},
-    {key:'alb',  label:'Albumin',  unit:'g/dL',  lo:3.5, hi:5.0, critical:null, lowBad:true},
+    {key:'alb',  label:'Albumin',  unit:'g/dL',  lo:3.5, hi:5.0, critical:2.5, lowBad:true},
   ]},
   { id:'cbc', label:'CBC', color:'blue', fields:[
     {key:'wbc',  label:'WBC',  unit:'×10³/μL', lo:4.5, hi:11.0, critical:null},
@@ -158,7 +200,7 @@ window.LAB_GROUPS = [
     {key:'b',    label:'B',    unit:'%',        lo:0,   hi:1,    critical:null},
   ]},
   { id:'renal', label:'Renal / UA', color:'indigo', fields:[
-    {key:'scr',  label:'Scr',       unit:'mg/dL', lo:0.6, hi:1.2,  critical:5},
+    {key:'scr',  label:'Scr',       unit:'mg/dL', lo:0.6, hi:1.2,  critical:null},
     {key:'bun',  label:'BUN',       unit:'mg/dL', lo:7,   hi:20,   critical:null},
     {key:'ua',   label:'Uric Acid', unit:'mg/dL', lo:3.5, hi:7.2,  critical:10},
   ]},
@@ -202,7 +244,7 @@ window.INITIAL_PATIENTS = [
     ],
     phase:'Intensive', month:2, day:50,
     status:'normal', adherence:98,
-    comorbidities:['เบาหวาน (DM)'],
+    comorbidities:['DM'],
     concomitantDrugs:['Metformin 500mg OD'],
     hivStatus:null, hivNote:'',
     nextAppt:'25 ต.ค. 67', daysUntil:4, startDate:'2024-08-10',
@@ -240,7 +282,7 @@ window.INITIAL_PATIENTS = [
     ],
     phase:'Continuation', month:3, day:95,
     status:'critical', adherence:85,
-    comorbidities:['HIV/AIDS'],
+    comorbidities:['HIV'],
     concomitantDrugs:['ARV (Efavirenz) OD'],
     hivStatus:'Positive', hivNote:'CD4 = 350 cells/mm³',
     nextAppt:'22 ต.ค. 67', daysUntil:1, startDate:'2024-07-15',
@@ -281,7 +323,7 @@ window.INITIAL_PATIENTS = [
     ],
     phase:'Continuation', month:5, day:152,
     status:'normal', adherence:95,
-    comorbidities:['ความดันโลหิตสูง (HT)'],
+    comorbidities:['HT'],
     concomitantDrugs:['Amlodipine 5mg OD','Enalapril 5mg OD'],
     hivStatus:'Negative', hivNote:'',
     nextAppt:'28 ต.ค. 67', daysUntil:7, startDate:'2024-05-20',
@@ -324,7 +366,7 @@ window.INITIAL_PATIENTS = [
     ],
     phase:'Continuation', month:4, day:120,
     status:'normal', adherence:92,
-    comorbidities:['เบาหวาน (DM)','ความดันโลหิตสูง (HT)'],
+    comorbidities:['DM','HT'],
     concomitantDrugs:['Metformin 500mg BID','Amlodipine 5mg OD'],
     hivStatus:'Negative', hivNote:'',
     nextAppt:'5 พ.ค. 69', daysUntil:4, startDate:'2024-01-10',
@@ -385,6 +427,51 @@ window.INITIAL_PATIENTS = [
     customDoses:null
   },
   {
+    id:'P006', hn:'33221/68',
+    prefix:'นาย', firstName:'ประสิทธิ์', lastName:'แก้วมณี',
+    name:'นาย ประสิทธิ์ แก้วมณี',
+    age:68, gender:'M', patientType:'New',
+    diseaseLocation:'Pulmonary', extraPulmonaryType:'',
+    subdistrict:'ดวนใหญ่',
+    weight:58, regimen:'2HRZE/4HR',
+    regimenHistory:[
+      {regimen:'2HRZE/4HR',startDate:'2026-03-01',reason:'เริ่มรักษาครั้งแรก',isCurrent:true}
+    ],
+    phase:'Intensive', month:2, day:71,
+    status:'normal', adherence:90,
+    comorbidities:['CKD','HT'],
+    concomitantDrugs:['Amlodipine 5mg OD','Enalapril 5mg OD'],
+    hivStatus:'Negative', hivNote:'',
+    nextAppt:'13 พ.ค. 69', daysUntil:2, startDate:'2026-03-01',
+    labs:[
+      {tp:'M0',date:'2026-03-01',alt:28,ast:25,alb:3.4,scr:2.1,bun:28,ua:7.8,hbsag:'Negative',hcv:'Negative',cbc:{hb:10.2,hct:31,plt:185}},
+      {tp:'M2',date:'2026-05-01',alt:32,ast:28,alb:2.2,scr:2.8,bun:34,ua:9.2,hbsag:'',hcv:'',cbc:{hb:6.5,hct:20,plt:162}},
+    ],
+    sputum:[{tp:'M0',result:'2+',date:'2026-03-01'}],
+    adr:{
+      neuropathy:{checked:false,note:''},nausea:{checked:true,note:'คลื่นไส้เล็กน้อย'},
+      arthralgia:{checked:true,note:'ปวดข้อเข่า สงสัย Hyperuricemia จาก PZA'},
+      optic:{checked:false,note:''},rash:{checked:false,note:''},jaundice:{checked:false,note:''},
+      fever:{checked:false,note:''},orange_urine:{checked:true,note:'ปกติจาก RIF'},
+      alopecia:{checked:false,note:''},gi:{checked:false,note:''},neuro:{checked:false,note:''},edema:{checked:false,note:''}
+    },
+    visits:[
+      {id:'v1',date:'2026-03-01',weight:58,type:'visit',
+       vitals:{bp:'148/90',hr:'76',rr:'18',temp:'36.8',o2:'97'},
+       drugDoses:'H300 R450 Z1000 E800',
+       note:'S: ไอมีเสมหะ เหนื่อยง่าย\nO: BW 58kg, BP 148/90, Scr 2.1 → CrCl ~28 mL/min\n>>> Sputum AFB 2+\nA: PTB New case + CKD stage 4 — เสี่ยง EMB/PZA สะสม\nP: Monitor Scr/UA ทุกเดือน เฝ้าระวัง Optic Neuritis',
+       consult:{type:'Renal Dosing (CrCl)',note:'CrCl ~28 mL/min — ควรพิจารณาปรับขนาด EMB และ monitor UA จาก PZA ใกล้ชิด'},
+       drp:[{type:'C6',note:'EMB 800mg อาจสูงเกินไปสำหรับ CrCl < 30 — เสี่ยง Optic Neuritis'}],
+       adrNoted:[],labData:{},sputumQuick:{}}
+    ],
+    dot:{
+      '2026-04-20':true,'2026-04-21':true,'2026-04-22':true,'2026-04-23':true,
+      '2026-04-24':false,'2026-04-25':true,'2026-04-26':true,'2026-04-27':true,
+      '2026-05-01':true,'2026-05-02':true,'2026-05-03':false,'2026-05-04':true
+    },
+    customDoses:null
+  },
+  {
     id:'P005', hn:'99001/68',
     prefix:'นาย', firstName:'สมชาย', lastName:'ทดสอบระบบ',
     name:'นาย สมชาย ทดสอบระบบ',
@@ -398,7 +485,7 @@ window.INITIAL_PATIENTS = [
     phase:'Intensive', month:3, day:76,
     status:'critical', adherence:88,
     hasResistance:true,
-    comorbidities:['เบาหวาน (DM)'],
+    comorbidities:['DM'],
     concomitantDrugs:['Metformin 500mg BID'],
     hivStatus:'Negative', hivNote:'',
     nextAppt:'10 พ.ค. 69', daysUntil:9, startDate:'2026-01-15',
@@ -450,3 +537,51 @@ window.INITIAL_PATIENTS = [
     customDoses:null
   }
 ];
+
+// ========== SUPABASE ==========
+const _SUPA_URL = 'https://cioswzdbonnbhbyynrhh.supabase.co';
+const _SUPA_KEY = 'sb_publishable_SuzwNfnSbCFCdNmDsMhydA_Yd8Nl0Yc';
+window._sb = window.supabase.createClient(_SUPA_URL, _SUPA_KEY);
+
+window.dbToPatient = r => ({
+  id:r.id, hn:r.hn, prefix:r.prefix, firstName:r.first_name, lastName:r.last_name,
+  name:r.name, age:r.age, gender:r.gender, weight:r.weight, regimen:r.regimen,
+  regimenHistory:r.regimen_history||[], phase:r.phase, month:r.month, day:r.day,
+  status:r.status, adherence:r.adherence, patientType:r.patient_type,
+  diseaseLocation:r.disease_location, extraPulmonaryType:r.extra_pulmonary_type,
+  subdistrict:r.subdistrict, comorbidities:r.comorbidities||[],
+  concomitantDrugs:r.concomitant_drugs||[], hivStatus:r.hiv_status, hivNote:r.hiv_note,
+  nextAppt:r.next_appt, daysUntil:r.days_until, startDate:r.start_date,
+  labs:r.labs||[], sputum:r.sputum||[], adr:r.adr||{}, visits:r.visits||[],
+  dot:r.dot||{}, customDoses:r.custom_doses||null,
+});
+
+window.patientToDb = p => ({
+  id:p.id, hn:p.hn, prefix:p.prefix, first_name:p.firstName, last_name:p.lastName,
+  name:p.name, age:p.age, gender:p.gender, weight:p.weight, regimen:p.regimen,
+  regimen_history:p.regimenHistory||[], phase:p.phase, month:p.month, day:p.day,
+  status:p.status, adherence:p.adherence, patient_type:p.patientType,
+  disease_location:p.diseaseLocation, extra_pulmonary_type:p.extraPulmonaryType,
+  subdistrict:p.subdistrict, comorbidities:p.comorbidities||[],
+  concomitant_drugs:p.concomitantDrugs||[], hiv_status:p.hivStatus, hiv_note:p.hivNote,
+  next_appt:p.nextAppt, days_until:p.daysUntil, start_date:p.startDate,
+  labs:p.labs||[], sputum:p.sputum||[], adr:p.adr||{}, visits:p.visits||[],
+  dot:p.dot||{}, custom_doses:p.customDoses||null,
+  updated_at: new Date().toISOString(),
+});
+
+window.loadPatients = async () => {
+  const { data, error } = await window._sb.from('tb_patients').select('*').order('created_at');
+  if (error) { console.error('Supabase load error:', error); return []; }
+  return (data||[]).map(window.dbToPatient);
+};
+
+window.savePatient = async p => {
+  const { error } = await window._sb.from('tb_patients').upsert(window.patientToDb(p));
+  if (error) console.error('Supabase save error:', error);
+};
+
+window.removePatient = async id => {
+  const { error } = await window._sb.from('tb_patients').delete().eq('id', id);
+  if (error) console.error('Supabase delete error:', error);
+};

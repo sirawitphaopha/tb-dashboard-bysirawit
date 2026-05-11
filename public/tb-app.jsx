@@ -10,53 +10,102 @@ function StatusBadge({ status }) {
 }
 
 // ===================== DASHBOARD =====================
-function Dashboard({ patients }) {
+const MONTH_LABELS = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const FAKE_MONTHLY = { 2025:[8,11,9,14,15,20,18,25,22,19,13,10], 2026:[12,15,10,18,6,0,0,0,0,0,0,0] };
+const FAKE_YEARLY = { 2025:184, 2026:61 };
+
+function Dashboard({ patients, onDashFilter }) {
   const barRef = useRef(null); const pieRef = useRef(null);
+  const [chartMode, setChartMode] = useState('monthly');
+  const [selectedYear, setSelectedYear] = useState(2026);
   const active = patients.filter(p => p.status !== 'done');
   const criticals = patients.filter(p => p.status === 'critical');
   const intensive = patients.filter(p => p.phase === 'Intensive').length;
   const cont = patients.filter(p => p.phase === 'Continuation').length;
+  const mdr = patients.filter(p => p.regimen && (p.regimen.includes('Bdq')||p.regimen.includes('Lzd')||p.regimen.includes('Mfx'))).length;
 
   useEffect(() => {
     if (!barRef.current) return;
+    const isYearly = chartMode === 'yearly';
+    const labels = isYearly ? Object.keys(FAKE_YEARLY) : MONTH_LABELS;
+    const data = isYearly ? Object.values(FAKE_YEARLY) : (FAKE_MONTHLY[selectedYear] || Array(12).fill(0));
     const c = new Chart(barRef.current, {
       type: 'bar',
-      data: { labels:['พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.'], datasets:[{ label:'รายใหม่', data:[15,20,18,25,22,patients.length], backgroundColor:'#0d9488', borderRadius:6, hoverBackgroundColor:'#0f766e' }] },
-      options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{grid:{color:'rgba(0,0,0,0.04)'},ticks:{font:{size:11}}},x:{ticks:{font:{size:11}}}} }
+      data: { labels, datasets:[{ label:'ผู้ป่วยใหม่', data, backgroundColor:'#0d9488', borderRadius:6, hoverBackgroundColor:'#0f766e' }] },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        plugins:{legend:{display:false}},
+        scales:{y:{grid:{color:'rgba(0,0,0,0.04)'},beginAtZero:true,ticks:{font:{size:11}}},x:{ticks:{font:{size:11}}}},
+        onHover:(e,el)=>{ e.native.target.style.cursor = el.length ? 'pointer' : 'default'; },
+        onClick:(e,el)=>{
+          if(!el.length) return;
+          const idx=el[0].index;
+          if(chartMode==='monthly') onDashFilter({type:'startMonth',month:idx+1,year:selectedYear,label:`เริ่มยา ${MONTH_LABELS[idx]} ${selectedYear}`});
+          else { const yr=parseInt(Object.keys(FAKE_YEARLY)[idx]); onDashFilter({type:'startYear',year:yr,label:`เริ่มยา ปี ${yr}`}); }
+        }
+      }
     });
     return () => c.destroy();
-  }, [patients.length]);
+  }, [chartMode, selectedYear, onDashFilter]);
 
   useEffect(() => {
     if (!pieRef.current) return;
+    const pieFilters = [
+      {type:'phase',phase:'Intensive',label:'Intensive Phase'},
+      {type:'phase',phase:'Continuation',label:'Continuation Phase'},
+      {type:'mdr',label:'MDR-TB'},
+    ];
     const c = new Chart(pieRef.current, {
-      type: 'doughnut',
-      data: { labels:['Intensive','Continuation','MDR-TB'], datasets:[{ data:[intensive,cont,0], backgroundColor:['#f59e0b','#10b981','#ef4444'], borderWidth:0, hoverOffset:4 }] },
-      options: { responsive:true, maintainAspectRatio:false, cutout:'72%', plugins:{legend:{position:'right',labels:{font:{size:11},boxWidth:10,padding:8}}} }
+      type: 'pie',
+      data: { labels:['Intensive','Continuation','MDR-TB'], datasets:[{ data:[intensive||1,cont,mdr], backgroundColor:['#f59e0b','#10b981','#ef4444'], borderWidth:2, borderColor:'#fff', hoverOffset:6 }] },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        plugins:{legend:{position:'right',labels:{font:{size:11},boxWidth:10,padding:8}}},
+        onHover:(e,el)=>{ e.native.target.style.cursor = el.length ? 'pointer' : 'default'; },
+        onClick:(e,el)=>{ if(el.length) onDashFilter(pieFilters[el[0].index]); }
+      }
     });
     return () => c.destroy();
-  }, [intensive, cont]);
+  }, [intensive, cont, mdr, onDashFilter]);
 
+  const done = patients.filter(p => p.status === 'done').length;
   const kpis = [
-    { label:'ขึ้นทะเบียนทั้งหมด', value:(2538+patients.length).toLocaleString(), icon:'fa-users', color:'bg-blue-50 text-blue-600' },
-    { label:'กำลังรักษา (Active)', value:active.length, icon:'fa-lungs', color:'bg-teal-50 text-teal-600' },
-    { label:'รักษาหาย (Success)', value:'2,310', icon:'fa-check-double', color:'bg-green-50 text-green-600' },
-    { label:'Lab ผิดปกติ / ADR', value:criticals.length, icon:'fa-flask-vial', color:'bg-red-50 text-red-600', alert:criticals.length>0 },
+    { label:'ขึ้นทะเบียนทั้งหมด', value:patients.length.toLocaleString(), icon:'fa-users', color:'bg-blue-50 text-blue-600', filter:{type:'all',label:'ผู้ป่วยทั้งหมด'} },
+    { label:'กำลังรักษา (Active)', value:active.length, icon:'fa-lungs', color:'bg-teal-50 text-teal-600', filter:{type:'active',label:'กำลังรักษา (Active)'} },
+    { label:'รักษาหาย (Success)', value:done, icon:'fa-check-double', color:'bg-green-50 text-green-600', filter:{type:'done',label:'รักษาหาย'} },
+    { label:'Lab ผิดปกติ / ADR', value:criticals.length, icon:'fa-flask-vial', color:'bg-red-50 text-red-600', alert:criticals.length>0, filter:{type:'critical',label:'Lab ผิดปกติ / ADR'} },
   ];
 
   return (
     <div className="space-y-6 tb-fade">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
         {kpis.map(k => (
-          <div key={k.label} className={`bg-white p-5 rounded-2xl shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow border ${k.alert?'border-red-200':'border-gray-100'}`}>
+          <div key={k.label} onClick={()=>onDashFilter(k.filter)} className={`bg-white p-5 rounded-2xl shadow-sm flex items-center gap-4 hover:shadow-lg transition-all border cursor-pointer group ${k.alert?'border-red-200':'border-gray-100'}`}>
             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0 ${k.color}`}><i className={`fa-solid ${k.icon}`}></i></div>
-            <div><p className="text-xs text-gray-500 font-medium leading-tight">{k.label}</p><p className={`text-3xl font-bold mt-0.5 ${k.alert?'text-red-600':'text-gray-900'}`}>{k.value}</p></div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-gray-500 font-medium leading-tight">{k.label}</p>
+              <p className={`text-3xl font-bold mt-0.5 ${k.alert?'text-red-600':'text-gray-900'}`}>{k.value}</p>
+            </div>
+            <i className="fa-solid fa-chevron-right text-xs text-gray-300 group-hover:text-teal-400 transition-colors"></i>
           </div>
         ))}
       </div>
       <div className="grid grid-cols-3 gap-5">
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 col-span-2">
-          <h2 className="text-sm font-bold text-gray-800 mb-4">แนวโน้มผู้ป่วยใหม่ (รายเดือน)</h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-sm font-bold text-gray-800">แนวโน้มผู้ป่วยใหม่</h2>
+            <div className="flex items-center gap-2">
+              {chartMode==='monthly' && (
+                <select value={selectedYear} onChange={e=>setSelectedYear(+e.target.value)} className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-gray-50 outline-none focus:ring-2 focus:ring-teal-300">
+                  {Object.keys(FAKE_MONTHLY).map(y=><option key={y} value={+y}>{y}</option>)}
+                </select>
+              )}
+              <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs font-bold">
+                <button type="button" onClick={()=>setChartMode('monthly')} className={'px-3 py-1.5 transition-colors '+(chartMode==='monthly'?'bg-teal-600 text-white':'text-gray-500 hover:bg-gray-50')}>รายเดือน</button>
+                <button type="button" onClick={()=>setChartMode('yearly')} className={'px-3 py-1.5 transition-colors '+(chartMode==='yearly'?'bg-teal-600 text-white':'text-gray-500 hover:bg-gray-50')}>รายปี</button>
+              </div>
+            </div>
+          </div>
           <div className="h-52"><canvas ref={barRef}></canvas></div>
         </div>
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
@@ -82,91 +131,220 @@ function Dashboard({ patients }) {
 }
 
 // ===================== PATIENT LIST =====================
-function PatientList({ patients, onAdd, onOpen, settings }) {
-  const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState('all');
-  const [showAdd, setShowAdd] = useState(false);
+// ─── patient list helpers ────────────────────────────────────────
+const DEFAULT_COL_CONFIG = [
+  { id:'info',          label:'อายุ / เพศ / ตำบล',  visible:true  },
+  { id:'tb_regimen',    label:'ชนิด TB / สูตรยา',   visible:true  },
+  { id:'progress',      label:'ความคืบหน้า',         visible:true  },
+  { id:'weight',        label:'น้ำหนัก',             visible:true  },
+  { id:'start_date',    label:'วันเริ่ม',             visible:true  },
+  { id:'next_appt',     label:'วันนัดถัดไป',          visible:true  },
+  { id:'comorbidities', label:'โรคร่วม',              visible:false },
+  { id:'status',        label:'สถานะ',               visible:true  },
+];
+
+function getTotalMonths(regimen) {
+  if (!regimen) return null;
+  const m = regimen.match(/^(\d+)[A-Z]+\/(\d+)/);
+  if (m) return parseInt(m[1]) + parseInt(m[2]);
+  if (/^6-9H/.test(regimen)) return 9;
+  if (/^3HR/.test(regimen)) return 3;
+  return null;
+}
+
+const fmtDate = d => { if(!d) return '-'; const [y,m,day] = d.split('-'); return `${day}/${m}/${y.slice(2)}`; };
+
+function PatientList({ patients, onAdd, onOpen, settings, dashFilter, onClearDashFilter, search, filter, showColMgr, onToggleColMgr }) {
+  const [colConfig, setColConfig] = useState(() => {
+    try { const s = localStorage.getItem('tbColCfg'); return s ? JSON.parse(s) : DEFAULT_COL_CONFIG; }
+    catch { return DEFAULT_COL_CONFIG; }
+  });
+
+  useEffect(() => { try { localStorage.setItem('tbColCfg', JSON.stringify(colConfig)); } catch {} }, [colConfig]);
+
+  const toggleCol = id => setColConfig(c => c.map(col => col.id===id ? {...col, visible:!col.visible} : col));
+  const moveCol = (id, dir) => setColConfig(c => {
+    const i = c.findIndex(col => col.id===id);
+    const ni = i + dir;
+    if (ni < 0 || ni >= c.length) return c;
+    const next = [...c]; [next[i], next[ni]] = [next[ni], next[i]]; return next;
+  });
+  const resetCols = () => { setColConfig(DEFAULT_COL_CONFIG); localStorage.removeItem('tbColCfg'); };
+
+  const visibleCols = colConfig.filter(c => c.visible);
+
+  const applyDashFilter = p => {
+    if (!dashFilter) return true;
+    switch(dashFilter.type) {
+      case 'all': return true;
+      case 'active': return p.status !== 'done';
+      case 'done': return p.status === 'done';
+      case 'critical': return p.status === 'critical';
+      case 'phase': return p.phase === dashFilter.phase;
+      case 'mdr': return p.regimen && (p.regimen.includes('Bdq')||p.regimen.includes('Lzd')||p.regimen.includes('Mfx'));
+      case 'startMonth': { if(!p.startDate) return false; const d=new Date(p.startDate); return d.getMonth()+1===dashFilter.month && d.getFullYear()===dashFilter.year; }
+      case 'startYear': return p.startDate && new Date(p.startDate).getFullYear()===dashFilter.year;
+      default: return true;
+    }
+  };
 
   const filtered = patients.filter(p => {
     const q = search.toLowerCase();
     const ok = !q || p.name.toLowerCase().includes(q) || p.hn.includes(q) || (p.armyId||'').includes(q) || (p.subdistrict||'').includes(q);
     const fs = filter==='all' || (filter==='intensive'&&p.phase==='Intensive') || (filter==='continuation'&&p.phase==='Continuation') || (filter==='critical'&&p.status==='critical');
-    return ok && fs;
+    return ok && fs && applyDashFilter(p);
   });
 
-  return (
-    <div className="space-y-5 tb-fade">
-      <div className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-        <div className="flex gap-3 flex-1 mr-4">
-          <div className="relative flex-1 max-w-sm">
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="ค้นหา HN, ชื่อ, เลขกองทัพ, ตำบล..." className="w-full p-2.5 pl-9 border border-gray-200 rounded-xl bg-gray-50 focus:ring-2 focus:ring-teal-200 outline-none text-sm"/>
-            <i className="fa-solid fa-search absolute left-3 top-3 text-gray-400 text-xs"></i>
+  const renderCell = (colId, p) => {
+    switch(colId) {
+      case 'info': return (
+        <td key={colId} className="py-2 px-4 text-xs whitespace-nowrap">
+          <p className={`font-semibold ${p.gender==='M'?'text-blue-600':'text-pink-500'}`}>
+            <i className={`fa-solid ${p.gender==='M'?'fa-person':'fa-person-dress'} mr-1`}></i>
+            {p.age} ปี · {p.gender==='M'?'ชาย':'หญิง'}
+          </p>
+          {p.subdistrict && <p className="text-teal-600 font-medium mt-0.5">ต.{p.subdistrict}</p>}
+        </td>
+      );
+      case 'tb_regimen': return (
+        <td key={colId} className="py-2 px-4 whitespace-nowrap">
+          <p className="text-xs text-gray-500 mb-0.5">{p.diseaseLocation==='Extra-pulmonary'?(p.extraPulmonaryType||'Extra-pulmonary'):p.diseaseLocation||'Pulmonary'}</p>
+          <span className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded font-mono text-xs">{p.regimen}</span>
+        </td>
+      );
+      case 'progress': {
+        const total = getTotalMonths(p.regimen);
+        const pct = total ? Math.min(100, Math.round((p.month/total)*100)) : null;
+        const isInt = p.phase==='Intensive';
+        return (
+          <td key={colId} className="py-2 px-4 min-w-[130px]">
+            <div className="flex items-center justify-between text-xs mb-1">
+              <span className={`font-bold ${isInt?'text-amber-600':'text-green-600'}`}>{isInt?'Intensive':'Cont.'}</span>
+              <span className="text-gray-500 font-mono">{total?`M${p.month}/${total}`:` M${p.month}`}</span>
+            </div>
+            <div className="bg-gray-200 rounded-full h-2 overflow-hidden">
+              {pct!==null && <div className={`h-2 rounded-full ${isInt?'bg-amber-400':'bg-green-500'}`} style={{width:`${pct}%`}}></div>}
+            </div>
+          </td>
+        );
+      }
+      case 'weight': return <td key={colId} className="py-2 px-4 text-sm font-semibold text-gray-700 whitespace-nowrap">{p.weight} kg</td>;
+      case 'adherence': return (
+        <td key={colId} className="py-2 px-4">
+          <div className="flex items-center gap-2">
+            <div className="bg-gray-200 rounded-full h-1.5 w-16 overflow-hidden">
+              <div className={`h-1.5 rounded-full ${p.adherence>=90?'bg-green-500':p.adherence>=70?'bg-amber-500':'bg-red-500'}`} style={{width:`${p.adherence}%`}}></div>
+            </div>
+            <span className={`text-xs font-bold w-8 ${p.adherence<80?'text-red-600':p.adherence<90?'text-amber-600':'text-gray-600'}`}>{p.adherence}%</span>
           </div>
-          <select value={filter} onChange={e => setFilter(e.target.value)} className="p-2.5 border border-gray-200 rounded-xl bg-gray-50 outline-none text-sm">
-            <option value="all">สถานะทั้งหมด</option>
-            <option value="intensive">Intensive Phase</option>
-            <option value="continuation">Continuation Phase</option>
-            <option value="critical">Lab ผิดปกติ</option>
-          </select>
-        </div>
-        <button onClick={() => setShowAdd(true)} className="bg-teal-600 hover:bg-teal-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-md shadow-teal-200 transition-all text-sm whitespace-nowrap">
-          <i className="fa-solid fa-user-plus mr-2"></i>ลงทะเบียนผู้ป่วยใหม่
-        </button>
-      </div>
+        </td>
+      );
+      case 'start_date': {
+        const hist = p.regimenHistory||[];
+        const latest = hist.length>0 ? hist[hist.length-1] : null;
+        const latestDate = latest?.startDate || p.startDate;
+        const hasRestart = hist.length > 1;
+        return (
+          <td key={colId} className="py-2 px-4 text-xs whitespace-nowrap">
+            <p className="font-mono text-gray-700">{fmtDate(latestDate)}</p>
+            {hasRestart && <span className="inline-flex items-center gap-1 mt-0.5 bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full text-xs font-semibold">↺ Re-start</span>}
+          </td>
+        );
+      }
+      case 'next_appt': {
+        const du = p.daysUntil ?? null;
+        const color = du===null?'text-gray-400':du<0?'text-red-600':du===0?'text-orange-600':du<=3?'text-amber-600':'text-gray-600';
+        const sub = du===null?'':du<0?`เลย ${Math.abs(du)} วัน`:du===0?'วันนี้!':du===1?'พรุ่งนี้':`อีก ${du} วัน`;
+        return (
+          <td key={colId} className="py-2 px-4 text-xs whitespace-nowrap">
+            <p className={`font-semibold ${color}`}>{p.nextAppt||'-'}</p>
+            {sub && <p className={`mt-0.5 ${color}`}>{sub}</p>}
+          </td>
+        );
+      }
+      case 'comorbidities': return (
+        <td key={colId} className="py-2 px-4">
+          <div className="flex flex-wrap gap-1 max-w-[140px]">
+            {(p.comorbidities||[]).slice(0,3).map(c=><span key={c} className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full text-xs font-bold">{c}</span>)}
+            {(p.comorbidities||[]).length>3 && <span className="text-gray-400 text-xs self-center">+{p.comorbidities.length-3}</span>}
+          </div>
+        </td>
+      );
+      case 'status': return <td key={colId} className="py-2 px-4 whitespace-nowrap"><StatusBadge status={p.status}/></td>;
+      default: return <td key={colId} className="py-2 px-4"></td>;
+    }
+  };
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <table className="w-full text-left">
+  return (
+    <div className="flex flex-col gap-3 tb-fade h-full">
+      {/* Column manager panel */}
+      {showColMgr && (
+        <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm tb-fade flex-shrink-0">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-bold text-gray-700"><i className="fa-solid fa-table-columns mr-2 text-teal-600"></i>จัดการคอลัม</p>
+            <button onClick={resetCols} className="text-xs text-gray-400 hover:text-red-500 transition-colors"><i className="fa-solid fa-rotate-left mr-1"></i>รีเซ็ตค่าเริ่มต้น</button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {colConfig.map((col, i) => (
+              <div key={col.id} className={`flex items-center gap-1 border rounded-xl px-2.5 py-1.5 text-xs transition-all ${col.visible?'bg-teal-50 border-teal-300 text-teal-800':'bg-gray-50 border-gray-200 text-gray-400'}`}>
+                <button onClick={()=>toggleCol(col.id)} className="font-semibold mr-1">
+                  {col.visible?<i className="fa-solid fa-check text-teal-500 w-3"></i>:<i className="fa-regular fa-square w-3 text-gray-300"></i>}
+                  <span className="ml-1.5">{col.label}</span>
+                </button>
+                <button onClick={()=>moveCol(col.id,-1)} disabled={i===0} className="text-gray-300 hover:text-teal-500 disabled:opacity-20 transition-colors px-0.5"><i className="fa-solid fa-chevron-left text-xs"></i></button>
+                <button onClick={()=>moveCol(col.id,1)} disabled={i===colConfig.length-1} className="text-gray-300 hover:text-teal-500 disabled:opacity-20 transition-colors px-0.5"><i className="fa-solid fa-chevron-right text-xs"></i></button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Dashboard filter banner */}
+      {dashFilter && (
+        <div className="flex items-center gap-2 bg-teal-50 border border-teal-200 px-4 py-2.5 rounded-xl text-sm text-teal-700 flex-shrink-0">
+          <i className="fa-solid fa-filter text-xs"></i>
+          <span>กรองจาก Dashboard: <strong>{dashFilter.label}</strong></span>
+          <button type="button" onClick={onClearDashFilter} className="ml-auto text-teal-400 hover:text-red-500 transition-colors px-1"><i className="fa-solid fa-xmark"></i> ล้าง</button>
+        </div>
+      )}
+
+      {/* Table — flex-1 + min-h-0 ทำให้ scroll container ลอยอยู่ขอบล่างเสมอ */}
+      <div className="flex-1 min-h-0 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-auto">
+        <table className="w-full min-w-max text-left">
           <thead className="bg-slate-50 text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200">
             <tr>
-              <th className="p-4 font-semibold">HN / ID</th>
-              <th className="p-4 font-semibold">ชื่อ-นามสกุล</th>
-              <th className="p-4 font-semibold">อายุ / ตำบล</th>
-              <th className="p-4 font-semibold">สูตรยา / ระยะ</th>
-              <th className="p-4 font-semibold">น้ำหนัก</th>
-              <th className="p-4 font-semibold">Adherence</th>
-              <th className="p-4 font-semibold">สถานะ</th>
-              <th className="p-4 font-semibold text-center">จัดการ</th>
+              <th className="py-2 px-4 font-semibold sticky left-0 bg-slate-50 z-10 whitespace-nowrap">HN / ชื่อ</th>
+              {visibleCols.map(col => <th key={col.id} className="py-2 px-4 font-semibold whitespace-nowrap">{col.label}</th>)}
+              <th className="py-2 px-4 font-semibold text-center">จัดการ</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 text-sm">
-            {filtered.length === 0 ? (
-              <tr><td colSpan={8} className="p-10 text-center text-gray-400"><i className="fa-solid fa-user-slash text-2xl mb-2 block text-gray-300"></i>ไม่พบผู้ป่วยที่ค้นหา</td></tr>
+            {filtered.length===0 ? (
+              <tr><td colSpan={visibleCols.length+2} className="p-10 text-center text-gray-400"><i className="fa-solid fa-user-slash text-2xl mb-2 block text-gray-300"></i>ไม่พบผู้ป่วยที่ค้นหา</td></tr>
             ) : filtered.map(p => (
-              <tr key={p.id} onClick={() => onOpen(p)} className={`hover:bg-teal-50/40 transition-colors cursor-pointer group ${p.status==='critical'?'hover:bg-red-50/40':''}`}>
-                <td className="p-4 font-mono text-gray-500 text-xs">{p.hn}<br/><span className="text-gray-400">{p.armyId}</span></td>
-                <td className="p-4">
-                  <p className="font-bold text-gray-800 group-hover:text-teal-700">{p.name}</p>
-                  <p className="text-xs text-gray-400">{p.patientType||'New'} · {p.diseaseLocation||'Pulmonary'}</p>
+              <tr key={p.id} onClick={()=>onOpen(p)}
+                className={`hover:bg-teal-50/40 transition-colors cursor-pointer group ${p.status==='critical'?'border-l-4 border-l-red-400':''}`}>
+                {/* HN / ชื่อ — fixed left */}
+                <td className="py-2 px-4 sticky left-0 bg-white group-hover:bg-teal-50/30 z-10 transition-colors">
+                  <p className="font-mono text-gray-400 text-xs">{p.hn}</p>
+                  <p className="font-bold text-gray-800 group-hover:text-teal-700 mt-0.5">{p.name}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{p.patientType||'New'} · {p.diseaseLocation==='Extra-pulmonary'?'Extra-pulmonary':p.diseaseLocation||'Pulmonary'}</p>
                 </td>
-                <td className="p-4 text-xs text-gray-500">
-                  {p.age ? <p>{p.age} ปี · {p.gender==='M'?'ชาย':'หญิง'}</p> : null}
-                  {p.subdistrict ? <p className="text-teal-600 font-medium">ต.{p.subdistrict}</p> : null}
-                </td>
-                <td className="p-4">
-                  <span className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded font-mono text-xs">{p.regimen}</span>
-                  <br/><span className="text-xs text-teal-600 mt-0.5 inline-block">{p.phase} M{p.month}</span>
-                </td>
-                <td className="p-4">{p.weight} kg</td>
-                <td className="p-4">
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 bg-gray-200 rounded-full h-1.5 w-14 overflow-hidden">
-                      <div className={`h-1.5 rounded-full ${p.adherence>=90?'bg-green-500':p.adherence>=70?'bg-amber-500':'bg-red-500'}`} style={{width:`${p.adherence}%`}}></div>
-                    </div>
-                    <span className="text-xs font-bold text-gray-600 w-8">{p.adherence}%</span>
-                  </div>
-                </td>
-                <td className="p-4"><StatusBadge status={p.status}/></td>
-                <td className="p-4 text-center">
-                  <button onClick={e => { e.stopPropagation(); onOpen(p); }} className="text-teal-400 hover:text-teal-700 transition-colors p-1"><i className="fa-solid fa-file-medical"></i></button>
+                {visibleCols.map(col => renderCell(col.id, p))}
+                {/* จัดการ — fixed right */}
+                <td className="py-2 px-4 text-center whitespace-nowrap">
+                  <button onClick={e=>{e.stopPropagation();onOpen(p);}} className="text-teal-400 hover:text-teal-700 transition-colors p-1.5 rounded-lg hover:bg-teal-50">
+                    <i className="fa-solid fa-file-medical"></i>
+                  </button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-        <div className="p-3 bg-slate-50/50 border-t border-gray-100 text-xs text-gray-400 text-right">แสดง {filtered.length} จาก {patients.length} ราย</div>
+        <div className="p-3 bg-slate-50/50 border-t border-gray-100 text-xs text-gray-400 text-right">
+          แสดง {filtered.length} จาก {patients.length} ราย
+        </div>
       </div>
-
-      {showAdd && <AddPatientModal onClose={() => setShowAdd(false)} onAdd={onAdd} settings={settings}/>}
     </div>
   );
 }
@@ -428,18 +606,35 @@ function Reports({ patients }) {
 
 // ===================== ADMIN SETTINGS =====================
 function AdminSettings({ settings, setSettings }) {
-  const [newComorbidity, setNewComorbidity] = useState('');
+  const [newComorbidity, setNewComorbidity] = useState({ name: '', abbr: '' });
   const [newDrug, setNewDrug] = useState('');
+  const [newReason, setNewReason] = useState('');
   const [newLabField, setNewLabField] = useState({ label:'', key:'', unit:'', lo:'', hi:'', group:'lft' });
   const [activeTab, setActiveTab] = useState('comorbidity');
 
   const addComorbidity = () => {
-    const v = newComorbidity.trim();
-    if (!v || settings.comorbidities.includes(v)) return;
-    setSettings(s => ({ ...s, comorbidities: [...s.comorbidities, v] }));
-    setNewComorbidity('');
+    const name = newComorbidity.name.trim();
+    const abbr = newComorbidity.abbr.trim().toUpperCase();
+    if (!name || !abbr || settings.comorbidities.some(c => c.abbr === abbr)) return;
+    setSettings(s => ({ ...s, comorbidities: [...s.comorbidities, { name, abbr }] }));
+    setNewComorbidity({ name: '', abbr: '' });
   };
-  const removeComorbidity = c => setSettings(s => ({ ...s, comorbidities: s.comorbidities.filter(x => x !== c) }));
+  const removeComorbidity = abbr => setSettings(s => ({ ...s, comorbidities: s.comorbidities.filter(c => c.abbr !== abbr) }));
+  const addReason = () => {
+    const v = newReason.trim();
+    if (!v || (settings.restartReasons||[]).includes(v)) return;
+    setSettings(s => ({ ...s, restartReasons: [...(s.restartReasons||[]), v] }));
+    setNewReason('');
+  };
+  const removeReason = r => setSettings(s => ({ ...s, restartReasons: (s.restartReasons||[]).filter(x => x !== r) }));
+  const [newRegimen, setNewRegimen] = useState('');
+  const addRegimen = () => {
+    const v = newRegimen.trim().toUpperCase();
+    if (!v || (settings.regimens||[]).includes(v)) return;
+    setSettings(s => ({ ...s, regimens: [...(s.regimens||[]), v] }));
+    setNewRegimen('');
+  };
+  const removeRegimen = r => setSettings(s => ({ ...s, regimens: (s.regimens||[]).filter(x => x !== r) }));
 
   const addDrug = () => {
     const v = newDrug.trim();
@@ -478,6 +673,7 @@ function AdminSettings({ settings, setSettings }) {
     { id:'drugs', label:'ยาโรคร่วม', icon:'fa-capsules' },
     { id:'lab', label:'ค่า Lab', icon:'fa-flask' },
     { id:'regimen', label:'สูตรยา', icon:'fa-pills' },
+    { id:'restart', label:'เหตุผลเริ่มยาใหม่', icon:'fa-rotate-right' },
     { id:'interaction', label:'Drug Interaction', icon:'fa-triangle-exclamation' },
     { id:'consult', label:'Consult / DRP', icon:'fa-comments' },
   ];
@@ -509,10 +705,12 @@ function AdminSettings({ settings, setSettings }) {
             <div><h3 className="font-bold text-gray-800">โรคประจำตัว</h3><p className="text-xs text-gray-400">{settings.comorbidities.length} รายการ</p></div>
           </div>
           <div className="flex flex-wrap gap-2 min-h-20 bg-slate-50 p-3 rounded-xl mb-4">
-            {settings.comorbidities.map(c => <TagPill key={c} label={c} onRemove={() => removeComorbidity(c)}/>)}
+            {settings.comorbidities.map(c => <TagPill key={c.abbr} label={`${c.name} (${c.abbr})`} onRemove={() => removeComorbidity(c.abbr)}/>)}
           </div>
-          <div className="flex gap-2">
-            <input value={newComorbidity} onChange={e => setNewComorbidity(e.target.value)} onKeyDown={e => e.key==='Enter'&&addComorbidity()} placeholder="เพิ่มโรคประจำตัว เช่น โรคเกาต์" className="flex-1 p-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 outline-none focus:ring-2 focus:ring-teal-300"/>
+          <p className="text-xs text-gray-400 mb-2"><i className="fa-solid fa-circle-info mr-1"></i>ชื่อเต็มแสดงใน Profile ผู้ป่วย · ชื่อย่อแสดงเป็น badge ในตาราง</p>
+          <div className="grid grid-cols-[1fr_120px_auto] gap-2">
+            <input value={newComorbidity.name} onChange={e => setNewComorbidity(n => ({...n, name: e.target.value}))} onKeyDown={e => e.key==='Enter'&&addComorbidity()} placeholder="ชื่อเต็ม เช่น โรคเกาต์" className="p-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 outline-none focus:ring-2 focus:ring-teal-300"/>
+            <input value={newComorbidity.abbr} onChange={e => setNewComorbidity(n => ({...n, abbr: e.target.value}))} onKeyDown={e => e.key==='Enter'&&addComorbidity()} placeholder="ย่อ เช่น Gout" className="p-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 outline-none focus:ring-2 focus:ring-teal-300 font-mono text-center"/>
             <button onClick={addComorbidity} className="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-sm font-bold transition-colors"><i className="fa-solid fa-plus"></i></button>
           </div>
         </div>
@@ -580,13 +778,43 @@ function AdminSettings({ settings, setSettings }) {
         <div className="bg-white p-6 rounded-2xl border border-gray-200 tb-fade">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 bg-purple-100 text-purple-600 rounded-xl flex items-center justify-center"><i className="fa-solid fa-pills"></i></div>
-            <div><h3 className="font-bold text-gray-800">สูตรยามาตรฐาน</h3><p className="text-xs text-gray-400">สูตรยาที่แสดงในหน้าลงทะเบียน</p></div>
+            <div><h3 className="font-bold text-gray-800">สูตรยามาตรฐาน</h3><p className="text-xs text-gray-400">สูตรยาที่แสดงใน dropdown หน้าลงทะเบียน — {(settings.regimens||[]).length} สูตร</p></div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {REGIMENS.map(r => <span key={r} className="bg-purple-50 text-purple-700 border border-purple-200 px-3 py-1.5 rounded-full text-sm font-mono font-bold">{r}</span>)}
+          <div className="flex flex-wrap gap-2 min-h-16 bg-slate-50 p-3 rounded-xl mb-4">
+            {(settings.regimens||[]).map(r => (
+              <span key={r} className="flex items-center gap-1.5 bg-white border border-purple-200 text-purple-700 px-3 py-1.5 rounded-full text-sm font-mono font-bold hover:border-red-300 group transition-colors">
+                {r}
+                <button onClick={() => removeRegimen(r)} className="text-gray-300 hover:text-red-500 transition-colors group-hover:text-red-400"><i className="fa-solid fa-xmark text-xs"></i></button>
+              </span>
+            ))}
             <span className="bg-gray-100 text-gray-500 border border-gray-200 px-3 py-1.5 rounded-full text-sm font-semibold">+ อื่นๆ (กรอกเอง)</span>
           </div>
-          <p className="text-xs text-gray-400 mt-4"><i className="fa-solid fa-circle-info mr-1"></i>ในรุ่นนี้สูตรยามาตรฐานถูกกำหนดในระบบ ติดต่อผู้ดูแลระบบเพื่อเพิ่มสูตร</p>
+          <div className="flex gap-2">
+            <input value={newRegimen} onChange={e => setNewRegimen(e.target.value)} onKeyDown={e => e.key==='Enter'&&addRegimen()} placeholder="เช่น 4RH หรือ BPaLM" className="flex-1 p-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 outline-none focus:ring-2 focus:ring-purple-300 font-mono"/>
+            <button onClick={addRegimen} className="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-sm font-bold transition-colors"><i className="fa-solid fa-plus"></i></button>
+          </div>
+        </div>
+      )}
+
+      {/* Restart Reasons */}
+      {activeTab==='restart'&&(
+        <div className="bg-white p-6 rounded-2xl border border-gray-200 tb-fade">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 bg-orange-100 text-orange-600 rounded-xl flex items-center justify-center"><i className="fa-solid fa-rotate-right"></i></div>
+            <div><h3 className="font-bold text-gray-800">เหตุผลที่เริ่มยาใหม่</h3><p className="text-xs text-gray-400">ใช้เป็น dropdown ในแถบ "ประวัติสูตรยา" ของผู้ป่วย — {(settings.restartReasons||[]).length} รายการ</p></div>
+          </div>
+          <div className="flex flex-col gap-2 min-h-24 bg-slate-50 p-3 rounded-xl mb-4">
+            {(settings.restartReasons||[]).map((r,i) => (
+              <div key={i} className="flex items-center justify-between bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm text-gray-700 hover:border-red-200 group transition-colors">
+                <span><span className="text-gray-400 font-mono text-xs mr-2">{i+1}.</span>{r}</span>
+                <button onClick={() => removeReason(r)} className="text-gray-300 hover:text-red-500 transition-colors group-hover:text-red-400 ml-2 flex-shrink-0"><i className="fa-solid fa-xmark text-xs"></i></button>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <input value={newReason} onChange={e => setNewReason(e.target.value)} onKeyDown={e => e.key==='Enter'&&addReason()} placeholder="เช่น เริ่มใหม่หลัง MDR-TB confirmed" className="flex-1 p-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 outline-none focus:ring-2 focus:ring-orange-300"/>
+            <button onClick={addReason} className="px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-bold transition-colors"><i className="fa-solid fa-plus"></i></button>
+          </div>
         </div>
       )}
 
@@ -696,18 +924,40 @@ function AdminSettings({ settings, setSettings }) {
 function App() {
   const [page, setPage] = useState('login');
   const [nav, setNav] = useState('dashboard');
-  const [patients, setPatients] = useState(INITIAL_PATIENTS);
+  const [patients, setPatients] = useState([]);
+  const [dbLoading, setDbLoading] = useState(true);
   const [clinical, setClinical] = useState(null);
   const [showNotifs, setShowNotifs] = useState(false);
+  const [showFullNotifs, setShowFullNotifs] = useState(false);
+  const [readAlerts, setReadAlerts] = useState(new Set());
   const [loggingIn, setLoggingIn] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showProfile, setShowProfile] = useState(false);
-  const [settings, setSettings] = useState({ comorbidities: DEFAULT_COMORBIDITIES, drugs: DEFAULT_DRUGS, labGroups: null, customDrugInteractions: [] });
+  const [settings, setSettings] = useState({ comorbidities: DEFAULT_COMORBIDITIES, drugs: DEFAULT_DRUGS, labGroups: null, customDrugInteractions: [], restartReasons: DEFAULT_RESTART_REASONS, regimens: [...REGIMENS] });
+  const [ptSearch, setPtSearch] = useState('');
+  const [ptFilter, setPtFilter] = useState('all');
+  const [ptShowColMgr, setPtShowColMgr] = useState(false);
+
+  const DEMO_IDS = new Set(INITIAL_PATIENTS.map(p => p.id));
+  const [dashFilter, setDashFilter] = useState(null);
+
+  useEffect(() => {
+    loadPatients().then(data => {
+      setPatients([...INITIAL_PATIENTS, ...data]);
+      setDbLoading(false);
+    });
+  }, []);
+
   const alerts = generateAlerts(patients);
+  const unreadCount = alerts.filter(a => !readAlerts.has(a.id)).length;
+  const markRead = id => setReadAlerts(s => new Set([...s, id]));
+  const markAllRead = () => setReadAlerts(new Set(alerts.map(a => a.id)));
+  const openFromNotif = p => { setClinical(p); };
 
   const login = e => { e.preventDefault(); setLoggingIn(true); setTimeout(() => { setPage('app'); setLoggingIn(false); }, 700); };
-  const addPatient = p => setPatients(ps => [...ps, p]);
-  const updatePatient = updated => {
+  const addPatient = async p => { await savePatient(p); setPatients(ps => [...ps, p]); };
+  const updatePatient = async updated => {
+    if (!DEMO_IDS.has(updated.id)) await savePatient(updated);
     setPatients(ps => ps.map(p => p.id===updated.id ? updated : p));
     if (clinical?.id === updated.id) setClinical(updated);
   };
@@ -719,7 +969,8 @@ function App() {
     { id:'reports', icon:'fa-file-contract', label:'รายงาน & สถิติ' },
     { id:'settings', icon:'fa-gear', label:'ตั้งค่าระบบ (Admin)', divider:true },
   ];
-  const titles = { dashboard:'ภาพรวมระบบ', 'patient-list':'ทะเบียนผู้ป่วย', 'weekly-prep':'เตรียมยาประจำสัปดาห์', reports:'รายงาน และ สถิติ', settings:'ตั้งค่าระบบ (Admin)' };
+  const titles = { dashboard:'ภาพรวมระบบ', 'patient-list':'ทะเบียนผู้ป่วย', 'add-patient':'ลงทะเบียนผู้ป่วยใหม่', 'weekly-prep':'เตรียมยาประจำสัปดาห์', reports:'รายงาน และ สถิติ', settings:'ตั้งค่าระบบ (Admin)' };
+  const pageIcons = { dashboard:'fa-chart-pie', 'patient-list':'fa-users', 'add-patient':'fa-user-plus', 'weekly-prep':'fa-calendar-check', reports:'fa-file-contract', settings:'fa-gear' };
 
   if (page === 'login') return (
     <div className="w-full h-screen bg-gradient-to-br from-teal-900 to-teal-700 flex items-center justify-center">
@@ -737,7 +988,7 @@ function App() {
         <div className="mt-8 pt-6 border-t border-gray-100">
           <p className="text-xs text-gray-400 leading-relaxed">พัฒนาโดย เภสัชกร สิรวิชญ์ เผ่าผา</p>
           <p className="text-xs text-gray-400">โรงพยาบาลปรางค์กู่</p>
-          <p className="text-xs text-gray-300 mt-1">Version 0.5.0 · <span className="text-amber-400 font-medium">ยังไม่เผยแพร่</span></p>
+          <p className="text-xs text-gray-300 mt-1">Version 0.6.0 · <span className="text-amber-400 font-medium">ยังไม่เผยแพร่</span></p>
         </div>
       </div>
     </div>
@@ -822,7 +1073,7 @@ function App() {
             <div>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:0,whiteSpace:'nowrap'}}>พัฒนาโดย เภสัชกร สิรวิชญ์ เผ่าผา</p>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:'1px 0 0 0',whiteSpace:'nowrap'}}>โรงพยาบาลปรางค์กู่</p>
-              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.5.0 · <span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
+              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.6.0 · <span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
             </div>
           ) : (
             <div style={{display:'flex',justifyContent:'center'}}>
@@ -834,34 +1085,81 @@ function App() {
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="h-16 bg-white/90 backdrop-blur-md shadow-sm flex items-center justify-between px-6 z-10 border-b border-gray-200 flex-shrink-0">
-          <h1 className="text-lg font-bold text-gray-800 truncate">{titles[nav]}</h1>
-          <div className="flex items-center gap-4 flex-shrink-0">
-            <div className="relative hidden md:block">
-              <input type="text" placeholder="ค้นหาด่วน..." className="w-48 p-2 pl-9 bg-gray-100 rounded-full text-sm focus:ring-2 focus:ring-teal-200 outline-none"/>
+        <header className="h-16 bg-white/90 backdrop-blur-md shadow-sm flex items-center gap-3 px-6 z-10 border-b border-gray-200 flex-shrink-0">
+          <h1 className="text-lg font-bold text-teal-700 whitespace-nowrap flex-shrink-0 flex items-center gap-2">
+            <i className={`fa-solid ${pageIcons[nav]||'fa-circle'} text-teal-500`}></i>
+            {titles[nav]}
+          </h1>
+
+          {/* Patient list controls — แสดงเฉพาะหน้า patient-list */}
+          {nav==='patient-list' && (
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <div className="relative flex-1 max-w-xs">
+                <input value={ptSearch} onChange={e=>setPtSearch(e.target.value)} placeholder="ค้นหา HN, ชื่อ, ตำบล..."
+                  className="w-full py-1.5 pl-8 pr-3 bg-gray-100 rounded-full text-sm focus:ring-2 focus:ring-teal-200 outline-none"/>
+                <i className="fa-solid fa-search absolute left-2.5 top-2 text-gray-400 text-xs"></i>
+              </div>
+              <select value={ptFilter} onChange={e=>setPtFilter(e.target.value)}
+                className="py-1.5 px-3 border border-gray-200 rounded-xl bg-white outline-none text-sm text-gray-600 flex-shrink-0">
+                <option value="all">สถานะทั้งหมด</option>
+                <option value="intensive">Intensive Phase</option>
+                <option value="continuation">Continuation Phase</option>
+                <option value="critical">Lab ผิดปกติ</option>
+              </select>
+              <button type="button" onClick={()=>setPtShowColMgr(v=>!v)} title="จัดการคอลัม"
+                className={`py-1.5 px-3 border rounded-xl text-sm transition-colors flex-shrink-0 ${ptShowColMgr?'bg-teal-600 text-white border-teal-600':'bg-white text-gray-500 border-gray-200 hover:border-teal-300'}`}>
+                <i className="fa-solid fa-table-columns"></i>
+              </button>
+              <button onClick={()=>setNav('add-patient')}
+                className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-1.5 rounded-xl font-bold text-sm whitespace-nowrap flex-shrink-0 shadow-sm shadow-teal-200 transition-all">
+                <i className="fa-solid fa-user-plus mr-1.5"></i>ลงทะเบียนผู้ป่วยใหม่
+              </button>
+            </div>
+          )}
+
+          {/* Quick search — แสดงเฉพาะหน้าอื่น */}
+          {nav!=='patient-list' && (
+            <div className="relative hidden md:block flex-1 max-w-xs ml-auto">
+              <input type="text" placeholder="ค้นหาด่วน..." className="w-full p-2 pl-9 bg-gray-100 rounded-full text-sm focus:ring-2 focus:ring-teal-200 outline-none"/>
               <i className="fa-solid fa-search absolute left-3 top-2.5 text-gray-400 text-xs"></i>
             </div>
-            <div className="relative">
-              <button onClick={() => setShowNotifs(!showNotifs)} className="relative p-2 text-gray-400 hover:text-teal-600 transition-colors">
-                <i className="fa-regular fa-bell text-xl"></i>
-                {alerts.length > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white animate-pulse"></span>}
-              </button>
-              {showNotifs && <NotificationPanel alerts={alerts} onClose={() => setShowNotifs(false)}/>}
-            </div>
+          )}
+
+          <div className="relative flex-shrink-0 ml-auto">
+            <button onClick={()=>setShowNotifs(!showNotifs)} className="relative p-2 text-gray-400 hover:text-teal-600 transition-colors">
+              <i className="fa-regular fa-bell text-xl"></i>
+              {unreadCount > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold px-1 border-2 border-white animate-pulse">{unreadCount}</span>}
+            </button>
+            {showNotifs && <NotificationPanel
+              alerts={alerts} patients={patients} readAlerts={readAlerts}
+              onRead={markRead} onReadAll={markAllRead}
+              onOpen={p=>{openFromNotif(p);setShowNotifs(false);}}
+              onClose={()=>setShowNotifs(false)}
+              onExpand={()=>{setShowNotifs(false);setShowFullNotifs(true);}}
+            />}
           </div>
         </header>
 
-        <div className="flex-1 p-6 overflow-y-auto">
-          {nav==='dashboard'     && <Dashboard patients={patients}/>}
-          {nav==='patient-list'  && <PatientList patients={patients} onAdd={addPatient} onOpen={setClinical} settings={settings}/>}
-          {nav==='weekly-prep'   && <WeeklyPrep patients={patients} onOpen={setClinical}/>}
-          {nav==='reports'       && <Reports patients={patients}/>}
-          {nav==='settings'      && <AdminSettings settings={settings} setSettings={setSettings}/>}
+        <div className={`flex-1 p-6 min-h-0 ${nav==='patient-list'?'overflow-hidden':'overflow-y-auto'}`}>
+          {dbLoading && <div className="flex items-center justify-center h-full"><div className="text-center text-gray-400"><i className="fa-solid fa-spinner fa-spin text-3xl mb-3 block text-teal-500"></i><p className="text-sm">กำลังโหลดข้อมูล...</p></div></div>}
+          {!dbLoading && nav==='dashboard'     && <Dashboard patients={patients} onDashFilter={f=>{setDashFilter(f);setNav('patient-list');}}/>}
+          {!dbLoading && nav==='patient-list'  && <PatientList patients={patients} onAdd={addPatient} onOpen={setClinical} settings={settings} dashFilter={dashFilter} onClearDashFilter={()=>setDashFilter(null)} search={ptSearch} filter={ptFilter} showColMgr={ptShowColMgr} onToggleColMgr={()=>setPtShowColMgr(v=>!v)}/>}
+          {!dbLoading && nav==='add-patient'   && <AddPatientPage onBack={()=>setNav('patient-list')} onAdd={p=>{addPatient(p);setNav('patient-list');}} settings={settings}/>}
+          {!dbLoading && nav==='weekly-prep'   && <WeeklyPrep patients={patients} onOpen={setClinical}/>}
+          {!dbLoading && nav==='reports'       && <Reports patients={patients}/>}
+          {!dbLoading && nav==='settings'      && <AdminSettings settings={settings} setSettings={setSettings}/>}
         </div>
       </main>
 
       {/* User Profile Modal */}
       {showProfile && <UserProfileModal onClose={()=>setShowProfile(false)}/>}
+      {/* Notification Full Modal */}
+      {showFullNotifs && <NotificationFullModal
+        alerts={alerts} patients={patients} readAlerts={readAlerts}
+        onRead={markRead} onReadAll={markAllRead}
+        onOpen={p=>{openFromNotif(p);}}
+        onClose={()=>setShowFullNotifs(false)}
+      />}
     </div>
   );
 }

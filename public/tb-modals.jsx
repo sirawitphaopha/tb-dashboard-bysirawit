@@ -57,12 +57,9 @@ function DoseCalculator({weight,regimen,manualMode,manualDoses,onToggle,onManual
                     <p className="text-xs text-gray-400">{d.min}–{d.max} mg/kg · max {d.absMax}mg</p>
                   </div>
                   {d.isSyrup?<div className="text-right mr-2 flex-shrink-0"><p className="font-bold text-teal-700 text-sm">{d.ml} ml OD</p><p className="text-xs text-gray-400">{d.bottles} ขวด/เดือน</p></div>
-                  :manualMode?<div className="flex items-center gap-1 flex-shrink-0"><input type="number" min={1} max={8} value={curTabs} onChange={e=>onManualChange(d.key,Math.max(1,parseInt(e.target.value)||1))} className="w-12 p-1.5 border-2 border-teal-300 rounded-lg text-center font-bold outline-none focus:ring-2 focus:ring-teal-400"/><span className="text-xs text-gray-500">tab</span></div>
+                  :manualMode?<div className="flex items-center gap-1 flex-shrink-0"><input type="number" min={0.5} max={12} step={0.5} value={curTabs} onChange={e=>onManualChange(d.key,Math.max(0.5,parseFloat(e.target.value)||0.5))} className="w-14 p-1.5 border-2 border-teal-300 rounded-lg text-center font-bold outline-none focus:ring-2 focus:ring-teal-400"/><span className="text-xs text-gray-500">tab</span></div>
                   :<span className="bg-teal-600 text-white px-3 py-1.5 rounded-lg font-mono font-bold text-sm flex-shrink-0">{d.tabs} tab</span>}
                   {d.isSyrup?<div className="text-right flex-shrink-0"><p className="font-bold text-sm text-green-700">5 mg/kg</p><span className="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full font-bold">เหมาะสม</span></div>:<RangeStatus status={curSt} mgkg={curMgkg}/>}
-                </div>
-                <div className="bg-slate-50 px-3 py-1 border-t border-gray-100 text-xs text-gray-500 flex justify-between">
-                  {d.isSyrup?<><span>รวม/เดือน: <strong className="text-teal-700">{d.mlMonth} ml</strong></span><span>({d.bottles} ขวด×30ml)</span></>:<><span>รวม/เดือน: <strong className="text-teal-700 font-mono">{curTabs*30} tab</strong></span><span>({curTabs} tab×30วัน)</span></>}
                 </div>
               </div>
             );
@@ -93,36 +90,127 @@ function DOTCalendar({patient,onUpdate}){
   );
 }
 
-function NotificationPanel({alerts,onClose}){
-  const cols={critical:'border-l-4 border-red-400',warning:'border-l-4 border-amber-400',info:'border-l-4 border-blue-400'};
+function useNotifHelpers(alerts,patients,readAlerts,onRead,onOpen,onClose){
+  const cols={critical:'border-l-4 border-red-500',warning:'border-l-4 border-amber-400',info:'border-l-4 border-blue-400'};
+  const unreadBg={critical:'bg-red-50',warning:'bg-amber-50',info:'bg-blue-50'};
+
+  const sorted=React.useMemo(()=>{
+    const order={critical:0,warning:1,info:2};
+    const appts=alerts.filter(a=>a.id.startsWith('appt-'));
+    const others=alerts.filter(a=>!a.id.startsWith('appt-'));
+    const grouped=[...others];
+    if(appts.length===1) grouped.unshift(appts[0]);
+    else if(appts.length>1) grouped.unshift({id:'appt-group',type:'info',patient:null,patientId:null,msg:`มีนัดพรุ่งนี้ ${appts.length} ราย`,time:'วันนี้'});
+    return grouped.sort((a,b)=>(order[a.type]??2)-(order[b.type]??2));
+  },[alerts]);
+
+  const handleClick=a=>{
+    onRead(a.id);
+    if(a.patientId&&onOpen){const p=(patients||[]).find(x=>x.id===a.patientId);if(p){onOpen(p);if(onClose)onClose();}}
+  };
+
+  const renderItem=(a,i)=>{
+    const isRead=readAlerts.has(a.id);
+    const bg=!isRead?(unreadBg[a.type]||'bg-blue-50'):'bg-white';
+    return(
+      <div key={a.id+i} onClick={()=>handleClick(a)} className={'p-4 transition-colors '+cols[a.type]+' '+bg+(a.patientId?' cursor-pointer':'')+' hover:bg-teal-50'}>
+        <div className="flex justify-between items-start gap-2">
+          <div className="flex-1 min-w-0">
+            {a.patient&&<p className="font-bold text-xs text-gray-700 mb-0.5">{a.patient}</p>}
+            <p className={'text-sm '+(isRead?'text-gray-400':'text-gray-700 font-medium')}>{a.msg}</p>
+            <p className="text-xs text-gray-400 mt-1">{a.time}</p>
+          </div>
+          <div className="flex items-center gap-1.5 flex-shrink-0 mt-0.5">
+            {!isRead&&<button type="button" onClick={e=>{e.stopPropagation();onRead(a.id);}} className="text-xs bg-teal-100 text-teal-700 px-2 py-0.5 rounded-lg hover:bg-teal-200 transition-colors font-bold" title="รับทราบ">✓</button>}
+            {a.patientId&&<i className="fa-solid fa-chevron-right text-xs text-teal-400"></i>}
+          </div>
+        </div>
+      </div>
+    );
+  };
+  return {sorted,renderItem};
+}
+
+function NotificationPanel({alerts,patients,readAlerts,onRead,onReadAll,onOpen,onClose,onExpand}){
+  const unread=alerts.filter(a=>!readAlerts.has(a.id)).length;
+  const {sorted,renderItem}=useNotifHelpers(alerts,patients,readAlerts,onRead,onOpen,onClose);
   return(
     <div className="absolute right-0 top-full mt-2 bg-white rounded-2xl shadow-2xl border border-gray-200 z-50 tb-fade overflow-hidden" style={{width:'360px'}}>
-      <div className="p-4 border-b border-gray-100 flex justify-between items-center"><h3 className="font-bold text-gray-800 text-sm">การแจ้งเตือน <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full ml-1">{alerts.length}</span></h3><button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600"><i className="fa-solid fa-xmark"></i></button></div>
-      <div className="max-h-80 overflow-y-auto divide-y divide-gray-50">{alerts.length===0?<p className="p-6 text-center text-gray-400 text-sm">ไม่มีการแจ้งเตือน</p>:alerts.map(a=><div key={a.id} className={'p-4 hover:bg-gray-50 '+cols[a.type]}><p className="font-bold text-xs text-gray-700">{a.patient}</p><p className="text-sm text-gray-600 mt-0.5">{a.msg}</p><p className="text-xs text-gray-400 mt-1">{a.time}</p></div>)}</div>
+      <div className="p-4 border-b border-gray-100 flex justify-between items-center">
+        <h3 className="font-bold text-gray-800 text-sm">การแจ้งเตือน {unread>0&&<span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full ml-1">{unread}</span>}</h3>
+        <div className="flex items-center gap-1">
+          <button type="button" onClick={onExpand} className="p-1.5 text-gray-400 hover:text-teal-600 transition-colors" title="ขยายเต็มจอ"><i className="fa-solid fa-expand text-xs"></i></button>
+          <button type="button" onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors"><i className="fa-solid fa-xmark"></i></button>
+        </div>
+      </div>
+      <div className="max-h-80 overflow-y-auto divide-y divide-gray-50">
+        {sorted.length===0?<p className="p-6 text-center text-gray-400 text-sm">ไม่มีการแจ้งเตือน</p>:sorted.map((a,i)=>renderItem(a,i))}
+      </div>
+      {alerts.length>0&&<div className="p-3 border-t border-gray-100 text-right"><button type="button" onClick={onReadAll} className="text-xs text-gray-400 hover:text-teal-600 transition-colors font-medium">ล้างการแจ้งเตือนทั้งหมด</button></div>}
+    </div>
+  );
+}
+
+function NotificationFullModal({alerts,patients,readAlerts,onRead,onReadAll,onOpen,onClose}){
+  const unread=alerts.filter(a=>!readAlerts.has(a.id)).length;
+  const {sorted,renderItem}=useNotifHelpers(alerts,patients,readAlerts,onRead,onOpen,null);
+  return(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.45)'}}>
+      <div className="bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden notif-modal" style={{width:'min(90vw,920px)',maxHeight:'82vh'}}>
+        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center flex-shrink-0">
+          <div>
+            <h2 className="font-bold text-gray-800">การแจ้งเตือนทั้งหมด</h2>
+            <p className="text-xs text-gray-400 mt-0.5">ยังไม่อ่าน {unread} รายการ &nbsp;·&nbsp; ทั้งหมด {alerts.length} รายการ</p>
+          </div>
+          <div className="flex items-center gap-3">
+            {alerts.length>0&&<button type="button" onClick={onReadAll} className="text-sm text-gray-400 hover:text-teal-600 transition-colors font-medium"><i className="fa-solid fa-check-double mr-1"></i>ล้างทั้งหมด</button>}
+            <button type="button" onClick={onClose} className="w-9 h-9 rounded-xl bg-gray-100 hover:bg-red-100 hover:text-red-600 text-gray-500 flex items-center justify-center transition-colors"><i className="fa-solid fa-xmark"></i></button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4">
+          {sorted.length===0
+            ?<p className="p-10 text-center text-gray-400">ไม่มีการแจ้งเตือน</p>
+            :<div className="grid grid-cols-2 gap-3" style={{gridAutoRows:'max-content'}}>
+              {sorted.map((a,i)=>(
+                <div key={a.id} className="rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                  {renderItem(a,i)}
+                </div>
+              ))}
+            </div>
+          }
+        </div>
+      </div>
     </div>
   );
 }
 
 function DrugInteractionPanel({patient}){
   const ix=[];const c=(patient.comorbidities||[]).join(' ');
+  const drugs=(patient.concomitantDrugs||[]).join(' ');
   if(c.includes('HIV'))ix.push({s:'high',drug:'Rifampicin + ARV',effect:'Rifampicin เหนี่ยวนำ CYP3A4 ลดระดับ ARV',rec:'ปรึกษา HIV specialist — พิจารณา Efavirenz-based regimen'});
   if(c.includes('DM'))ix.push({s:'medium',drug:'Isoniazid + OHA/Insulin',effect:'INH รบกวนควบคุมน้ำตาล + เพิ่มเสี่ยง Neuropathy',rec:'Monitor FBS ทุกเดือน เสริม B6 50mg/day'});
   if(c.includes('HT'))ix.push({s:'medium',drug:'Rifampicin + CCB',effect:'Rifampicin ลดระดับ CCB อย่างมีนัยสำคัญ',rec:'Monitor BP ใกล้ชิด อาจต้องเพิ่มขนาด CCB'});
   if(c.includes('CKD'))ix.push({s:'high',drug:'Ethambutol + CKD',effect:'EMB สะสมในไต เพิ่มเสี่ยง Optic Neuritis',rec:'ปรับขนาด EMB ตาม eGFR หรือตัดออกถ้า <30'});
   if(c.includes('ตับแข็ง')||c.includes('Cirrhosis'))ix.push({s:'high',drug:'INH/RIF + Cirrhosis',effect:'เสี่ยง Hepatotoxicity สูงมาก',rec:'Monitor LFT ทุก 2 สัปดาห์ ปรึกษา ID'});
+  if(drugs.includes('Warfarin'))ix.push({s:'high',drug:'Rifampicin + Warfarin',effect:'Rifampicin เหนี่ยวนำ CYP2C9 ลด INR อย่างมาก เสี่ยงลิ่มเลือด',rec:'Monitor INR ทุกสัปดาห์ อาจต้องเพิ่มขนาด Warfarin 2-5 เท่า'});
+  if(drugs.includes('Phenytoin'))ix.push({s:'high',drug:'Rifampicin + Phenytoin',effect:'Rifampicin ลดระดับ Phenytoin อย่างมีนัยสำคัญ',rec:'Monitor ระดับยา Phenytoin และอาการชัก'});
+  if(drugs.includes('Methadone'))ix.push({s:'high',drug:'Rifampicin + Methadone',effect:'Rifampicin ลดระดับ Methadone — เสี่ยง withdrawal',rec:'พิจารณาเพิ่มขนาด Methadone ปรึกษาแพทย์'});
   if(ix.length===0)return<div className="bg-green-50 border border-green-200 p-4 rounded-2xl"><p className="text-green-700 font-bold text-sm"><i className="fa-solid fa-check-circle mr-2"></i>ไม่พบ Drug Interaction ที่มีนัยสำคัญ</p></div>;
   const co={high:'bg-red-50 border-red-200 text-red-700',medium:'bg-amber-50 border-amber-200 text-amber-700'};
   return<div className="space-y-3">{ix.map((item,i)=><div key={i} className={'p-4 rounded-xl border '+co[item.s]}><p className="font-bold text-sm mb-1"><i className={'fa-solid '+(item.s==='high'?'fa-triangle-exclamation':'fa-circle-exclamation')+' mr-2'}></i>{item.drug}</p><p className="text-xs text-gray-600 mb-1">{item.effect}</p><p className="text-xs font-semibold text-gray-700">💊 {item.rec}</p></div>)}</div>;
 }
 
-function RegimenHistoryTab({patient,onUpdate}){
+function RegimenHistoryTab({patient,onUpdate,settings}){
+  const regimenList=(settings?.regimens)||REGIMENS;
+  const reasonList=(settings?.restartReasons)||DEFAULT_RESTART_REASONS;
   const [showForm,setShowForm]=useState(false);
-  const [nr,setNr]=useState({regimen:REGIMENS[0],custom:'',startDate:new Date().toISOString().split('T')[0],reason:''});
+  const [nr,setNr]=useState({regimen:REGIMENS[0],custom:'',startDate:new Date().toISOString().split('T')[0],reason:'',customReason:''});
   const save=()=>{
-    if(!nr.startDate||!nr.reason.trim())return;
+    const finalReason=nr.reason==='อื่นๆ'?nr.customReason.trim():nr.reason;
+    if(!nr.startDate||!finalReason)return;
     const final=nr.regimen==='อื่นๆ'?nr.custom:nr.regimen;
     const hist=patient.regimenHistory.map(r=>({...r,isCurrent:false,endDate:r.endDate||nr.startDate}));
-    hist.push({regimen:final,startDate:nr.startDate,reason:nr.reason,isCurrent:true});
+    hist.push({regimen:final,startDate:nr.startDate,reason:finalReason,isCurrent:true});
     onUpdate({...patient,regimen:final,regimenHistory:hist});setShowForm(false);
   };
   return(
@@ -143,12 +231,20 @@ function RegimenHistoryTab({patient,onUpdate}){
         <div className="bg-teal-50 border-2 border-teal-200 p-4 rounded-2xl tb-fade">
           <div className="grid grid-cols-2 gap-3 mb-3">
             <div><label className="text-xs font-bold text-gray-600 block mb-1">สูตรยาใหม่</label>
-              <select value={nr.regimen} onChange={e=>setNr(n=>({...n,regimen:e.target.value}))} className="w-full p-2 border border-gray-200 rounded-lg font-mono text-teal-800 text-sm outline-none bg-white">{REGIMENS.map(r=><option key={r}>{r}</option>)}<option value="อื่นๆ">อื่นๆ</option></select>
+              <select value={nr.regimen} onChange={e=>setNr(n=>({...n,regimen:e.target.value}))} className="w-full p-2 border border-gray-200 rounded-lg font-mono text-teal-800 text-sm outline-none bg-white">{regimenList.map(r=><option key={r}>{r}</option>)}<option value="อื่นๆ">อื่นๆ (กรอกเอง)</option></select>
               {nr.regimen==='อื่นๆ'&&<input value={nr.custom} onChange={e=>setNr(n=>({...n,custom:e.target.value}))} placeholder="กรอกสูตรยา" className="w-full mt-1 p-2 border border-teal-300 rounded-lg text-sm font-mono outline-none bg-white"/>}
             </div>
             <div><label className="text-xs font-bold text-gray-600 block mb-1">วันที่เริ่ม</label><input type="date" value={nr.startDate} onChange={e=>setNr(n=>({...n,startDate:e.target.value}))} className="w-full p-2 border border-gray-200 rounded-lg outline-none bg-white"/></div>
           </div>
-          <div className="mb-3"><label className="text-xs font-bold text-gray-600 block mb-1">เหตุผล <span className="text-red-500">*</span></label><input value={nr.reason} onChange={e=>setNr(n=>({...n,reason:e.target.value}))} placeholder="เช่น Hepatotoxicity, ปรับตาม DST..." className="w-full p-2 border border-gray-200 rounded-lg text-sm outline-none bg-white"/></div>
+          <div className="mb-3">
+            <label className="text-xs font-bold text-gray-600 block mb-1">เหตุผล <span className="text-red-500">*</span></label>
+            <select value={nr.reason} onChange={e=>setNr(n=>({...n,reason:e.target.value}))} className="w-full p-2 border border-gray-200 rounded-lg text-sm outline-none bg-white">
+              <option value="">-- เลือกเหตุผล --</option>
+              {reasonList.filter(r=>!r.includes('Original')).map(r=><option key={r} value={r}>{r}</option>)}
+              <option value="อื่นๆ">อื่นๆ (ระบุเอง)</option>
+            </select>
+            {nr.reason==='อื่นๆ'&&<input value={nr.customReason} onChange={e=>setNr(n=>({...n,customReason:e.target.value}))} placeholder="ระบุเหตุผล..." className="w-full mt-1 p-2 border border-teal-300 rounded-lg text-sm outline-none bg-white"/>}
+          </div>
           <div className="flex justify-end gap-2"><button type="button" onClick={()=>setShowForm(false)} className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-200 rounded-lg">ยกเลิก</button><button type="button" onClick={save} className="px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-bold">บันทึก</button></div>
         </div>
       )}
@@ -181,7 +277,12 @@ function LabTab({patient,onUpdate,settings}){
     if(!tp)return;
     const lft=labData.lft||{};const renal=labData.renal||{};
     const entry={tp,date:date||'',alt:+lft.alt||0,ast:+lft.ast||0,alp:+lft.alp||0,tbili:+lft.tbili||0,dbili:+lft.dbili||0,alb:+lft.alb||0,scr:+renal.scr||0,bun:+renal.bun||0,ua:+renal.ua||0,hbsag,hcv,cbc:labData.cbc||{}};
-    onUpdate({...patient,labs:[...patient.labs,entry],status:+lft.alt>120?'critical':patient.status});
+    const allData={...lft,...renal,...(labData.cbc||{})};
+    const allFields=effectiveLAB_GROUPS.flatMap(g=>g.fields);
+    const hasCritical=allFields.some(f=>f.critical&&getLabStatus(allData[f.key],f)==='critical');
+    const hasAnyInput=Object.values(allData).some(v=>+v>0);
+    const newStatus=hasCritical?'critical':hasAnyInput?'normal':patient.status;
+    onUpdate({...patient,labs:[...patient.labs,entry],status:newStatus});
     setTp('');setDate('');setLabData({lft:{},cbc:{},renal:{}});setHbsag('');setHcv('');setShowAdd(false);
   };
 
@@ -1998,7 +2099,7 @@ function ClinicalModal({patient,onClose,onUpdate,settings}){
         <div className="flex-1 overflow-y-auto p-6 bg-slate-50/30">
           {tab==='timeline'&&<TimelineTab patient={patient} onUpdate={onUpdate} settings={settings}/>}
           {tab==='meds'&&<MedsTab patient={patient} onUpdate={onUpdate} settings={settings}/>}
-          {tab==='regimen-history'&&<RegimenHistoryTab patient={patient} onUpdate={onUpdate}/>}
+          {tab==='regimen-history'&&<RegimenHistoryTab patient={patient} onUpdate={onUpdate} settings={settings}/>}
           {tab==='labs'&&<LabTab patient={patient} onUpdate={onUpdate}/>}
           {tab==='sputum'&&<DiagnosisTab patient={patient} onUpdate={onUpdate}/>}
           {tab==='dot'&&<div className="max-w-lg"><DOTCalendar patient={patient} onUpdate={onUpdate}/></div>}
@@ -2010,74 +2111,90 @@ function ClinicalModal({patient,onClose,onUpdate,settings}){
   );
 }
 
-function AddPatientModal({onClose,onAdd,settings}){
+function AddPatientPage({onBack,onAdd,settings}){
   const comorbList=settings?.comorbidities||DEFAULT_COMORBIDITIES;
-  const [form,setForm]=useState({hn:'',prefix:'นาย',firstName:'',lastName:'',age:'',gender:'M',patientType:'New',diseaseLocation:'Pulmonary',extraPulmonaryType:'',weight:'',regimen:'2HRZE/4HR',customRegimen:'',subdistrict:'พิมาย',comorbidities:[],startDate:new Date().toISOString().split('T')[0]});
+  const [form,setForm]=useState({hn:'',prefix:'นาย',firstName:'',lastName:'',age:'',gender:'M',patientType:'New',diseaseLocation:'Pulmonary',extraPulmonaryType:'',weight:'',regimen:'2HRZE/4HR',customRegimen:'',subdistrict:'พิมาย',comorbidities:[],concomitantDrugs:[],startDate:new Date().toISOString().split('T')[0]});
   const [manualMode,setManualMode]=useState(false);
   const [manualDoses,setManualDoses]=useState({});
   const [errors,setErrors]=useState({});
+  const [drugInput,setDrugInput]=useState('');
   const set=(k,v)=>setForm(f=>({...f,[k]:v}));
+  const setPrefix=p=>{const gMap={นาย:'M',เด็กชาย:'M',นาง:'F',นางสาว:'F',เด็กหญิง:'F'};setForm(f=>({...f,prefix:p,gender:gMap[p]||f.gender}));};
   const toggleCo=c=>setForm(f=>({...f,comorbidities:f.comorbidities.includes(c)?f.comorbidities.filter(x=>x!==c):[...f.comorbidities,c]}));
+  const addDrug=()=>{if(drugInput.trim()){setForm(f=>({...f,concomitantDrugs:[...f.concomitantDrugs,drugInput.trim()]}));setDrugInput('');}};
+  const removeDrug=i=>setForm(f=>({...f,concomitantDrugs:f.concomitantDrugs.filter((_,idx)=>idx!==i)}));
   const finalReg=form.regimen==='อื่นๆ'?form.customRegimen:form.regimen;
   const validate=()=>{const e={};if(!form.hn.trim())e.hn='กรุณากรอก HN';if(!form.firstName.trim())e.firstName='กรุณากรอกชื่อ';if(!form.lastName.trim())e.lastName='กรุณากรอกนามสกุล';if(!form.weight||+form.weight<10)e.weight='น้ำหนักไม่ถูกต้อง';return e;};
-  const submit=()=>{const e=validate();if(Object.keys(e).length){setErrors(e);return;}onAdd({id:'P'+Date.now(),hn:form.hn,prefix:form.prefix,firstName:form.firstName,lastName:form.lastName,name:form.prefix+' '+form.firstName+' '+form.lastName,age:+form.age,gender:form.gender,patientType:form.patientType,diseaseLocation:form.diseaseLocation,extraPulmonaryType:form.extraPulmonaryType,subdistrict:form.subdistrict,weight:+form.weight,regimen:finalReg,regimenHistory:[{regimen:finalReg,startDate:form.startDate,reason:'เริ่มรักษาครั้งแรก',isCurrent:true}],phase:'Intensive',month:0,day:1,status:'normal',adherence:100,comorbidities:form.comorbidities,concomitantDrugs:[],hivStatus:null,hivNote:'',nextAppt:'นัดครั้งแรก',daysUntil:30,startDate:form.startDate,labs:[],sputum:[],adr:{},visits:[],dot:{},customDoses:manualMode?manualDoses:null});onClose();};
+  const submit=()=>{const e=validate();if(Object.keys(e).length){setErrors(e);return;}onAdd({id:'P'+Date.now(),hn:form.hn,prefix:form.prefix,firstName:form.firstName,lastName:form.lastName,name:form.prefix+' '+form.firstName+' '+form.lastName,age:+form.age,gender:form.gender,patientType:form.patientType,diseaseLocation:form.diseaseLocation,extraPulmonaryType:form.extraPulmonaryType,subdistrict:form.subdistrict,weight:+form.weight,regimen:finalReg,regimenHistory:[{regimen:finalReg,startDate:form.startDate,reason:'เริ่มรักษาครั้งแรก',isCurrent:true}],phase:'Intensive',month:0,day:1,status:'normal',adherence:100,comorbidities:form.comorbidities,concomitantDrugs:form.concomitantDrugs,hivStatus:null,hivNote:'',nextAppt:'นัดครั้งแรก',daysUntil:30,startDate:form.startDate,labs:[],sputum:[],adr:{},visits:[],dot:{},customDoses:manualMode?manualDoses:null});onBack();};
   return(
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden tb-fade">
-        <header className="bg-teal-700 px-6 py-4 flex justify-between items-center text-white flex-shrink-0">
-          <h2 className="text-lg font-bold"><i className="fa-solid fa-user-plus mr-2"></i>ลงทะเบียนผู้ป่วยวัณโรครายใหม่</h2>
-          <button type="button" onClick={onClose} className="w-8 h-8 rounded-full bg-teal-600 hover:bg-teal-500 flex items-center justify-center"><i className="fa-solid fa-xmark"></i></button>
-        </header>
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          <FormSection icon="fa-user" title="ข้อมูลผู้ป่วย">
-            <div className="space-y-3">
-              <div className="grid grid-cols-[96px_1fr_1fr] gap-3">
-                <div><label className="block text-xs font-bold text-gray-600 mb-1">คำนำหน้า</label><select value={form.prefix} onChange={e=>set('prefix',e.target.value)} className={`${INP} border-gray-200 font-semibold`}>{PREFIXES.map(p=><option key={p}>{p}</option>)}</select></div>
-                <div><label className="block text-xs font-bold text-gray-600 mb-1">ชื่อ <span className="text-red-500">*</span></label><input value={form.firstName} onChange={e=>set('firstName',e.target.value)} className={INP+' '+(errors.firstName?'border-red-400':'border-gray-200')}/><FieldError msg={errors.firstName}/></div>
-                <div><label className="block text-xs font-bold text-gray-600 mb-1">นามสกุล <span className="text-red-500">*</span></label><input value={form.lastName} onChange={e=>set('lastName',e.target.value)} className={INP+' '+(errors.lastName?'border-red-400':'border-gray-200')}/><FieldError msg={errors.lastName}/></div>
-              </div>
-              <div className="grid grid-cols-[1fr_90px_auto] gap-3 items-end">
-                <div><label className="block text-xs font-bold text-gray-600 mb-1">HN <span className="text-red-500">*</span></label><input value={form.hn} onChange={e=>set('hn',e.target.value)} placeholder="12345/67" className={INP+' font-mono '+(errors.hn?'border-red-400':'border-gray-200')}/><FieldError msg={errors.hn}/></div>
-                <div><label className="block text-xs font-bold text-gray-600 mb-1">อายุ (ปี)</label><input type="number" min={0} max={120} value={form.age} onChange={e=>set('age',e.target.value)} className={`${INP} border-gray-200 text-center`}/></div>
-                <div><label className="block text-xs font-bold text-gray-600 mb-1">เพศ</label><div className="flex gap-1.5">{[['M','fa-person','ชาย'],['F','fa-person-dress','หญิง']].map(([v,ic,lbl])=><label key={v} className={'flex items-center gap-1.5 cursor-pointer px-3 py-2.5 rounded-xl border-2 transition-all font-semibold text-sm whitespace-nowrap '+(form.gender===v?'bg-teal-50 border-teal-400 text-teal-700':'border-gray-200 text-gray-500')}><input type="radio" className="hidden" checked={form.gender===v} onChange={()=>set('gender',v)}/><i className={`fa-solid ${ic}`}></i>{lbl}</label>)}</div></div>
-              </div>
-            </div>
-          </FormSection>
-          <hr className="border-gray-100"/>
-          <FormSection icon="fa-hospital" title="ข้อมูลทางคลินิก">
-            <div className="space-y-3">
-              <div><label className="block text-xs font-bold text-gray-600 mb-2">ประเภทผู้ป่วย</label><div className="grid grid-cols-4 gap-2">{PATIENT_TYPES.map(t=><button key={t} type="button" onClick={()=>set('patientType',t)} className={'py-2 rounded-xl border-2 text-xs font-bold transition-all '+(form.patientType===t?'bg-teal-600 border-teal-600 text-white':'border-gray-200 text-gray-600 hover:border-teal-300')}>{t}</button>)}</div></div>
-              <div><label className="block text-xs font-bold text-gray-600 mb-2">ตำแหน่งโรค</label><div className="grid grid-cols-3 gap-2">{DISEASE_LOCATIONS.map(l=><button key={l} type="button" onClick={()=>set('diseaseLocation',l)} className={'py-2.5 rounded-xl border-2 text-sm font-semibold transition-all '+(form.diseaseLocation===l?'bg-teal-600 border-teal-600 text-white':'border-gray-200 text-gray-600 hover:border-teal-300')}>{l}</button>)}</div></div>
-              {form.diseaseLocation==='Extra-pulmonary'&&<div className="tb-fade"><label className="block text-xs font-bold text-gray-600 mb-1">ระบุตำแหน่ง</label><select value={form.extraPulmonaryType} onChange={e=>set('extraPulmonaryType',e.target.value)} className={`${INP} border-teal-300 bg-teal-50`}><option value="">-- เลือก --</option>{EXTRA_PULMONARY_TYPES.map(t=><option key={t}>{t}</option>)}</select></div>}
-            </div>
-          </FormSection>
-          <hr className="border-gray-100"/>
-          <FormSection icon="fa-pills" title="น้ำหนักและสูตรยา">
-            <div className="space-y-4">
-              <div className="grid grid-cols-[130px_1fr] gap-4">
-                <div><label className="block text-xs font-bold text-gray-600 mb-1">น้ำหนัก (kg) <span className="text-red-500">*</span></label><input type="number" value={form.weight} onChange={e=>set('weight',e.target.value)} className={'w-full p-2.5 border rounded-xl bg-white text-center font-bold text-xl outline-none focus:ring-2 focus:ring-teal-400 '+(errors.weight?'border-red-400':'border-gray-200')}/><FieldError msg={errors.weight}/></div>
-                <div><label className="block text-xs font-bold text-gray-600 mb-1">สูตรยาเริ่มต้น</label><select value={form.regimen} onChange={e=>set('regimen',e.target.value)} className={`${INP} border-gray-200 font-mono text-teal-800 font-bold`}>{REGIMENS.map(r=><option key={r}>{r}</option>)}<option value="อื่นๆ">อื่นๆ</option></select>{form.regimen==='อื่นๆ'&&<input value={form.customRegimen} onChange={e=>set('customRegimen',e.target.value)} placeholder="กรอกสูตรยา" className="w-full mt-2 p-2.5 border-2 border-teal-300 rounded-xl bg-teal-50 outline-none font-mono text-sm"/>}</div>
-              </div>
-              <DoseCalculator weight={form.weight} regimen={finalReg} manualMode={manualMode} manualDoses={manualDoses} onToggle={()=>setManualMode(m=>!m)} onManualChange={(k,v)=>setManualDoses(d=>({...d,[k]:v}))}/>
-            </div>
-          </FormSection>
-          <hr className="border-gray-100"/>
-          <FormSection icon="fa-map-marker-alt" title="ข้อมูลพื้นฐาน">
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-xs font-bold text-gray-600 mb-1">ตำบล</label><select value={form.subdistrict} onChange={e=>set('subdistrict',e.target.value)} className={`${INP} border-gray-200`}>{TAMBONS.map(t=><option key={t} value={t}>ต.{t}</option>)}</select></div>
-                <div><label className="block text-xs font-bold text-gray-600 mb-1">วันที่เริ่มรักษา</label><input type="date" value={form.startDate} onChange={e=>set('startDate',e.target.value)} className={`${INP} border-gray-200`}/></div>
-              </div>
-              <div><label className="block text-xs font-bold text-gray-600 mb-2">โรคประจำตัว</label>
-                <div className="grid grid-cols-2 gap-2 max-h-44 overflow-y-auto pr-1">{comorbList.map(c=><button key={c} type="button" onClick={()=>toggleCo(c)} className={'flex items-center gap-2 p-2.5 rounded-xl border-2 transition-all text-xs text-left '+(form.comorbidities.includes(c)?'bg-teal-50 border-teal-400 text-teal-800 font-semibold':'border-gray-200 text-gray-600 hover:border-teal-200')}><div className={'w-4 h-4 rounded flex items-center justify-center flex-shrink-0 '+(form.comorbidities.includes(c)?'bg-teal-500':'border-2 border-gray-300')}>{form.comorbidities.includes(c)&&<i className="fa-solid fa-check text-white" style={{fontSize:'8px'}}></i>}</div><span className="truncate">{c}</span></button>)}</div>
-              </div>
-            </div>
-          </FormSection>
+    <div className="flex flex-col h-full tb-fade">
+      <div className="flex items-center justify-between mb-5 flex-shrink-0">
+        <div className="flex items-center gap-3">
+          <button type="button" onClick={onBack} className="w-9 h-9 bg-gray-100 hover:bg-gray-200 rounded-xl flex items-center justify-center text-gray-500 transition-colors"><i className="fa-solid fa-arrow-left text-sm"></i></button>
+          <div>
+            <h2 className="text-lg font-bold text-gray-800"><i className="fa-solid fa-user-plus mr-2 text-teal-600"></i>ลงทะเบียนผู้ป่วยวัณโรครายใหม่</h2>
+            <p className="text-xs text-gray-400">กรอกข้อมูลให้ครบถ้วนก่อนบันทึก</p>
+          </div>
         </div>
-        <footer className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 flex-shrink-0">
-          <button type="button" onClick={onClose} className="px-5 py-2.5 rounded-xl font-bold text-gray-500 hover:bg-gray-200 transition-colors">ยกเลิก</button>
+        <div className="flex gap-3">
+          <button type="button" onClick={onBack} className="px-5 py-2.5 rounded-xl font-bold text-gray-500 hover:bg-gray-200 transition-colors">ยกเลิก</button>
           <button type="button" onClick={submit} className="px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold shadow-md transition-all"><i className="fa-solid fa-save mr-2"></i>บันทึกและสร้างเคส</button>
-        </footer>
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto">
+        <div className="grid grid-cols-2 gap-6">
+          <div className="space-y-5">
+            <FormSection icon="fa-user" title="ข้อมูลผู้ป่วย">
+              <div className="space-y-3">
+                <div className="grid grid-cols-[96px_1fr_1fr] gap-3">
+                  <div><label className="block text-xs font-bold text-gray-600 mb-1">คำนำหน้า</label><select value={form.prefix} onChange={e=>setPrefix(e.target.value)} className={`${INP} border-gray-200 font-semibold`}>{PREFIXES.map(p=><option key={p}>{p}</option>)}</select></div>
+                  <div><label className="block text-xs font-bold text-gray-600 mb-1">ชื่อ <span className="text-red-500">*</span></label><input value={form.firstName} onChange={e=>set('firstName',e.target.value)} className={INP+' '+(errors.firstName?'border-red-400':'border-gray-200')}/><FieldError msg={errors.firstName}/></div>
+                  <div><label className="block text-xs font-bold text-gray-600 mb-1">นามสกุล <span className="text-red-500">*</span></label><input value={form.lastName} onChange={e=>set('lastName',e.target.value)} className={INP+' '+(errors.lastName?'border-red-400':'border-gray-200')}/><FieldError msg={errors.lastName}/></div>
+                </div>
+                <div className="grid grid-cols-[1fr_90px_auto] gap-3 items-end">
+                  <div><label className="block text-xs font-bold text-gray-600 mb-1">HN <span className="text-red-500">*</span></label><input value={form.hn} onChange={e=>set('hn',e.target.value)} placeholder="12345/67" className={INP+' font-mono '+(errors.hn?'border-red-400':'border-gray-200')}/><FieldError msg={errors.hn}/></div>
+                  <div><label className="block text-xs font-bold text-gray-600 mb-1">อายุ (ปี)</label><input type="number" min={0} max={120} value={form.age} onChange={e=>set('age',e.target.value)} className={`${INP} border-gray-200 text-center`}/></div>
+                  <div><label className="block text-xs font-bold text-gray-600 mb-1">เพศ</label><div className="flex gap-1.5">{[['M','fa-person','ชาย'],['F','fa-person-dress','หญิง']].map(([v,ic,lbl])=><label key={v} className={'flex items-center gap-1.5 cursor-pointer px-3 py-2.5 rounded-xl border-2 transition-all font-semibold text-sm whitespace-nowrap '+(form.gender===v?'bg-teal-50 border-teal-400 text-teal-700':'border-gray-200 text-gray-500')}><input type="radio" className="hidden" checked={form.gender===v} onChange={()=>set('gender',v)}/><i className={`fa-solid ${ic}`}></i>{lbl}</label>)}</div></div>
+                </div>
+              </div>
+            </FormSection>
+            <hr className="border-gray-100"/>
+            <FormSection icon="fa-hospital" title="ข้อมูลทางคลินิก">
+              <div className="space-y-3">
+                <div><label className="block text-xs font-bold text-gray-600 mb-2">ประเภทผู้ป่วย</label><div className="grid grid-cols-3 gap-2">{PATIENT_TYPES.map(t=><button key={t} type="button" onClick={()=>set('patientType',t)} className={'py-2 rounded-xl border-2 text-xs font-bold transition-all '+(form.patientType===t?'bg-teal-600 border-teal-600 text-white':'border-gray-200 text-gray-600 hover:border-teal-300')}>{t}</button>)}</div></div>
+                <div><label className="block text-xs font-bold text-gray-600 mb-2">ตำแหน่งโรค</label><div className="grid grid-cols-3 gap-2">{DISEASE_LOCATIONS.map(l=><button key={l} type="button" onClick={()=>set('diseaseLocation',l)} className={'py-2.5 rounded-xl border-2 text-sm font-semibold transition-all '+(form.diseaseLocation===l?'bg-teal-600 border-teal-600 text-white':'border-gray-200 text-gray-600 hover:border-teal-300')}>{l}</button>)}</div></div>
+                {form.diseaseLocation==='Extra-pulmonary'&&<div className="tb-fade"><label className="block text-xs font-bold text-gray-600 mb-1">ระบุตำแหน่ง</label><select value={form.extraPulmonaryType} onChange={e=>set('extraPulmonaryType',e.target.value)} className={`${INP} border-teal-300 bg-teal-50`}><option value="">-- เลือก --</option>{EXTRA_PULMONARY_TYPES.map(t=><option key={t}>{t}</option>)}</select></div>}
+                <div><label className="block text-xs font-bold text-gray-600 mb-1">ตำบล</label><select value={form.subdistrict} onChange={e=>set('subdistrict',e.target.value)} className={`${INP} border-gray-200`}>{TAMBONS.map(t=><option key={t} value={t}>ต.{t}</option>)}</select></div>
+              </div>
+            </FormSection>
+            <hr className="border-gray-100"/>
+            <FormSection icon="fa-capsules" title="ยาร่วมรักษา (Concomitant Drugs)">
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <input value={drugInput} onChange={e=>setDrugInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&(e.preventDefault(),addDrug())} placeholder="พิมพ์ชื่อยา แล้วกด Enter หรือ +" className={`${INP} border-gray-200 flex-1`}/>
+                  <button type="button" onClick={addDrug} className="px-3 bg-teal-600 text-white rounded-xl font-bold hover:bg-teal-700 transition-colors"><i className="fa-solid fa-plus"></i></button>
+                </div>
+                {form.concomitantDrugs.length>0&&<div className="flex flex-wrap gap-2 pt-1">{form.concomitantDrugs.map((d,i)=><span key={i} className="flex items-center gap-1.5 bg-teal-50 border border-teal-200 text-teal-800 text-xs font-semibold px-3 py-1.5 rounded-full">{d}<button type="button" onClick={()=>removeDrug(i)} className="text-teal-400 hover:text-red-500 transition-colors ml-0.5"><i className="fa-solid fa-xmark"></i></button></span>)}</div>}
+              </div>
+            </FormSection>
+          </div>
+          <div className="space-y-5">
+            <FormSection icon="fa-pills" title="น้ำหนักและสูตรยา">
+              <div className="space-y-4">
+                <div className="grid grid-cols-[110px_1fr_1fr] gap-3 items-end">
+                  <div><label className="block text-xs font-bold text-gray-600 mb-1">น้ำหนัก (kg) <span className="text-red-500">*</span></label><input type="number" value={form.weight} onChange={e=>set('weight',e.target.value)} className={'w-full p-2.5 border rounded-xl bg-white text-center font-bold text-xl outline-none focus:ring-2 focus:ring-teal-400 '+(errors.weight?'border-red-400':'border-gray-200')}/><FieldError msg={errors.weight}/></div>
+                  <div><label className="block text-xs font-bold text-gray-600 mb-1">สูตรยาเริ่มต้น</label><select value={form.regimen} onChange={e=>set('regimen',e.target.value)} className={`${INP} border-gray-200 font-mono text-teal-800 font-bold`}>{(settings?.regimens||REGIMENS).map(r=><option key={r}>{r}</option>)}<option value="อื่นๆ">อื่นๆ</option></select>{form.regimen==='อื่นๆ'&&<input value={form.customRegimen} onChange={e=>set('customRegimen',e.target.value)} placeholder="กรอกสูตรยา" className="w-full mt-2 p-2.5 border-2 border-teal-300 rounded-xl bg-teal-50 outline-none font-mono text-sm"/>}</div>
+                  <div><label className="block text-xs font-bold text-gray-600 mb-1">วันที่เริ่มรักษา</label><input type="date" value={form.startDate} onChange={e=>set('startDate',e.target.value)} className={`${INP} border-gray-200`}/></div>
+                </div>
+                <DoseCalculator weight={form.weight} regimen={finalReg} manualMode={manualMode} manualDoses={manualDoses} onToggle={()=>setManualMode(m=>!m)} onManualChange={(k,v)=>setManualDoses(d=>({...d,[k]:v}))}/>
+              </div>
+            </FormSection>
+            <hr className="border-gray-100"/>
+            <FormSection icon="fa-heart-pulse" title="โรคประจำตัว">
+              <div className="grid grid-cols-2 gap-2">{comorbList.map(c=><button key={c.abbr} type="button" onClick={()=>toggleCo(c.abbr)} className={'flex items-center gap-2 p-2.5 rounded-xl border-2 transition-all text-xs text-left '+(form.comorbidities.includes(c.abbr)?'bg-teal-50 border-teal-400 text-teal-800 font-semibold':'border-gray-200 text-gray-600 hover:border-teal-200')}><div className={'w-4 h-4 rounded flex items-center justify-center flex-shrink-0 '+(form.comorbidities.includes(c.abbr)?'bg-teal-500':'border-2 border-gray-300')}>{form.comorbidities.includes(c.abbr)&&<i className="fa-solid fa-check text-white" style={{fontSize:'8px'}}></i>}</div><span className="truncate">{c.name} <span className="opacity-50 font-normal">({c.abbr})</span></span></button>)}</div>
+            </FormSection>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -2156,4 +2273,4 @@ function PharmSummaryTab({ patient }) {
   );
 }
 
-Object.assign(window,{DoseCalculator,DOTCalendar,DrugInteractionPanel,RegimenHistoryTab,NotificationPanel,AddPatientModal,ClinicalModal,InfoBar,LabTab,ADRTab,TimelineTab,DiagnosisTab,MedsTab,PharmSummaryTab,ConfirmModal,hasResistance,afbCombined,isAfbPositive,getSputumConversion,isDelayedConversion});
+Object.assign(window,{DoseCalculator,DOTCalendar,DrugInteractionPanel,RegimenHistoryTab,NotificationPanel,NotificationFullModal,AddPatientPage,ClinicalModal,InfoBar,LabTab,ADRTab,TimelineTab,DiagnosisTab,MedsTab,PharmSummaryTab,ConfirmModal,hasResistance,afbCombined,isAfbPositive,getSputumConversion,isDelayedConversion});
