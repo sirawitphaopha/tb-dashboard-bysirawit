@@ -17,15 +17,25 @@ export default function TBApp() {
     const root = document.getElementById('root');
     if (!root) return;
 
-    const loadScript = (src: string, type?: string): Promise<void> =>
+    const loadScript = (src: string): Promise<void> =>
       new Promise((resolve, reject) => {
         const s = document.createElement('script');
         s.src = src;
-        if (type) s.type = type;
         s.onload = () => resolve();
         s.onerror = () => reject(new Error('Failed to load ' + src));
         document.body.appendChild(s);
       });
+
+    const loadBabelScript = async (src: string): Promise<void> => {
+      const res = await fetch(src);
+      if (!res.ok) throw new Error('Failed to fetch ' + src);
+      const code = await res.text();
+      const babel = (window as any).Babel;
+      const result = babel.transform(code, { presets: ['react'] });
+      const s = document.createElement('script');
+      s.textContent = result.code;
+      document.body.appendChild(s);
+    };
 
     (async () => {
       try {
@@ -42,11 +52,11 @@ export default function TBApp() {
         // 4. Load app data (plain JS)
         await loadScript('/tb-data.js');
 
-        // 5. Load modals (Babel JSX)
-        await loadScript('/tb-modals.jsx', 'text/babel');
+        // 5. Load modals (Babel JSX) — fetch + transform manually
+        await loadBabelScript('/tb-modals.jsx');
 
         // 6. Load main app (Babel JSX) — this renders into #root
-        await loadScript('/tb-app.jsx', 'text/babel');
+        await loadBabelScript('/tb-app.jsx');
       } catch (err) {
         console.error('[TBApp] Script load error:', err);
       }

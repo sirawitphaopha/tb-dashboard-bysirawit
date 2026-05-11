@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(cp /vercel/share/v0-project/tb-app.jsx /vercel/share/v0-project/public/)",
+      "Bash(cp /vercel/share/v0-project/tb-data.js /vercel/share/v0-project/public/)",
+      "Bash(cp /vercel/share/v0-project/tb-modals.jsx /vercel/share/v0-project/public/)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/tb-data.js)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/tb-app.jsx)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/tb-modals.jsx)",
+      "Bash(curl -s http://localhost:3000)",
+      "Bash(cat /tmp/next-dev.log)",
+      "Read(//tmp/**)"
+    ]
+  }
+}

@@ -8,18 +8,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="th" className="bg-slate-100">
-      <head>
-        <link
-          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
-          rel="stylesheet"
-        />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap"
-          rel="stylesheet"
-        />
-      </head>
-      <body className="bg-slate-100 overflow-hidden">{children}</body>
+    <html lang="th" className="h-full">
+      <body className="h-full m-0 p-0 overflow-hidden">{children}</body>
     </html>
   );
 }
