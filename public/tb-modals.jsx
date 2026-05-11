@@ -453,7 +453,7 @@ function buildGroupedTimeline(patient) {
 
     // Resistance alert
     const isRes = hasResistance && hasResistance([s]);
-    if (isRes) raw.push({ type:'alert-high', date:s.date, label:'⚠ พบเชื้อดื้อยา — '+[s.rifResult==='RIF resistant'?'RIF resistant':'',s.inhResult==='INH resistant'?'INH resistant':''].filter(Boolean).join(', '), detail:'ตรวจสอบสูตรยาและปรึกษาผู้เชี่ยวชาญ MDR-TB' });
+    if (isRes) raw.push({ type:'alert-high', date:s.date, label:'⚠ พบเชื้อดื้อยา — '+[s.rifResult==='RIF resistant'?'RIF resistant':'',s.inhResult==='INH resistant'?'INH resistant':''].filter(Boolean).join(', '), detail:'ตรวจสอบสูตรยาและปรึกษาผู้เชี่ยวช��ญ MDR-TB' });
 
     // Delayed conversion
     if (delayedConv && s.tp === 'M2') raw.push({ type:'alert-warn', date:s.date, label:'⚡ Delayed Sputum Conversion (M2 ยังบวก)', detail:'ประเมิน adherence และพิจารณาทบทวนสูตรยา' });
@@ -1940,32 +1940,58 @@ function ClinicalModal({patient,onClose,onUpdate,settings}){
   const isRes = hasResistance(patient.sputum||[]) || patient.hasResistance;
   const isCritical = patient.status==='critical' || isRes;
   return(
-    <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className={`bg-white rounded-[2rem] shadow-2xl w-full max-w-7xl h-[94vh] flex flex-col overflow-hidden tb-fade ${isRes?'ring-4 ring-red-500':''}`}>
-        <div className={`px-6 pt-5 pb-3 border-b flex-shrink-0 ${isRes?'bg-red-50 border-red-200':'bg-white border-gray-100'}`}>
-          <div className="flex justify-between items-start">
-            <div className="flex items-center gap-4">
-              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl text-white font-black shadow-lg flex-shrink-0 ${isCritical?'bg-gradient-to-br from-red-500 to-red-700':'bg-gradient-to-br from-teal-400 to-teal-600'}`}>{(patient.firstName||patient.name).substring(0,2)}</div>
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="text-xl font-bold text-gray-900">{patient.name}</h2>
-                  {isCritical&&<span className="animate-pulse bg-red-500 text-white text-xs px-2.5 py-0.5 rounded-full font-bold"><i className="fa-solid fa-triangle-exclamation mr-1"></i>Critical</span>}
-                  {isRes&&<span className="animate-pulse bg-red-700 text-white text-xs px-2.5 py-0.5 rounded-full font-bold"><i className="fa-solid fa-biohazard mr-1"></i>Drug Resistant</span>}
-                  {hasAdr&&<span className="bg-red-100 text-red-600 text-xs px-2 py-0.5 rounded-full font-bold">ADR {ADR_LIST.filter(a=>safeAdr[a.key]?.checked).length} รายการ</span>}
-                </div>
-                <div className="flex flex-wrap gap-2 mt-1">
-                  <span className="text-xs text-gray-500 font-mono bg-gray-100 px-2 py-0.5 rounded">{patient.regimen}</span>
-                  <span className="text-xs text-teal-600 font-semibold">{patient.phase} · M{patient.month} · Day {patient.day}</span>
-                  <span className="text-xs text-gray-500">Adherence: <strong className={patient.adherence>=90?'text-green-600':'text-amber-600'}>{patient.adherence}%</strong></span>
-                  {crcl&&<span className={'text-xs font-semibold '+crClStage(crcl).color}>CrCl: {crcl}</span>}
-                  {(patient.comorbidities||[]).map(c=><span key={c} className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full text-xs font-bold">{c}</span>)}
-                </div>
+    <div className={`bg-white w-full h-full flex flex-col overflow-hidden tb-fade ${isRes?'ring-4 ring-red-500 ring-inset':''}`}>
+        {/* ── 2-column compact header ── */}
+        <div className={`flex items-center gap-4 px-5 border-b flex-shrink-0 ${isRes?'bg-red-50 border-red-200':'bg-white border-gray-100'}`} style={{minHeight:'80px',padding:'10px 20px'}}>
+
+          {/* คอลัมน์ซ้าย — fit-content ไม่ stretch */}
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-sm text-white font-black flex-shrink-0 ${isCritical?'bg-red-500':'bg-teal-500'}`}>{(patient.firstName||patient.name).substring(0,2)}</div>
+            <div className="flex flex-col gap-1 min-w-0">
+              {/* แถว 1: ชื่อ + status badges */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-bold text-gray-900 text-sm leading-tight">{patient.name}</span>
+                {isCritical&&<span className="animate-pulse bg-red-500 text-white text-xs px-2 py-0.5 rounded-full font-bold"><i className="fa-solid fa-triangle-exclamation mr-1"></i>Critical</span>}
+                {isRes&&<span className="animate-pulse bg-red-700 text-white text-xs px-2 py-0.5 rounded-full font-bold"><i className="fa-solid fa-biohazard mr-1"></i>Resistant</span>}
+                {hasAdr&&<span className="bg-red-100 text-red-600 text-xs px-2 py-0.5 rounded-full font-bold">ADR {ADR_LIST.filter(a=>safeAdr[a.key]?.checked).length} รายการ</span>}
+              </div>
+              {/* แถว 2: HN · อายุ/เพศ · ตำบล · โรคประจำตัว */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-gray-400 font-mono">HN: <strong className="text-gray-600">{patient.hn}</strong></span>
+                {patient.age&&<span className="text-xs text-gray-400">{patient.age} ปี · {patient.gender==='M'?'ชาย':'หญิง'}</span>}
+                {patient.subdistrict&&<span className="text-xs text-gray-400">ต.<strong className="text-gray-600">{patient.subdistrict}</strong></span>}
+                {(patient.comorbidities||[]).map(c=><span key={c} className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full text-xs font-bold">{c}</span>)}
               </div>
             </div>
-            <button type="button" onClick={onClose} className="w-10 h-10 bg-gray-100 hover:bg-red-100 hover:text-red-600 rounded-full flex items-center justify-center text-gray-500 transition-colors flex-shrink-0"><i className="fa-solid fa-xmark text-lg"></i></button>
           </div>
+
+          {/* divider */}
+          <div className="w-px bg-gray-100 flex-shrink-0" style={{alignSelf:'stretch',margin:'8px 0'}}></div>
+
+          {/* คอลัมน์ขวา */}
+          <div className="flex flex-col gap-1 flex-shrink-0">
+            {/* แถว 1: clinical */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-mono font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded">{patient.regimen}</span>
+              <span className="text-xs text-teal-600 font-semibold">{patient.phase} · M{patient.month} · Day {patient.day}</span>
+              <span className="text-xs text-gray-500">Adherence: <strong className={patient.adherence>=90?'text-green-600':'text-amber-500'}>{patient.adherence}%</strong></span>
+              {crcl&&<span className={'text-xs font-semibold '+crClStage(crcl).color}>CrCl: {crcl}</span>}
+            </div>
+            {/* แถว 2: demographic */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-gray-400">น้ำหนัก: <strong className="text-teal-700">{patient.weight} kg</strong></span>
+              {patient.nextAppt&&<span className="text-xs text-gray-400">นัด: <strong className="text-gray-600">{patient.nextAppt}</strong></span>}
+              {patient.hivStatus&&<span className={`text-xs px-2 py-0.5 rounded-full font-bold ${patient.hivStatus==='Positive'?'bg-red-100 text-red-700':'bg-green-100 text-green-700'}`}>HIV: {patient.hivStatus}</span>}
+              {patient.patientType&&<span className="bg-blue-50 text-blue-600 text-xs px-2 py-0.5 rounded-full font-bold">{patient.patientType}</span>}
+              {patient.diseaseLocation&&<span className="bg-indigo-50 text-indigo-600 text-xs px-2 py-0.5 rounded-full font-bold">{patient.diseaseLocation}</span>}
+            </div>
+          </div>
+
+          {/* ปุ่มกลับ — เด่น สี teal */}
+          <button type="button" onClick={onClose} className="ml-auto flex items-center gap-2 px-4 py-2.5 bg-teal-500 hover:bg-teal-600 text-white rounded-xl text-sm font-bold transition-colors flex-shrink-0 shadow-sm">
+            <i className="fa-solid fa-arrow-left"></i>กลับ
+          </button>
         </div>
-        <InfoBar patient={patient} onUpdate={onUpdate}/>
         <div className="flex border-b border-gray-200 bg-white flex-shrink-0 overflow-x-auto">
           {tabs.map(t=><button key={t.id} type="button" onClick={()=>setTab(t.id)} className={'flex items-center gap-2 px-5 py-3 text-xs font-bold border-b-2 transition-all whitespace-nowrap '+(tab===t.id?'border-teal-600 text-teal-700 bg-teal-50/50':'border-transparent text-gray-500 hover:text-teal-600 hover:bg-gray-50')}><i className={'fa-solid '+t.icon}></i>{t.label}</button>)}
         </div>
@@ -1980,7 +2006,6 @@ function ClinicalModal({patient,onClose,onUpdate,settings}){
           
           {tab==='summary'&&<PharmSummaryTab patient={patient}/>}
         </div>
-      </div>
     </div>
   );
 }

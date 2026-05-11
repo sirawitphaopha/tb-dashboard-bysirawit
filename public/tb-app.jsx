@@ -700,6 +700,8 @@ function App() {
   const [clinical, setClinical] = useState(null);
   const [showNotifs, setShowNotifs] = useState(false);
   const [loggingIn, setLoggingIn] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showProfile, setShowProfile] = useState(false);
   const [settings, setSettings] = useState({ comorbidities: DEFAULT_COMORBIDITIES, drugs: DEFAULT_DRUGS, labGroups: null, customDrugInteractions: [] });
   const alerts = generateAlerts(patients);
 
@@ -732,33 +734,103 @@ function App() {
             {loggingIn ? <><i className="fa-solid fa-spinner fa-spin"></i>กำลังเข้าสู่ระบบ...</> : <><i className="fa-solid fa-right-to-bracket"></i>เข้าสู่ระบบ</>}
           </button>
         </form>
+        <div className="mt-8 pt-6 border-t border-gray-100">
+          <p className="text-xs text-gray-400 leading-relaxed">พัฒนาโดย เภสัชกร สิรวิชญ์ เผ่าผา</p>
+          <p className="text-xs text-gray-400">โรงพยาบาลปรางค์กู่</p>
+          <p className="text-xs text-gray-300 mt-1">Version 0.5.0 · <span className="text-amber-400 font-medium">ยังไม่เผยแพร่</span></p>
+        </div>
       </div>
     </div>
   );
 
+  // Clinical view กินทั้งจอ — ซ่อน sidebar + header ทั้งหมด
+  if (clinical) {
+    return (
+      <div className="flex h-screen bg-white overflow-hidden">
+        <ClinicalModal patient={clinical} onClose={() => setClinical(null)} onUpdate={updatePatient} settings={settings}/>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-slate-100 overflow-hidden">
-      <aside className="w-60 bg-white flex flex-col shadow-lg z-20 flex-shrink-0">
-        <div className="flex items-center px-5 py-4 border-b border-gray-100 h-16">
-          <i className="fa-solid fa-lungs-virus text-2xl text-teal-600 mr-3"></i>
-          <span className="text-lg font-bold text-teal-800 tracking-tight">TB-CARE LINK</span>
+
+      {/* ── SIDEBAR ── */}
+      <aside style={{width:sidebarOpen?'240px':'72px',transition:'width 0.2s ease',overflow:'hidden',flexShrink:0,display:'flex',flexDirection:'column',background:'#fff',borderRight:'1px solid #f1f5f9',boxShadow:'1px 0 4px rgba(0,0,0,0.04)'}}>
+
+        {/* Header: icon คงที่ + label fade + ปุ่ม toggle */}
+        <div style={{display:'flex',alignItems:'center',height:'60px',padding:'0 10px',borderBottom:'1px solid #f1f5f9',flexShrink:0}}>
+          <span style={{width:'36px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+            <i className="fa-solid fa-lungs-virus" style={{color:'#0f766e',fontSize:'18px'}}></i>
+          </span>
+          <span style={{overflow:'hidden',whiteSpace:'nowrap',fontWeight:700,fontSize:'15px',color:'#0f766e',flex:1,maxWidth:sidebarOpen?'140px':'0px',opacity:sidebarOpen?1:0,transition:'max-width 0.2s ease,opacity 0.15s ease'}}>TB-CARE LINK</span>
+          <button
+            onClick={()=>setSidebarOpen(o=>!o)}
+            title={sidebarOpen?'ซ่อนเมนู':'แสดงเมนู'}
+            style={{width:'28px',height:'28px',borderRadius:'6px',border:'none',background:'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,color:'#9ca3af',transition:'color 0.15s'}}
+            onMouseEnter={e=>e.currentTarget.style.color='#0f766e'}
+            onMouseLeave={e=>e.currentTarget.style.color='#9ca3af'}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <line x1="9" y1="3" x2="9" y2="21"/>
+            </svg>
+          </button>
         </div>
-        <nav className="flex-1 px-3 py-4 overflow-y-auto">
+
+        {/* Nav items */}
+        <nav style={{flex:1,overflowY:'auto',padding:'10px 8px'}}>
           {navItems.map(n => (
             <div key={n.id}>
-              {n.divider && <div className="my-2 border-t border-gray-100"></div>}
-              <button onClick={() => setNav(n.id)}
-                className={`flex w-full items-center gap-3 px-4 py-3 rounded-xl transition-all text-sm font-semibold mb-0.5 ${nav===n.id?'bg-teal-900 text-white shadow-inner':'text-gray-600 hover:bg-teal-50 hover:text-teal-700'}`}
-              ><i className={`fa-solid ${n.icon} w-4 text-sm`}></i>{n.label}</button>
+              {n.divider && <div style={{margin:'6px 0',borderTop:'1px solid #f1f5f9'}}></div>}
+              <button
+                onClick={()=>setNav(n.id)}
+                title={!sidebarOpen?n.label:undefined}
+                style={{display:'flex',width:'100%',alignItems:'center',padding:'9px 8px',borderRadius:'8px',border:'none',cursor:'pointer',marginBottom:'2px',transition:'background 0.15s',background:nav===n.id?'#ccfbf1':'transparent',fontWeight:nav===n.id?700:500,fontSize:'14px',color:nav===n.id?'#0f766e':'#374151'}}
+                onMouseEnter={e=>{if(nav!==n.id){e.currentTarget.style.background='#f0fdfa';e.currentTarget.style.color='#0f766e';}}}
+                onMouseLeave={e=>{if(nav!==n.id){e.currentTarget.style.background='transparent';e.currentTarget.style.color='#374151';}}}
+              >
+                {/* icon คงที่ 36px ไม่ขยับ */}
+                <span style={{width:'36px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                  <i className={`fa-solid ${n.icon}`} style={{fontSize:'17px',color:'#0f766e'}}></i>
+                </span>
+                {/* label fade */}
+                <span style={{overflow:'hidden',whiteSpace:'nowrap',maxWidth:sidebarOpen?'160px':'0px',opacity:sidebarOpen?1:0,transition:'max-width 0.2s ease,opacity 0.15s ease'}}>{n.label}</span>
+              </button>
             </div>
           ))}
         </nav>
-        <div className="p-4 border-t border-gray-100 bg-gray-50/50">
-          <div className="flex items-center p-2 rounded-xl hover:bg-white transition-all cursor-pointer gap-3">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-teal-400 to-teal-600 text-white flex items-center justify-center font-bold text-xs shadow flex-shrink-0">ภก</div>
-            <div className="text-xs flex-1 min-w-0"><p className="font-bold text-gray-800 truncate">ภก.สิรวิชญ์ เผ่าผา</p><p className="text-teal-600 font-medium">Pharmacist</p></div>
-          </div>
+
+        {/* User profile */}
+        <div style={{borderTop:'1px solid #f1f5f9',padding:'10px 8px',flexShrink:0}}>
+          <button onClick={()=>setShowProfile(true)} style={{width:'100%',display:'flex',alignItems:'center',padding:'8px',borderRadius:'10px',cursor:'pointer',transition:'background 0.15s',border:'none',background:'transparent',textAlign:'left'}}
+            onMouseEnter={e=>e.currentTarget.style.background='#f0fdfa'}
+            onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+            <span style={{width:'36px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+              <div style={{width:'32px',height:'32px',borderRadius:'50%',background:'#0f766e',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:'11px'}}>ภก</div>
+            </span>
+            <div style={{overflow:'hidden',maxWidth:sidebarOpen?'160px':'0px',opacity:sidebarOpen?1:0,transition:'max-width 0.2s ease,opacity 0.15s ease',whiteSpace:'nowrap'}}>
+              <p style={{fontWeight:700,fontSize:'12px',color:'#1f2937',margin:0}}>ภก.สิรวิชญ์ เผ่าผา</p>
+              <p style={{fontSize:'11px',color:'#0f766e',margin:0}}>Pharmacist</p>
+            </div>
+          </button>
         </div>
+
+        {/* Version info */}
+        <div style={{padding:'8px 12px',borderTop:'1px solid #f1f5f9',flexShrink:0,overflow:'hidden'}}>
+          {sidebarOpen ? (
+            <div>
+              <p style={{fontSize:'10px',color:'#9ca3af',margin:0,whiteSpace:'nowrap'}}>พัฒนาโดย เภสัชกร สิรวิชญ์ เผ่าผา</p>
+              <p style={{fontSize:'10px',color:'#9ca3af',margin:'1px 0 0 0',whiteSpace:'nowrap'}}>โรงพยาบาลปรางค์กู่</p>
+              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.5.0 · <span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
+            </div>
+          ) : (
+            <div style={{display:'flex',justifyContent:'center'}}>
+              <span style={{fontSize:'9px',color:'#d1d5db',fontWeight:700}}>0.5</span>
+            </div>
+          )}
+        </div>
+
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -788,7 +860,100 @@ function App() {
         </div>
       </main>
 
-      {clinical && <ClinicalModal patient={clinical} onClose={() => setClinical(null)} onUpdate={updatePatient} settings={settings}/>}
+      {/* User Profile Modal */}
+      {showProfile && <UserProfileModal onClose={()=>setShowProfile(false)}/>}
+    </div>
+  );
+}
+
+const DEMO_USER = {
+  name: 'ภก.สิรวิชญ์ เผ่าผา',
+  nameEn: 'Sirawit Phaophan',
+  position: 'เภสัชกร (Pharmacist)',
+  hospital: 'โรงพยาบาลปรางค์กู่',
+  department: 'กลุ่มงานเภสัชกรรม',
+  licenseNo: 'ภก. 12345',
+  username: 'sirawit.p',
+  email: 'sirawit.p@pranggku.go.th',
+  phone: '045-691-234 ต่อ 201',
+  role: 'Admin',
+  since: '1 ต.ค. 2567',
+};
+
+function UserProfileModal({ onClose }) {
+  const [editing, setEditing] = React.useState(false);
+  const [form, setForm] = React.useState({...DEMO_USER});
+  const set = k => e => setForm(f=>({...f,[k]:e.target.value}));
+
+  const editableFields = [
+    {icon:'fa-hospital', label:'โรงพยาบาล',             key:'hospital'},
+    {icon:'fa-pills',    label:'แผนก',                  key:'department'},
+    {icon:'fa-id-card',  label:'เลขใบประกอบวิชาชีพ',    key:'licenseNo'},
+    {icon:'fa-user',     label:'ชื่อผู้ใช้',             key:'username'},
+    {icon:'fa-envelope', label:'อีเมล',                  key:'email'},
+    {icon:'fa-phone',    label:'โทรศัพท์',               key:'phone'},
+    {icon:'fa-calendar', label:'ใช้งานระบบตั้งแต่',      key:'since'},
+  ];
+
+  return (
+    <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.4)',backdropFilter:'blur(2px)',zIndex:50,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}}
+      onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div style={{background:'#fff',borderRadius:'20px',width:'100%',maxWidth:'480px',maxHeight:'90vh',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,0.15)',overflow:'hidden'}}>
+
+        {/* Header — fixed */}
+        <div style={{background:'linear-gradient(135deg,#0f766e,#14b8a6)',padding:'24px 24px 20px',textAlign:'center',position:'relative',flexShrink:0}}>
+          <button onClick={onClose} style={{position:'absolute',top:'14px',right:'14px',width:'28px',height:'28px',borderRadius:'8px',border:'none',background:'rgba(255,255,255,0.2)',color:'#fff',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'13px'}}>
+            <i className="fa-solid fa-xmark"></i>
+          </button>
+          <div style={{width:'60px',height:'60px',borderRadius:'50%',background:'rgba(255,255,255,0.2)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:800,fontSize:'18px',margin:'0 auto 10px'}}>ภก</div>
+          <p style={{fontWeight:800,fontSize:'17px',color:'#fff',margin:0}}>{form.name}</p>
+          <p style={{fontSize:'12px',color:'rgba(255,255,255,0.8)',margin:'3px 0 0'}}>{form.position}</p>
+          <span style={{display:'inline-block',marginTop:'7px',background:'rgba(255,255,255,0.2)',color:'#fff',fontSize:'11px',fontWeight:700,padding:'3px 10px',borderRadius:'20px'}}>
+            <i className="fa-solid fa-shield-halved" style={{marginRight:'4px'}}></i>{form.role}
+          </span>
+        </div>
+
+        {/* Info rows — scrollable */}
+        <div style={{overflowY:'auto',flex:1,padding:'16px 24px'}}>
+          {editableFields.map(row=>(
+            <div key={row.key} style={{display:'flex',alignItems:'center',gap:'12px',padding:'10px 0',borderBottom:'1px solid #f1f5f9'}}>
+              <span style={{width:'32px',height:'32px',borderRadius:'8px',background:'#f0fdfa',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                <i className={`fa-solid ${row.icon}`} style={{color:'#0f766e',fontSize:'13px'}}></i>
+              </span>
+              <div style={{flex:1,minWidth:0}}>
+                <p style={{fontSize:'10px',color:'#9ca3af',margin:0}}>{row.label}</p>
+                {editing
+                  ? <input value={form[row.key]} onChange={set(row.key)}
+                      style={{width:'100%',fontSize:'13px',fontWeight:600,color:'#1f2937',border:'none',borderBottom:'1.5px solid #14b8a6',outline:'none',background:'transparent',padding:'2px 0'}}/>
+                  : <p style={{fontSize:'13px',fontWeight:600,color:'#1f2937',margin:0}}>{form[row.key]}</p>
+                }
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Footer — fixed */}
+        <div style={{padding:'12px 24px 18px',display:'flex',gap:'8px',borderTop:'1px solid #f1f5f9',flexShrink:0}}>
+          {editing ? <>
+            <button onClick={()=>setEditing(false)} style={{flex:1,padding:'10px',borderRadius:'10px',border:'1.5px solid #e5e7eb',background:'#fff',color:'#374151',fontWeight:600,fontSize:'13px',cursor:'pointer'}}>
+              ยกเลิก
+            </button>
+            <button onClick={()=>setEditing(false)} style={{flex:1,padding:'10px',borderRadius:'10px',border:'none',background:'#0f766e',color:'#fff',fontWeight:700,fontSize:'13px',cursor:'pointer'}}>
+              <i className="fa-solid fa-check" style={{marginRight:'6px'}}></i>บันทึก
+            </button>
+          </> : <>
+            <button onClick={()=>setEditing(true)} style={{flex:1,padding:'10px',borderRadius:'10px',border:'1.5px solid #e5e7eb',background:'#fff',color:'#374151',fontWeight:600,fontSize:'13px',cursor:'pointer'}}>
+              <i className="fa-solid fa-pen" style={{marginRight:'6px'}}></i>แก้ไขข้อมูล
+            </button>
+            <button style={{flex:1,padding:'10px',borderRadius:'10px',border:'1.5px solid #e5e7eb',background:'#fff',color:'#374151',fontWeight:600,fontSize:'13px',cursor:'pointer'}}>
+              <i className="fa-solid fa-key" style={{marginRight:'6px'}}></i>เปลี่ยนรหัสผ่าน
+            </button>
+            <button onClick={onClose} style={{flex:1,padding:'10px',borderRadius:'10px',border:'none',background:'#0f766e',color:'#fff',fontWeight:700,fontSize:'13px',cursor:'pointer'}}>
+              ปิด
+            </button>
+          </>}
+        </div>
+      </div>
     </div>
   );
 }
