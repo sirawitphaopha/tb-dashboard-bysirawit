@@ -609,6 +609,7 @@ const EMPTY_VISIT = () => ({
   labData: { lft:{}, cbc:{}, renal:{} },
   addSputum: false,
   sputumQuick: {tp:'', result:'', scantyCount:'', genexpert:'', genexpertRif:''},
+  outcomeType: '', outcomeEndDate: '', outcomeNote: '',
 });
 
 // Helper: lab value color class
@@ -812,6 +813,25 @@ function VisitForm({ initial, onSave, onCancel, patient }) {
             ))}
           </div>
         </div>
+
+        {/* Treatment Outcome */}
+        <div className="bg-teal-50 border border-teal-200 rounded-xl p-3">
+          <label className="text-xs font-bold text-teal-700 block mb-1"><i className="fa-solid fa-flag-checkered mr-1.5"></i>ผลการรักษา (Treatment Outcome)</label>
+          <p className="text-xs text-teal-600/70 mb-2">บันทึกเมื่อพร้อมปิดเคส — หากยังไม่มีผลให้ว่างไว้</p>
+          <select value={v.outcomeType||''} onChange={e=>sf('outcomeType',e.target.value)} className={inp+' mb-2'}>
+            <option value="">— ยังไม่ระบุผลการรักษา —</option>
+            {(window.OUTCOME_TYPES||[]).map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          {v.outcomeType && (
+            <div className="space-y-1.5">
+              <div className="grid grid-cols-[auto_1fr] gap-2 items-center">
+                <label className="text-xs text-teal-600 font-semibold whitespace-nowrap">วันที่ครบ:</label>
+                <input type="date" value={v.outcomeEndDate||''} onChange={e=>sf('outcomeEndDate',e.target.value)} className={inp}/>
+              </div>
+              <input placeholder="หมายเหตุ (ไม่บังคับ)" value={v.outcomeNote||''} onChange={e=>sf('outcomeNote',e.target.value)} className={inp}/>
+            </div>
+          )}
+        </div>
       </div>
       <div className="px-4 py-3 border-t border-gray-100 bg-gray-50 flex justify-end gap-2">
         <button type="button" onClick={onCancel} className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-xl">ยกเลิก</button>
@@ -894,7 +914,10 @@ function TimelineTab({ patient, onUpdate, settings }) {
     });
 
     const newStatus = labs.some(l => l.alt > 120) ? 'critical' : patient.status;
-    onUpdate({ ...patient, visits, labs, sputum, adr, status: newStatus, weight: +v.weight || patient.weight });
+    const outcome = v.outcomeType
+      ? { type: v.outcomeType, date: v.date, endDate: v.outcomeEndDate || '', note: v.outcomeNote || '' }
+      : (patient.outcome || null);
+    onUpdate({ ...patient, visits, labs, sputum, adr, status: newStatus, weight: +v.weight || patient.weight, outcome });
     setShowForm(false); setEditId(null);
   };
 
@@ -920,6 +943,9 @@ function TimelineTab({ patient, onUpdate, settings }) {
     sputumQuick: editInitial.sputumQuick || {tp:'',result:'',scantyCount:'',genexpert:'',genexpertRif:''},
     addLab: false,
     addSputum: false,
+    outcomeType: editInitial.outcome?.type || '',
+    outcomeEndDate: editInitial.outcome?.endDate || '',
+    outcomeNote: editInitial.outcome?.note || '',
   } : null;
 
   const FILTERS = [['all','ทั้งหมด'],['visit','Visit'],['lab','Lab'],['sputum','เสมหะ'],['alert','Alert'],['regimen','สูตรยา']];
@@ -2022,7 +2048,7 @@ function InfoBar({patient,onUpdate}){
   );
 }
 
-function ClinicalModal({patient,onClose,onUpdate,settings}){
+function ClinicalModal({patient,onClose,onUpdate,settings,onArchive}){
   const [tab,setTab]=useState('timeline');
   const tabs=[
     {id:'timeline',icon:'fa-timeline',label:'Timeline'},
@@ -2088,8 +2114,15 @@ function ClinicalModal({patient,onClose,onUpdate,settings}){
             </div>
           </div>
 
+          {/* ปุ่ม Archive — แสดงเมื่อมี outcome และยังไม่ archive */}
+          {patient.outcome?.type && !patient.archived && onArchive && (
+            <button type="button" onClick={()=>onArchive(patient)}
+              className="tb-wiggle ml-auto flex items-center gap-2 px-4 py-2.5 bg-amber-400 hover:bg-amber-500 text-amber-900 rounded-xl text-sm font-bold transition-colors flex-shrink-0 shadow-sm">
+              <i className="fa-solid fa-flag-checkered"></i>ส่งเข้าทะเบียนจบ
+            </button>
+          )}
           {/* ปุ่มกลับ — เด่น สี teal */}
-          <button type="button" onClick={onClose} className="ml-auto flex items-center gap-2 px-4 py-2.5 bg-teal-500 hover:bg-teal-600 text-white rounded-xl text-sm font-bold transition-colors flex-shrink-0 shadow-sm">
+          <button type="button" onClick={onClose} className={`${patient.outcome?.type && !patient.archived && onArchive ? '' : 'ml-auto '}flex items-center gap-2 px-4 py-2.5 bg-teal-500 hover:bg-teal-600 text-white rounded-xl text-sm font-bold transition-colors flex-shrink-0 shadow-sm`}>
             <i className="fa-solid fa-arrow-left"></i>กลับ
           </button>
         </div>
@@ -2111,18 +2144,22 @@ function ClinicalModal({patient,onClose,onUpdate,settings}){
   );
 }
 
-function AddPatientPage({onBack,onAdd,settings}){
+function AddPatientPage({onBack,onAdd,settings,onDirtyChange}){
   const comorbList=settings?.comorbidities||DEFAULT_COMORBIDITIES;
   const [form,setForm]=useState({hn:'',prefix:'นาย',firstName:'',lastName:'',age:'',gender:'M',patientType:'New',diseaseLocation:'Pulmonary',extraPulmonaryType:'',weight:'',regimen:'2HRZE/4HR',customRegimen:'',subdistrict:'พิมาย',comorbidities:[],concomitantDrugs:[],startDate:new Date().toISOString().split('T')[0]});
   const [manualMode,setManualMode]=useState(false);
   const [manualDoses,setManualDoses]=useState({});
   const [errors,setErrors]=useState({});
   const [drugInput,setDrugInput]=useState('');
-  const set=(k,v)=>setForm(f=>({...f,[k]:v}));
-  const setPrefix=p=>{const gMap={นาย:'M',เด็กชาย:'M',นาง:'F',นางสาว:'F',เด็กหญิง:'F'};setForm(f=>({...f,prefix:p,gender:gMap[p]||f.gender}));};
-  const toggleCo=c=>setForm(f=>({...f,comorbidities:f.comorbidities.includes(c)?f.comorbidities.filter(x=>x!==c):[...f.comorbidities,c]}));
-  const addDrug=()=>{if(drugInput.trim()){setForm(f=>({...f,concomitantDrugs:[...f.concomitantDrugs,drugInput.trim()]}));setDrugInput('');}};
-  const removeDrug=i=>setForm(f=>({...f,concomitantDrugs:f.concomitantDrugs.filter((_,idx)=>idx!==i)}));
+  const [showLeaveConfirm,setShowLeaveConfirm]=useState(false);
+  const [isDirty,setIsDirty]=useState(false);
+  const markDirty=()=>{ setIsDirty(true); onDirtyChange&&onDirtyChange(true); };
+  const set=(k,v)=>{setForm(f=>({...f,[k]:v}));markDirty();};
+  const handleBack=()=>{ if(isDirty) setShowLeaveConfirm(true); else onBack(); };
+  const setPrefix=p=>{const gMap={นาย:'M',เด็กชาย:'M',นาง:'F',นางสาว:'F',เด็กหญิง:'F'};setForm(f=>({...f,prefix:p,gender:gMap[p]||f.gender}));markDirty();};
+  const toggleCo=c=>{setForm(f=>({...f,comorbidities:f.comorbidities.includes(c)?f.comorbidities.filter(x=>x!==c):[...f.comorbidities,c]}));markDirty();};
+  const addDrug=()=>{if(drugInput.trim()){setForm(f=>({...f,concomitantDrugs:[...f.concomitantDrugs,drugInput.trim()]}));setDrugInput('');markDirty();}};
+  const removeDrug=i=>{setForm(f=>({...f,concomitantDrugs:f.concomitantDrugs.filter((_,idx)=>idx!==i)}));markDirty();};
   const finalReg=form.regimen==='อื่นๆ'?form.customRegimen:form.regimen;
   const validate=()=>{const e={};if(!form.hn.trim())e.hn='กรุณากรอก HN';if(!form.firstName.trim())e.firstName='กรุณากรอกชื่อ';if(!form.lastName.trim())e.lastName='กรุณากรอกนามสกุล';if(!form.weight||+form.weight<10)e.weight='น้ำหนักไม่ถูกต้อง';return e;};
   const submit=()=>{const e=validate();if(Object.keys(e).length){setErrors(e);return;}onAdd({id:'P'+Date.now(),hn:form.hn,prefix:form.prefix,firstName:form.firstName,lastName:form.lastName,name:form.prefix+' '+form.firstName+' '+form.lastName,age:+form.age,gender:form.gender,patientType:form.patientType,diseaseLocation:form.diseaseLocation,extraPulmonaryType:form.extraPulmonaryType,subdistrict:form.subdistrict,weight:+form.weight,regimen:finalReg,regimenHistory:[{regimen:finalReg,startDate:form.startDate,reason:'เริ่มรักษาครั้งแรก',isCurrent:true}],phase:'Intensive',month:0,day:1,status:'normal',adherence:100,comorbidities:form.comorbidities,concomitantDrugs:form.concomitantDrugs,hivStatus:null,hivNote:'',nextAppt:'นัดครั้งแรก',daysUntil:30,startDate:form.startDate,labs:[],sputum:[],adr:{},visits:[],dot:{},customDoses:manualMode?manualDoses:null});onBack();};
@@ -2130,14 +2167,14 @@ function AddPatientPage({onBack,onAdd,settings}){
     <div className="flex flex-col h-full tb-fade">
       <div className="flex items-center justify-between mb-5 flex-shrink-0">
         <div className="flex items-center gap-3">
-          <button type="button" onClick={onBack} className="w-9 h-9 bg-gray-100 hover:bg-gray-200 rounded-xl flex items-center justify-center text-gray-500 transition-colors"><i className="fa-solid fa-arrow-left text-sm"></i></button>
+          <button type="button" onClick={handleBack} className="w-9 h-9 bg-gray-100 hover:bg-gray-200 rounded-xl flex items-center justify-center text-gray-500 transition-colors"><i className="fa-solid fa-arrow-left text-sm"></i></button>
           <div>
             <h2 className="text-lg font-bold text-gray-800"><i className="fa-solid fa-user-plus mr-2 text-teal-600"></i>ลงทะเบียนผู้ป่วยวัณโรครายใหม่</h2>
             <p className="text-xs text-gray-400">กรอกข้อมูลให้ครบถ้วนก่อนบันทึก</p>
           </div>
         </div>
         <div className="flex gap-3">
-          <button type="button" onClick={onBack} className="px-5 py-2.5 rounded-xl font-bold text-gray-500 hover:bg-gray-200 transition-colors">ยกเลิก</button>
+          <button type="button" onClick={handleBack} className="px-5 py-2.5 rounded-xl font-bold text-gray-500 hover:bg-gray-200 transition-colors">ยกเลิก</button>
           <button type="button" onClick={submit} className="px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold shadow-md transition-all"><i className="fa-solid fa-save mr-2"></i>บันทึกและสร้างเคส</button>
         </div>
       </div>
@@ -2196,6 +2233,22 @@ function AddPatientPage({onBack,onAdd,settings}){
           </div>
         </div>
       </div>
+
+      {/* Leave confirmation dialog */}
+      {showLeaveConfirm && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.45)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center'}}>
+          <div style={{background:'#fff',borderRadius:'20px',overflow:'hidden',maxWidth:'360px',width:'90%',textAlign:'center',boxShadow:'0 20px 50px rgba(0,0,0,0.2)',animation:'tbFadeIn 0.2s ease'}}>
+              <div style={{padding:'32px 32px 28px'}}>
+              <p style={{fontWeight:700,fontSize:'16px',color:'#1f2937',marginBottom:'8px'}}>ยืนยันการออกจากหน้านี้</p>
+              <p style={{fontSize:'13px',color:'#6b7280',marginBottom:'24px'}}>ข้อมูลที่กรอกไว้จะไม่ถูกบันทึก</p>
+              <div style={{display:'flex',gap:'10px',justifyContent:'center'}}>
+                <button onClick={()=>setShowLeaveConfirm(false)} style={{padding:'10px 24px',borderRadius:'12px',border:'2px solid #0d9488',background:'#fff',fontWeight:700,fontSize:'14px',color:'#0d9488',cursor:'pointer'}}>อยู่ต่อ</button>
+                <button onClick={onBack} style={{padding:'10px 24px',borderRadius:'12px',border:'none',background:'#ef4444',fontWeight:700,fontSize:'14px',color:'#fff',cursor:'pointer',display:'flex',alignItems:'center',gap:'8px'}}><i className="fa-solid fa-arrow-right-from-bracket"></i>ออกเลย</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

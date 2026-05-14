@@ -27,12 +27,35 @@
       from { opacity: 0; transform: scale(0.7) translateY(-20px); }
       to   { opacity: 1; transform: scale(1) translateY(0); }
     }
+    @keyframes tbWiggle {
+      0%, 100% { transform: translateX(0) scale(1); }
+      15%  { transform: translateX(-3px) scale(1.04); }
+      35%  { transform: translateX(3px)  scale(1.04); }
+      55%  { transform: translateX(-2px) scale(1.02); }
+      75%  { transform: translateX(2px)  scale(1.02); }
+      90%  { transform: translateX(-1px) scale(1); }
+    }
+    .tb-wiggle:hover { animation: tbWiggle 0.45s ease; cursor: pointer; }
+    .tb-dash-card {
+      transition: transform 0.22s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.22s cubic-bezier(0.34,1.56,0.64,1), border-color 0.15s ease;
+    }
+    .tb-dash-card:hover {
+      transform: translateY(-4px) scale(1.015);
+      box-shadow: 0 10px 28px rgba(13,148,136,0.15) !important;
+      border-color: #2dd4bf !important;
+    }
+    .tb-pt-row {
+      transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    .tb-pt-row:hover {
+      transform: translateY(-3px);
+    }
   </style>
 </head>
 <body class="bg-slate-100 overflow-hidden">
   <div id="root"></div>
-  <script src="tb-data.js?v=6"></script>
-  <script type="text/babel" src="tb-modals.jsx?v=6"></script>
-  <script type="text/babel" src="tb-app.jsx?v=6"></script>
+  <script src="tb-data.js?v=21"></script>
+  <script type="text/babel" src="tb-modals.jsx?v=21"></script>
+  <script type="text/babel" src="tb-app.jsx?v=21"></script>
 </body>
 </html>

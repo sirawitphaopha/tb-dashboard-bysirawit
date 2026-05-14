@@ -7,6 +7,15 @@ window.PATIENT_TYPES = ['New','Relapse','Treatment Failure'];
 window.DISEASE_LOCATIONS = ['LTBI','Pulmonary','Extra-pulmonary'];
 window.PREFIXES = ['นาย','นาง','นางสาว','เด็กชาย','เด็กหญิง'];
 
+window.OUTCOME_TYPES = [
+  { value:'Cured',          label:'รักษาหาย (Cured)',                color:'text-green-700 bg-green-100'   },
+  { value:'Completed',      label:'ครบการรักษา (Treatment Completed)',color:'text-teal-700 bg-teal-100'     },
+  { value:'Failed',         label:'รักษาไม่สำเร็จ (Treatment Failed)',color:'text-red-700 bg-red-100'       },
+  { value:'Died',           label:'เสียชีวิต (Died)',                color:'text-gray-600 bg-gray-200'     },
+  { value:'LostToFollowUp', label:'ขาดการติดตาม (Lost to Follow-up)',color:'text-amber-700 bg-amber-100'   },
+  { value:'NotEvaluated',   label:'ไม่ได้ประเมิน (Not Evaluated)',   color:'text-purple-700 bg-purple-100' },
+];
+
 window.DRUG_RANGES = {
   R:{ name:'Rifampicin (R)',   strength:300, min:8,  max:12, absMax:600  },
   H:{ name:'Isoniazid (H)',    strength:100, min:4,  max:6,  absMax:300  },
@@ -535,6 +544,84 @@ window.INITIAL_PATIENTS = [
       '2026-04-29':true,'2026-04-30':true,'2026-05-01':true
     },
     customDoses:null
+  },
+
+  // ── Demo: ผู้ป่วยที่บันทึก Outcome แล้ว พร้อมทดสอบระบบทะเบียนจบการรักษา ──
+  {
+    id:'pt-demo-archive',
+    hn:'TB0010',
+    prefix:'นางสาว', firstName:'สุภาพร', lastName:'ลาภมณี',
+    name:'นางสาวสุภาพร ลาภมณี',
+    age:34, gender:'F',
+    patientType:'New', diseaseLocation:'Pulmonary', extraPulmonaryType:'',
+    subdistrict:'กู่',
+    weight:52, regimen:'2HRZE/4HR',
+    regimenHistory:[
+      {regimen:'2HRZE/4HR',startDate:'2025-12-01',reason:'เริ่มรักษาครั้งแรก',isCurrent:true}
+    ],
+    phase:'Continuation', month:5, day:155,
+    status:'normal', adherence:96,
+    hasResistance:false,
+    comorbidities:[], concomitantDrugs:[],
+    hivStatus:'Negative', hivNote:'',
+    nextAppt:'', daysUntil:null, startDate:'2025-12-01',
+    labs:[
+      {tp:'M0',date:'2025-12-01',alt:22,ast:18,scr:0.8,ua:4.1,hbsag:'Negative',hcv:'Negative'},
+      {tp:'M2',date:'2026-02-01',alt:26,ast:20,scr:0.82,ua:4.3,hbsag:'',hcv:''},
+      {tp:'M5',date:'2026-05-01',alt:24,ast:19,scr:0.79,ua:4.0,hbsag:'',hcv:''},
+    ],
+    sputum:[
+      {
+        tp:'M0',date:'2025-12-01',specimenType:'Sputum',
+        afbSamples:[{result:'2+',scantyCount:''},{result:'1+',scantyCount:''}],
+        result:'2+',scantyCount:'',
+        molecType:'GeneXpert MTB/RIF',genexpert:'Detected',mtbResult:'Detected',
+        rifResult:'RIF susceptible',genexpertRif:'Susceptible',
+        inhResult:'',sldResults:{},igraResult:'',extraLabs:{}
+      },
+      {
+        tp:'M2',date:'2026-02-01',specimenType:'Sputum',
+        afbSamples:[{result:'Scanty',scantyCount:'1-9/100F'},{result:'Neg',scantyCount:''}],
+        result:'Scanty',scantyCount:'1-9/100F',
+        molecType:'',genexpert:'',mtbResult:'',rifResult:'',genexpertRif:'',
+        inhResult:'',sldResults:{},igraResult:'',extraLabs:{}
+      },
+      {
+        tp:'M5',date:'2026-05-01',specimenType:'Sputum',
+        afbSamples:[{result:'Neg',scantyCount:''},{result:'Neg',scantyCount:''}],
+        result:'Neg',scantyCount:'',
+        molecType:'',genexpert:'',mtbResult:'',rifResult:'',genexpertRif:'',
+        inhResult:'',sldResults:{},igraResult:'',extraLabs:{}
+      },
+    ],
+    adr:{
+      neuropathy:{checked:false,note:''},nausea:{checked:false,note:''},
+      arthralgia:{checked:false,note:''},optic:{checked:false,note:''},rash:{checked:false,note:''},
+      jaundice:{checked:false,note:''},fever:{checked:false,note:''},orange_urine:{checked:true,note:'ปกติจาก RIF'},
+      alopecia:{checked:false,note:''},gi:{checked:false,note:''},neuro:{checked:false,note:''},edema:{checked:false,note:''}
+    },
+    visits:[
+      {id:'v1-demo-arc',date:'2025-12-01',weight:52,type:'visit',
+       vitals:{bp:'112/72',hr:'76',rr:'16',temp:'36.8',o2:'99'},
+       drugDoses:'H200 R450 Z1000 E800',
+       note:'S: ไอมีเสมหะ เหนื่อยเล็กน้อย\nO: BW 52kg CXR: RUL infiltration\n>>> Sputum AFB 2+/1+ | GeneXpert: MTB Detected, RIF Susceptible\nA: Pulmonary TB, New Case\nP: เริ่ม 2HRZE/4HR ตามมาตรฐาน',
+       consult:{type:'',note:''},drp:[],adrNoted:[],labData:{},sputumQuick:{}},
+      {id:'v2-demo-arc',date:'2026-05-01',weight:55,type:'visit',
+       vitals:{bp:'110/70',hr:'74',rr:'16',temp:'36.7',o2:'99'},
+       drugDoses:'H200 R450',
+       note:'S: ไม่มีอาการ หายดีแล้ว น้ำหนักเพิ่มขึ้น 3 kg\nO: BW 55kg Sputum AFB Neg x2 ที่ M2 และ M5\nA: Pulmonary TB ครบการรักษา 6 เดือน — Sputum Neg\nP: บันทึก Outcome: รักษาหาย (Cured)',
+       consult:{type:'',note:''},drp:[],adrNoted:[],labData:{},sputumQuick:{},
+       outcome:{type:'Cured',date:'2026-05-01',note:'Sputum conversion ที่ M2, ครบการรักษา 6 เดือน'}}
+    ],
+    dot:{
+      '2026-04-20':true,'2026-04-21':true,'2026-04-22':true,
+      '2026-04-23':true,'2026-04-24':true,'2026-04-25':true,
+      '2026-04-26':true,'2026-04-27':true,'2026-04-28':true,
+      '2026-04-29':true,'2026-04-30':true,'2026-05-01':true
+    },
+    customDoses:null,
+    outcome:{type:'Cured',date:'2026-05-01',endDate:'2026-05-01',note:'Delayed conversion ที่ M2 (Scanty) แต่ M5 Neg, ครบการรักษา 6 เดือน'},
+    archived:true
   }
 ];
 
@@ -554,6 +641,7 @@ window.dbToPatient = r => ({
   nextAppt:r.next_appt, daysUntil:r.days_until, startDate:r.start_date,
   labs:r.labs||[], sputum:r.sputum||[], adr:r.adr||{}, visits:r.visits||[],
   dot:r.dot||{}, customDoses:r.custom_doses||null,
+  outcome:r.outcome||null, archived:r.archived||false,
 });
 
 window.patientToDb = p => ({
@@ -567,6 +655,7 @@ window.patientToDb = p => ({
   next_appt:p.nextAppt, days_until:p.daysUntil, start_date:p.startDate,
   labs:p.labs||[], sputum:p.sputum||[], adr:p.adr||{}, visits:p.visits||[],
   dot:p.dot||{}, custom_doses:p.customDoses||null,
+  outcome:p.outcome||null, archived:p.archived||false,
   updated_at: new Date().toISOString(),
 });
 
