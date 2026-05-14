@@ -1761,7 +1761,7 @@ function App() {
         <div className="mt-8 pt-6 border-t border-gray-100">
           <p className="text-xs text-gray-400 leading-relaxed">พัฒนาโดย เภสัชกร สิรวิชญ์ เผ่าผา</p>
           <p className="text-xs text-gray-400">โรงพยาบาลปรางค์กู่</p>
-          <p className="text-xs text-gray-300 mt-1">Version 0.6.0 · <span className="text-amber-400 font-medium">ยังไม่เผยแพร่</span></p>
+          <p className="text-xs text-gray-300 mt-1">Version 0.6.20 · <span className="text-amber-400 font-medium">ยังไม่เผยแพร่</span></p>
         </div>
       </div>
     </div>
