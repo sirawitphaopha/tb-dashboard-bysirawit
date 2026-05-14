@@ -73,7 +73,7 @@ function Dashboard({ patients, archivePatients, onDashFilter, onGoArchiveDelayed
       data: { labels, datasets:[{ label:'ผู้ป่วยใหม่', data, backgroundColor:'#0d9488', borderRadius:8, hoverBackgroundColor:'#99f6e4', borderSkipped:false }] },
       options: {
         responsive:true, maintainAspectRatio:false,
-        plugins:{ legend:{display:false}, tooltip:{ backgroundColor:'#0f766e', titleColor:'#ccfbf1', bodyColor:'#fff', padding:10, cornerRadius:10 } },
+        plugins:{ legend:{display:false}, tooltip:{ backgroundColor:'#f0fdfa', titleColor:'#0f766e', bodyColor:'#134e4a', borderColor:'#99f6e4', borderWidth:1, padding:12, cornerRadius:12, titleFont:{weight:'bold'} } },
         scales:{ y:{ grid:{color:'rgba(0,0,0,0.03)'},border:{display:false},beginAtZero:true,ticks:{font:{size:11},color:'#9ca3af'} }, x:{ grid:{display:false},border:{display:false},ticks:{font:{size:11},color:'#9ca3af'} } },
         onHover:(e,el)=>{ e.native.target.style.cursor = el.length ? 'pointer' : 'default'; },
         onClick:(e,el)=>{
@@ -99,7 +99,7 @@ function Dashboard({ patients, archivePatients, onDashFilter, onGoArchiveDelayed
       data: { labels:['Intensive','Continuation','MDR-TB'], datasets:[{ data:[intensive||1,cont,mdr], backgroundColor:['#f59e0b','#0d9488','#ef4444'], borderWidth:3, borderColor:'#fff', hoverOffset:8 }] },
       options: {
         responsive:true, maintainAspectRatio:false, cutout:'60%',
-        plugins:{ legend:{position:'bottom',labels:{font:{size:11},boxWidth:10,padding:12,color:'#6b7280'}}, tooltip:{ backgroundColor:'#1f2937', padding:10, cornerRadius:10 } },
+        plugins:{ legend:{position:'bottom',labels:{font:{size:11},boxWidth:10,padding:12,color:'#6b7280'}}, tooltip:{ backgroundColor:'#f0fdfa', titleColor:'#0f766e', bodyColor:'#134e4a', borderColor:'#99f6e4', borderWidth:1, padding:12, cornerRadius:12, titleFont:{weight:'bold'} } },
         onHover:(e,el)=>{ e.native.target.style.cursor = el.length ? 'pointer' : 'default'; },
         onClick:(e,el)=>{ if(el.length) onDashFilter(pieFilters[el[0].index]); }
       }
@@ -673,17 +673,18 @@ function PatientList({ patients, onAdd, onOpen, settings, dashFilter, onClearDas
       ); })()}
 
       {/* Table — flex-1 + min-h-0 ทำให้ scroll container ลอยอยู่ขอบล่างเสมอ */}
-      <div className="flex-1 min-h-0 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-auto">
+      <div className="flex-1 min-h-0 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="w-full h-full overflow-auto">
         <table className="w-full min-w-max text-left">
-          <thead className="bg-slate-50 text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200">
+          <thead className="bg-teal-600 text-white text-xs uppercase tracking-wide border-b border-teal-400">
             <tr>
-              <th className="py-2 px-4 font-semibold sticky left-0 bg-slate-50 z-10 whitespace-nowrap">HN / ชื่อ</th>
+              <th className="py-2 px-4 font-semibold sticky left-0 bg-teal-600 z-10 whitespace-nowrap">HN / ชื่อ</th>
               {visibleCols.map(col => <th key={col.id} className="py-2 px-4 font-semibold whitespace-nowrap">{col.label}</th>)}
               <th className="py-2 px-4 font-semibold whitespace-nowrap text-center">ผลการรักษา</th>
               <th className="py-2 px-4 font-semibold text-center">จัดการ</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100 text-sm">
+          <tbody className="divide-y divide-teal-100 text-sm">
             {filtered.length===0 ? (
               <tr><td colSpan={visibleCols.length+3} className="p-10 text-center text-gray-400"><i className="fa-solid fa-user-slash text-2xl mb-2 block text-gray-300"></i>ไม่พบผู้ป่วยที่ค้นหา</td></tr>
             ) : filtered.map(p => (
@@ -728,6 +729,7 @@ function PatientList({ patients, onAdd, onOpen, settings, dashFilter, onClearDas
         </table>
         <div className="p-3 bg-slate-50/50 border-t border-gray-100 text-xs text-gray-400 text-right">
           แสดง {filtered.length} จาก {patients.length} ราย
+        </div>
         </div>
       </div>
     </div>
@@ -836,11 +838,12 @@ function ArchiveList({ patients, onOpen, archiveDashFilter, onClearArchiveDashFi
       </div>
 
       {/* Table */}
-      <div className="flex-1 min-h-0 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-auto">
+      <div className="flex-1 min-h-0 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="w-full h-full overflow-auto">
         <table className="w-full min-w-max text-left">
-          <thead className="bg-slate-50 text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200">
+          <thead className="bg-teal-600 text-white text-xs uppercase tracking-wide border-b border-teal-400">
             <tr>
-              <th className="py-2 px-4 font-semibold sticky left-0 bg-slate-50 z-10 whitespace-nowrap">HN / ชื่อ</th>
+              <th className="py-2 px-4 font-semibold sticky left-0 bg-teal-600 z-10 whitespace-nowrap">HN / ชื่อ</th>
               {visibleCols.map(col => <th key={col.id} className="py-2 px-4 font-semibold whitespace-nowrap">{col.label}</th>)}
               <th className="py-2 px-4 font-semibold whitespace-nowrap text-center">ผลการรักษา</th>
               <th className="py-2 px-4 font-semibold whitespace-nowrap">วันที่ครบ</th>
@@ -848,7 +851,7 @@ function ArchiveList({ patients, onOpen, archiveDashFilter, onClearArchiveDashFi
               <th className="py-2 px-4 font-semibold text-center">ดูประวัติ</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100 text-sm">
+          <tbody className="divide-y divide-teal-100 text-sm">
             {filtered.length === 0 ? (
               <tr><td colSpan={visibleCols.length+5} className="p-10 text-center text-gray-400">
                 <i className="fa-solid fa-box-archive text-2xl mb-2 block text-gray-300"></i>
@@ -891,6 +894,7 @@ function ArchiveList({ patients, onOpen, archiveDashFilter, onClearArchiveDashFi
         <div className="p-3 bg-slate-50/50 border-t border-gray-100 text-xs text-gray-400 text-right">
           จบการรักษาทั้งหมด {filtered.length} ราย
         </div>
+        </div>
       </div>
     </div>
   );
@@ -920,11 +924,12 @@ function AllPatientsPage({ patients, archivePatients, onOpen, onBack }) {
           <span className="bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full font-bold">รวม: {allPts.length}</span>
         </div>
       </div>
-      <div className="flex-1 min-h-0 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-auto">
+      <div className="flex-1 min-h-0 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="w-full h-full overflow-auto">
         <table className="w-full min-w-max text-left">
-          <thead className="bg-slate-50 text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200">
+          <thead className="bg-teal-600 text-white text-xs uppercase tracking-wide border-b border-teal-400">
             <tr>
-              <th className="py-2 px-4 font-semibold sticky left-0 bg-slate-50 z-10 whitespace-nowrap">HN / ชื่อ</th>
+              <th className="py-2 px-4 font-semibold sticky left-0 bg-teal-600 z-10 whitespace-nowrap">HN / ชื่อ</th>
               <th className="py-2 px-4 font-semibold whitespace-nowrap">อายุ / เพศ / ตำบล</th>
               <th className="py-2 px-4 font-semibold whitespace-nowrap">ชนิด TB / สูตรยา</th>
               <th className="py-2 px-4 font-semibold whitespace-nowrap">ความคืบหน้า</th>
@@ -932,7 +937,7 @@ function AllPatientsPage({ patients, archivePatients, onOpen, onBack }) {
               <th className="py-2 px-4 font-semibold text-center whitespace-nowrap">ดูประวัติ</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100 text-sm">
+          <tbody className="divide-y divide-teal-100 text-sm">
             {filtered.length === 0 ? (
               <tr><td colSpan={6} className="p-10 text-center text-gray-400"><i className="fa-solid fa-user-slash text-2xl mb-2 block text-gray-300"></i>ไม่พบผู้ป่วย</td></tr>
             ) : filtered.map(p => (
@@ -967,6 +972,7 @@ function AllPatientsPage({ patients, archivePatients, onOpen, onBack }) {
         </table>
         <div className="p-3 bg-slate-50/50 border-t border-gray-100 text-xs text-gray-400 text-right">
           แสดง {filtered.length} จาก {allPts.length} ราย · กำลังรักษา {patients.length} · จบแล้ว {(archivePatients||[]).length}
+        </div>
         </div>
       </div>
     </div>
@@ -1663,9 +1669,12 @@ function App() {
   const [clinical, setClinical] = useState(null);
   const [showNotifs, setShowNotifs] = useState(false);
   const [showFullNotifs, setShowFullNotifs] = useState(false);
+  const [showSearchModal, setShowSearchModal] = useState(false);
   const [readAlerts, setReadAlerts] = useState(new Set());
   const [loggingIn, setLoggingIn] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarHovered, setSidebarHovered] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [settings, setSettings] = useState({ comorbidities: DEFAULT_COMORBIDITIES, drugs: DEFAULT_DRUGS, labGroups: null, customDrugInteractions: [], restartReasons: DEFAULT_RESTART_REASONS, regimens: [...REGIMENS] });
   const [ptSearch, setPtSearch] = useState('');
@@ -1753,7 +1762,15 @@ function App() {
         <p className="text-gray-400 mb-8 text-sm">รพ.ปรางค์กู่ · กลุ่มงานเภสัชกรรม</p>
         <form onSubmit={login} className="space-y-4 text-left">
           <div><label className="text-sm font-medium text-gray-600 block mb-1">Username</label><input type="text" defaultValue="sirawit.p" className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:ring-2 focus:ring-teal-400 outline-none" required/></div>
-          <div><label className="text-sm font-medium text-gray-600 block mb-1">รหัสผ่าน</label><input type="password" defaultValue="password" className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:ring-2 focus:ring-teal-400 outline-none" required/></div>
+          <div>
+            <label className="text-sm font-medium text-gray-600 block mb-1">รหัสผ่าน</label>
+            <div className="relative">
+              <input type={showPassword ? 'text' : 'password'} defaultValue="password" className="w-full p-3 pr-11 border border-gray-200 rounded-xl bg-gray-50 focus:ring-2 focus:ring-teal-400 outline-none" required/>
+              <button type="button" onClick={()=>setShowPassword(v=>!v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-teal-500 hover:text-teal-700 transition-colors">
+                <i className={`fa-solid ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+              </button>
+            </div>
+          </div>
           <button type="submit" className="w-full bg-teal-600 hover:bg-teal-700 text-white p-3.5 rounded-xl font-bold shadow-lg transition-all mt-2 flex items-center justify-center gap-2">
             {loggingIn ? <><i className="fa-solid fa-spinner fa-spin"></i>กำลังเข้าสู่ระบบ...</> : <><i className="fa-solid fa-right-to-bracket"></i>เข้าสู่ระบบ</>}
           </button>
@@ -1761,7 +1778,7 @@ function App() {
         <div className="mt-8 pt-6 border-t border-gray-100">
           <p className="text-xs text-gray-400 leading-relaxed">พัฒนาโดย เภสัชกร สิรวิชญ์ เผ่าผา</p>
           <p className="text-xs text-gray-400">โรงพยาบาลปรางค์กู่</p>
-          <p className="text-xs text-gray-300 mt-1">Version 0.6.20 · <span className="text-amber-400 font-medium">ยังไม่เผยแพร่</span></p>
+          <p className="text-xs text-gray-300 mt-1">Version 0.6.21 · <span className="text-amber-400 font-medium">ยังไม่เผยแพร่</span></p>
         </div>
       </div>
     </div>
@@ -1780,32 +1797,21 @@ function App() {
     <div className="flex h-screen bg-teal-50 overflow-hidden">
 
       {/* ── SIDEBAR ── */}
-      <aside style={{width:sidebarOpen?'240px':'72px',transition:'width 0.2s ease',overflow:'hidden',flexShrink:0,display:'flex',flexDirection:'column',background:'#fff',borderRight:'1px solid #f1f5f9',boxShadow:'1px 0 4px rgba(0,0,0,0.04)'}}>
+      <div style={{position:'relative',width:sidebarOpen?'240px':'72px',transition:'width 0.2s ease',flexShrink:0}} onMouseEnter={()=>setSidebarHovered(true)} onMouseLeave={()=>setSidebarHovered(false)}>
+      <aside style={{width:'100%',height:'100%',overflow:'hidden',display:'flex',flexDirection:'column',background:'#fff',borderRight:'1px solid #e5e7eb'}}>
 
-        {/* Header: icon คงที่ + label fade + ปุ่ม toggle */}
-        <div style={{display:'flex',alignItems:'center',height:'60px',padding:'0 10px',borderBottom:'1px solid #f1f5f9',flexShrink:0}}>
+        {/* Header: icon คงที่ + label fade */}
+        <div style={{display:'flex',alignItems:'center',height:'64px',padding:'0 10px',borderBottom:'1px solid #e5e7eb',flexShrink:0}}>
           <div onClick={handleLogoClick} title="กลับหน้าหลัก" style={{display:'flex',alignItems:'center',flex:1,cursor:'pointer',minWidth:0,height:'100%',borderRadius:'8px',transition:'background 0.15s'}} onMouseEnter={e=>e.currentTarget.style.background='#f0fdfa'} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
             <span style={{width:'36px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
               <i className="fa-solid fa-lungs-virus" style={{color:'#0f766e',fontSize:'18px'}}></i>
             </span>
             <span style={{overflow:'hidden',whiteSpace:'nowrap',fontWeight:700,fontSize:'15px',color:'#0f766e',flex:1,maxWidth:sidebarOpen?'140px':'0px',opacity:sidebarOpen?1:0,transition:'max-width 0.2s ease,opacity 0.15s ease'}}>TB-CARE LINK</span>
           </div>
-          <button
-            onClick={()=>setSidebarOpen(o=>!o)}
-            title={sidebarOpen?'ซ่อนเมนู':'แสดงเมนู'}
-            style={{width:'28px',height:'28px',borderRadius:'6px',border:'none',background:'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,color:'#9ca3af',transition:'color 0.15s'}}
-            onMouseEnter={e=>e.currentTarget.style.color='#0f766e'}
-            onMouseLeave={e=>e.currentTarget.style.color='#9ca3af'}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2"/>
-              <line x1="9" y1="3" x2="9" y2="21"/>
-            </svg>
-          </button>
         </div>
 
         {/* Nav items */}
-        <nav style={{flex:1,overflowY:'auto',padding:'10px 8px'}}>
+        <nav style={{flex:1,overflowY:'auto',padding:'10px 8px 10px 2px'}}>
           {navItems.map(n => (
             <div key={n.id}>
               {n.divider && <div style={{margin:'6px 0',borderTop:'1px solid #f1f5f9'}}></div>}
@@ -1869,7 +1875,7 @@ function App() {
             <div>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:0,whiteSpace:'nowrap'}}>พัฒนาโดย เภสัชกร สิรวิชญ์ เผ่าผา</p>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:'1px 0 0 0',whiteSpace:'nowrap'}}>โรงพยาบาลปรางค์กู่</p>
-              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.6.20 · <span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
+              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.6.21 · <span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
             </div>
           ) : (
             <div style={{display:'flex',justifyContent:'center'}}>
@@ -1879,6 +1885,19 @@ function App() {
         </div>
 
       </aside>
+
+      {/* Floating chevron toggle — option 1 */}
+      <button
+        onClick={()=>setSidebarOpen(o=>!o)}
+        title={sidebarOpen?'ซ่อนเมนู':'แสดงเมนู'}
+        style={{position:'absolute',right:'-12px',top:'32px',width:'24px',height:'24px',borderRadius:'50%',border:'1.5px solid #e5e7eb',background:'#fff',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',zIndex:20,color:'#0d9488',transition:'border-color 0.15s'}}
+        onMouseEnter={e=>e.currentTarget.style.borderColor='#0d9488'}
+        onMouseLeave={e=>e.currentTarget.style.borderColor='#e5e7eb'}
+      >
+        <i className={`fa-solid ${sidebarOpen?'fa-chevron-left':'fa-chevron-right'}`} style={{fontSize:'9px',color:'#0d9488'}}></i>
+      </button>
+
+      </div>
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <header className="h-16 bg-white/90 backdrop-blur-md shadow-sm flex items-center gap-3 px-6 z-10 border-b border-gray-200 flex-shrink-0">
@@ -1913,15 +1932,75 @@ function App() {
             </div>
           )}
 
-          {/* Quick search — แสดงเฉพาะหน้าอื่น (ไม่รวม archive-list ที่มี search ใน component) */}
-          {nav!=='patient-list' && nav!=='archive-list' && (
-            <div className="relative hidden md:block flex-1 max-w-xs ml-auto">
-              <input type="text" placeholder="ค้นหาด่วน..." className="w-full p-2 pl-9 bg-gray-100 rounded-full text-sm focus:ring-2 focus:ring-teal-200 outline-none"/>
-              <i className="fa-solid fa-search absolute left-3 top-2.5 text-gray-400 text-xs"></i>
+          <div className="relative flex-shrink-0 ml-auto flex items-center gap-0.5">
+            {/* Search placeholder button */}
+            <div className="relative">
+              <button
+                onClick={()=>setShowSearchModal(v=>!v)}
+                className="relative p-2 text-gray-400 hover:text-teal-600 transition-colors"
+                title="ค้นหาทุกอย่าง"
+              >
+                <i className="fa-solid fa-magnifying-glass text-lg"></i>
+              </button>
+              {showSearchModal && (
+                <div
+                  className="notif-modal absolute right-0 top-full mt-2 z-50"
+                  style={{width:'340px'}}
+                  onClick={e=>e.stopPropagation()}
+                >
+                  <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+                    {/* Header */}
+                    <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                      <div className="flex items-center gap-2.5">
+                        <span className="w-8 h-8 rounded-xl bg-teal-50 flex items-center justify-center">
+                          <i className="fa-solid fa-magnifying-glass text-teal-600 text-sm"></i>
+                        </span>
+                        <div>
+                          <p className="font-bold text-gray-800 text-sm leading-tight">ค้นหาอัจฉริยะ</p>
+                          <p className="text-xs text-gray-400">Global Search</p>
+                        </div>
+                      </div>
+                      <button onClick={()=>setShowSearchModal(false)} className="text-gray-300 hover:text-gray-500 transition-colors">
+                        <i className="fa-solid fa-xmark text-base"></i>
+                      </button>
+                    </div>
+                    {/* Coming soon banner */}
+                    <div className="mx-4 mt-4 mb-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-3">
+                      <i className="fa-solid fa-clock text-amber-500 mt-0.5 flex-shrink-0"></i>
+                      <div>
+                        <p className="text-sm font-bold text-amber-800">ฟังก์ชั่นนี้ยังอยู่ในการพัฒนา</p>
+                        <p className="text-xs text-amber-600 mt-0.5">กำลังสร้างระบบค้นหาขั้นสูง — ติดตามอัปเดตได้เลยค่ะ</p>
+                      </div>
+                    </div>
+                    {/* Roadmap */}
+                    <div className="px-4 pb-4">
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2.5">Roadmap — จะค้นหาได้</p>
+                      <div className="space-y-1">
+                        {[
+                          {icon:'fa-id-card',bg:'#f0fdfa',color:'#0d9488',label:'ชื่อผู้ป่วย / HN',desc:'ค้นทั้งกำลังรักษาและจบแล้ว'},
+                          {icon:'fa-heart-pulse',bg:'#fff1f2',color:'#e11d48',label:'โรคร่วม (HIV, DM, CKD ฯลฯ)',desc:'กรองผู้ป่วยตาม comorbidity'},
+                          {icon:'fa-flask',bg:'#f5f3ff',color:'#7c3aed',label:'ผลตรวจ Lab',desc:'เสมหะ, DST, ค่าไต, ตับ'},
+                          {icon:'fa-timeline',bg:'#eff6ff',color:'#2563eb',label:'บันทึก Timeline',desc:'ค้นจากข้อความบันทึกรายวัน'},
+                          {icon:'fa-bolt',bg:'#fffbeb',color:'#d97706',label:'ผลลัพธ์เป็น popup ทันที',desc:'กดจากผลค้นหาเปิดโปรไฟล์เลย'},
+                        ].map(({icon,bg,color,label,desc})=>(
+                          <div key={label} className="flex items-start gap-3 p-2.5 rounded-xl hover:bg-gray-50 transition-colors">
+                            <span style={{width:'28px',height:'28px',borderRadius:'8px',background:bg,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:'2px'}}>
+                              <i className={`fa-solid ${icon}`} style={{fontSize:'11px',color}}></i>
+                            </span>
+                            <div>
+                              <p className="text-sm font-semibold text-gray-700 leading-tight">{label}</p>
+                              <p className="text-xs text-gray-400">{desc}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
 
-          <div className="relative flex-shrink-0 ml-auto">
+            {/* Bell notification */}
             <button onClick={()=>setShowNotifs(!showNotifs)} className="relative p-2 text-gray-400 hover:text-teal-600 transition-colors">
               <i className="fa-regular fa-bell text-xl"></i>
               {unreadCount > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold px-1 border-2 border-white animate-pulse">{unreadCount}</span>}
