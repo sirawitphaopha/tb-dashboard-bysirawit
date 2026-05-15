@@ -42,3 +42,7 @@ next-env.d.ts
 # IDE
 .vscode/
 .idea/
+
+# local-only debug scripts (มี anon key hardcoded — เก็บไว้ในเครื่องเท่านั้น)
+scripts/check-rls.mjs
+
