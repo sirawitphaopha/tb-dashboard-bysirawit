@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase-admin'
-import { resend, EMAIL_FROM, ADMIN_EMAILS } from '@/lib/resend'
+import { getResend, EMAIL_FROM, ADMIN_EMAILS } from '@/lib/resend'
 import { adminNotifyEmail, userPendingEmail } from '@/lib/email-templates'
 
 const PROFESSION_LABELS: Record<string, string> = {
@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
     // ส่งเมลให้ admin
     const adminMail = adminNotifyEmail(summary, origin)
     try {
-      await resend.emails.send({
+      await getResend().emails.send({
         from: EMAIL_FROM,
         to: ADMIN_EMAILS,
         subject: adminMail.subject,
@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
     // ส่งเมลให้ user
     const userMail = userPendingEmail(firstName)
     try {
-      await resend.emails.send({
+      await getResend().emails.send({
         from: EMAIL_FROM,
         to: email,
         subject: userMail.subject,

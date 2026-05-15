@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { createAdminClient } from '@/lib/supabase-admin'
-import { resend, EMAIL_FROM } from '@/lib/resend'
+import { getResend, EMAIL_FROM } from '@/lib/resend'
 import { userRejectedEmail } from '@/lib/email-templates'
 
 export async function POST(req: NextRequest) {
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     if (userEmail && target) {
       const mail = userRejectedEmail(target.first_name || 'ผู้ใช้', reason)
       try {
-        await resend.emails.send({
+        await getResend().emails.send({
           from: EMAIL_FROM,
           to: userEmail,
           subject: mail.subject,
