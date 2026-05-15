@@ -1,56 +1,126 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
+import PasswordEye from '@/components/PasswordEye'
+
+const PROFESSIONS: Record<string, { label: string; prefix: string }> = {
+  doctor:      { label: 'แพทย์',                  prefix: 'ว.' },
+  dentist:     { label: 'ทันตแพทย์',              prefix: 'ท.' },
+  pharmacist:  { label: 'เภสัชกร',                prefix: 'ภ.' },
+  nurse:       { label: 'พยาบาลวิชาชีพ',          prefix: 'ป.' },
+  medtech:     { label: 'นักเทคนิคการแพทย์',      prefix: '' },
+  physio:      { label: 'นักกายภาพบำบัด',         prefix: '' },
+  radio:       { label: 'นักรังสีการแพทย์',       prefix: '' },
+  publichealth:{ label: 'เจ้าหน้าที่สาธารณสุข',   prefix: '' },
+  officer:     { label: 'เจ้าพนักงาน',            prefix: '' },
+  other:       { label: 'อื่นๆ',                   prefix: '' },
+}
+
+const HOSPITAL_TYPES = [
+  'โรงพยาบาลศูนย์ (ระดับ A)',
+  'โรงพยาบาลทั่วไป (ระดับ S)',
+  'โรงพยาบาลทั่วไป (ระดับ M1)',
+  'โรงพยาบาลชุมชน (ระดับ M2)',
+  'โรงพยาบาลชุมชน (ระดับ F1)',
+  'โรงพยาบาลชุมชน (ระดับ F2)',
+  'โรงพยาบาลชุมชน (ระดับ F3)',
+  'โรงพยาบาลเอกชน',
+  'สำนักงานสาธารณสุข (สสจ./สสอ.)',
+  'โรงพยาบาลส่งเสริมสุขภาพตำบล (รพ.สต.)',
+]
+
+const DEPARTMENTS = [
+  'กลุ่มงานเภสัชกรรม',
+  'กลุ่มงานการพยาบาล',
+  'กลุ่มงานแพทย์',
+  'อื่นๆ',
+]
 
 function checkPassword(pw: string) {
   return {
-    length: pw.length >= 8,
-    upper: /[A-Z]/.test(pw),
-    lower: /[a-z]/.test(pw),
-    number: /[0-9]/.test(pw),
+    length:  pw.length >= 8,
+    upper:   /[A-Z]/.test(pw),
+    lower:   /[a-z]/.test(pw),
+    number:  /[0-9]/.test(pw),
     special: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pw),
   }
 }
 
 function getStrength(checks: ReturnType<typeof checkPassword>) {
   const passed = Object.values(checks).filter(Boolean).length
-  if (passed <= 2) return { label: 'อ่อนแอ', color: '#ef4444', width: '20%' }
-  if (passed <= 3) return { label: 'พอใช้', color: '#f59e0b', width: '50%' }
-  if (passed === 4) return { label: 'ดี', color: '#3b82f6', width: '75%' }
-  return { label: 'แข็งแกร่ง', color: '#22c55e', width: '100%' }
+  if (passed <= 2) return { label: 'อ่อนแอ',     color: '#ef4444', width: '20%' }
+  if (passed <= 3) return { label: 'พอใช้',       color: '#f59e0b', width: '50%' }
+  if (passed === 4) return { label: 'ดี',          color: '#3b82f6', width: '75%' }
+  return               { label: 'แข็งแกร่ง',    color: '#22c55e', width: '100%' }
+}
+
+function formatPhone(val: string) {
+  const d = val.replace(/\D/g, '').slice(0, 10)
+  if (d.length <= 3) return d
+  if (d.length <= 6) return `${d.slice(0, 3)}-${d.slice(3)}`
+  return `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`
+}
+
+const inp: React.CSSProperties = {
+  width: '100%', padding: '10px 14px', border: '1px solid #e5e7eb',
+  borderRadius: '10px', background: '#f9fafb', fontSize: '14px',
+  outline: 'none', boxSizing: 'border-box',
+}
+const lbl: React.CSSProperties = {
+  fontSize: '13px', fontWeight: 600, color: '#4b5563',
+  display: 'block', marginBottom: '5px',
+}
+const focus = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => {
+  e.target.style.border = '1.5px solid #0d9488'
+  e.target.style.background = '#fff'
+}
+const blur = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => {
+  e.target.style.border = '1px solid #e5e7eb'
+  e.target.style.background = '#f9fafb'
 }
 
 export default function RegisterPage() {
-  const router = useRouter()
   const supabase = createClient()
 
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [confirm, setConfirm] = useState('')
+  const [username,     setUsername]     = useState('')
+  const [email,        setEmail]        = useState('')
+  const [password,     setPassword]     = useState('')
+  const [confirm,      setConfirm]      = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [showConfirm, setShowConfirm] = useState(false)
+  const [showConfirm,  setShowConfirm]  = useState(false)
+
+  const [firstName,    setFirstName]    = useState('')
+  const [lastName,     setLastName]     = useState('')
+  const [profession,   setProfession]   = useState('')
+  const [licenseNum,   setLicenseNum]   = useState('')
+  const [phone,        setPhone]        = useState('')
+
+  const [hospitalName,    setHospitalName]    = useState('')
+  const [hospitalType,    setHospitalType]    = useState('')
+  const [department,      setDepartment]      = useState('')
+  const [departmentOther, setDepartmentOther] = useState('')
+
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [error,   setError]   = useState('')
   const [success, setSuccess] = useState(false)
 
-  const checks = checkPassword(password)
-  const strength = getStrength(checks)
-  const allPassed = Object.values(checks).every(Boolean)
+  const checks       = checkPassword(password)
+  const strength     = getStrength(checks)
+  const passedCount  = Object.values(checks).filter(Boolean).length
+  const passwordOk   = passedCount >= 4 && checks.length
+  const prefix       = PROFESSIONS[profession]?.prefix ?? ''
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-
-    if (!allPassed) { setError('รหัสผ่านยังไม่ผ่านเกณฑ์ความปลอดภัย'); return }
-    if (password !== confirm) { setError('รหัสผ่านไม่ตรงกัน'); return }
+    if (!passwordOk)           { setError('รหัสผ่านยังไม่ผ่านเกณฑ์ความปลอดภัย (ต้องผ่านอย่างน้อย 4/5 ข้อ และมีความยาว 8 ตัวอักษรขึ้นไป)'); return }
+    if (password !== confirm)  { setError('รหัสผ่านไม่ตรงกัน'); return }
 
     setLoading(true)
-    const { error } = await supabase.auth.signUp({ email, password })
-
-    if (error) {
-      setError(error.message === 'User already registered' ? 'อีเมลนี้มีบัญชีอยู่แล้ว' : 'เกิดข้อผิดพลาด กรุณาลองใหม่')
+    const { error: authErr } = await supabase.auth.signUp({ email, password })
+    if (authErr) {
+      setError(authErr.message === 'User already registered' ? 'อีเมลนี้มีบัญชีอยู่แล้ว' : 'เกิดข้อผิดพลาด กรุณาลองใหม่')
       setLoading(false)
     } else {
       setSuccess(true)
@@ -58,141 +128,284 @@ export default function RegisterPage() {
   }
 
   if (success) return (
-    <div className="w-full h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #134e4a 0%, #0f766e 100%)' }}>
+    <div className="w-full min-h-screen flex items-center justify-center"
+      style={{ background: 'linear-gradient(135deg, #134e4a 0%, #0f766e 100%)' }}>
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-10 text-center">
-        <i className="fa-solid fa-circle-check text-6xl mb-4" style={{ color: '#22c55e' }}></i>
-        <h2 className="text-2xl font-bold mb-2" style={{ color: '#134e4a' }}>สมัครสำเร็จ!</h2>
-        <p className="text-sm mb-6" style={{ color: '#6b7280' }}>กรุณาตรวจสอบอีเมลเพื่อยืนยันบัญชี จากนั้นกลับมา login ได้เลยค่ะ</p>
-        <a href="/login" className="inline-block w-full p-3.5 rounded-xl font-bold text-white text-center" style={{ background: '#0f766e' }}>
-          ไปหน้า Login
+        <i className="fa-solid fa-hourglass-half text-6xl mb-4" style={{ color: '#f59e0b' }}></i>
+        <h2 className="text-2xl font-bold mb-2" style={{ color: '#134e4a' }}>ส่งคำขอสำเร็จ!</h2>
+        <p className="text-sm mb-2" style={{ color: '#6b7280' }}>
+          ระบบได้รับข้อมูลของคุณแล้วค่ะ
+        </p>
+        <p className="text-sm mb-6" style={{ color: '#6b7280' }}>
+          กรุณารอผู้ดูแลระบบพิจารณาอนุมัติ<br />
+          เมื่ออนุมัติแล้วจะมีอีเมลแจ้งกลับไปนะคะ
+        </p>
+        <a href="/login"
+          className="inline-block w-full p-3.5 rounded-xl font-bold text-white text-center"
+          style={{ background: '#0f766e' }}>
+          กลับหน้า Login
         </a>
       </div>
     </div>
   )
 
   return (
-    <div className="w-full min-h-screen flex items-center justify-center py-8" style={{ background: 'linear-gradient(135deg, #134e4a 0%, #0f766e 100%)' }}>
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-10 text-center">
+    <div className="w-full min-h-screen flex justify-center py-10"
+      style={{ background: 'linear-gradient(135deg, #134e4a 0%, #0f766e 100%)' }}>
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-8 relative">
 
-        <div className="mb-4">
+        {/* Back button */}
+        <a href="/login"
+          className="absolute top-5 left-5 flex items-center gap-1.5 text-sm font-medium transition-opacity hover:opacity-70"
+          style={{ color: '#0f766e' }}>
+          <i className="fa-solid fa-arrow-left"></i>
+          <span>ย้อนกลับ</span>
+        </a>
+
+        {/* Header */}
+        <div className="text-center mb-6">
           <i className="fa-solid fa-lungs-virus text-5xl" style={{ color: '#0f766e' }}></i>
+          <h1 className="text-2xl font-bold mt-2" style={{ color: '#134e4a' }}>Register</h1>
+          <p className="text-xs mt-0.5" style={{ color: '#9ca3af' }}>TB CARE & JOURNEY · รพ.ปรางค์กู่</p>
         </div>
-        <h1 className="text-3xl font-bold mb-1" style={{ color: '#134e4a' }}>สมัครสมาชิก</h1>
-        <p className="text-sm mb-6" style={{ color: '#9ca3af' }}>TB CARE & JOURNEY · รพ.ปรางค์กู่</p>
 
-        <form onSubmit={handleRegister} className="space-y-4 text-left">
-          <div>
-            <label className="text-sm font-medium block mb-1" style={{ color: '#4b5563' }}>อีเมล</label>
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="กรอกอีเมลของคุณ"
-              className="w-full p-3 border rounded-xl bg-gray-50 outline-none"
-              style={{ borderColor: '#e5e7eb' }}
-              onFocus={e => e.target.style.borderColor = '#0d9488'}
-              onBlur={e => e.target.style.borderColor = '#e5e7eb'}
-              required
-            />
-          </div>
+        <form onSubmit={handleRegister} className="space-y-5">
 
-          <div>
-            <label className="text-sm font-medium block mb-1" style={{ color: '#4b5563' }}>รหัสผ่าน</label>
-            <div className="relative">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="กรอกรหัสผ่าน"
-                className="w-full p-3 pr-11 border rounded-xl bg-gray-50 outline-none"
-                style={{ borderColor: '#e5e7eb' }}
-                onFocus={e => e.target.style.borderColor = '#0d9488'}
-                onBlur={e => e.target.style.borderColor = '#e5e7eb'}
-                required
-              />
-              <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: '#0d9488' }}>
-                <i className={`fa-solid ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
-              </button>
+          {/* ── ACCOUNT ── */}
+          <section>
+            <p className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: '#9ca3af' }}>
+              Account
+            </p>
+            <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 2fr' }}>
+              <div>
+                <label style={lbl}>Username</label>
+                <input type="text" name="username" autoComplete="username"
+                  value={username} onChange={e => setUsername(e.target.value)}
+                  placeholder="username" style={inp} onFocus={focus} onBlur={blur} required />
+              </div>
+              <div>
+                <label style={lbl}>Email</label>
+                <input type="email" name="email" autoComplete="email"
+                  value={email} onChange={e => setEmail(e.target.value)}
+                  placeholder="email@example.com" style={inp} onFocus={focus} onBlur={blur} required />
+              </div>
             </div>
 
-            {password && (
-              <div className="mt-2 space-y-2">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs" style={{ color: '#6b7280' }}>ความแข็งแกร่ง</span>
-                  <span className="text-xs font-semibold" style={{ color: strength.color }}>{strength.label}</span>
+            <div className="mt-3">
+              <label style={lbl}>Password</label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  name="new-password" autoComplete="new-password"
+                  value={password} onChange={e => setPassword(e.target.value)}
+                  placeholder="กรอกรหัสผ่าน"
+                  style={{ ...inp, paddingRight: '44px' }}
+                  onFocus={focus} onBlur={blur} required
+                />
+                <PasswordEye show={showPassword} onClick={() => setShowPassword(v => !v)} />
+              </div>
+
+              {password && (
+                <div className="mt-2 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs" style={{ color: '#6b7280' }}>ความแข็งแกร่ง</span>
+                    <span className="text-xs font-semibold" style={{ color: strength.color }}>{strength.label}</span>
+                  </div>
+                  <div className="w-full h-1.5 rounded-full" style={{ background: '#f3f4f6' }}>
+                    <div className="h-1.5 rounded-full transition-all duration-300"
+                      style={{ width: strength.width, background: strength.color }} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-1 pt-0.5">
+                    {([
+                      { key: 'length',  label: 'อย่างน้อย 8 ตัวอักษร' },
+                      { key: 'upper',   label: 'ตัวพิมพ์ใหญ่ (A-Z)' },
+                      { key: 'lower',   label: 'ตัวพิมพ์เล็ก (a-z)' },
+                      { key: 'number',  label: 'ตัวเลข (0-9)' },
+                      { key: 'special', label: 'อักขระพิเศษ (!@#$...)' },
+                    ] as const).map(({ key, label }) => (
+                      <div key={key} className="flex items-center gap-1.5">
+                        <i className={`fa-solid ${checks[key] ? 'fa-circle-check' : 'fa-circle-xmark'} text-xs`}
+                          style={{ color: checks[key] ? '#22c55e' : '#d1d5db' }} />
+                        <span className="text-xs" style={{ color: checks[key] ? '#374151' : '#9ca3af' }}>{label}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="w-full h-1.5 rounded-full" style={{ background: '#f3f4f6' }}>
-                  <div className="h-1.5 rounded-full transition-all duration-300" style={{ width: strength.width, background: strength.color }}></div>
-                </div>
-                <div className="grid grid-cols-2 gap-1 mt-2">
-                  {[
-                    { key: 'length', label: 'อย่างน้อย 8 ตัวอักษร' },
-                    { key: 'upper', label: 'ตัวพิมพ์ใหญ่ (A-Z)' },
-                    { key: 'lower', label: 'ตัวพิมพ์เล็ก (a-z)' },
-                    { key: 'number', label: 'ตัวเลข (0-9)' },
-                    { key: 'special', label: 'อักขระพิเศษ (!@#$...)' },
-                  ].map(({ key, label }) => (
-                    <div key={key} className="flex items-center gap-1.5">
-                      <i className={`fa-solid ${checks[key as keyof typeof checks] ? 'fa-circle-check' : 'fa-circle-xmark'} text-xs`}
-                        style={{ color: checks[key as keyof typeof checks] ? '#22c55e' : '#d1d5db' }}></i>
-                      <span className="text-xs" style={{ color: checks[key as keyof typeof checks] ? '#374151' : '#9ca3af' }}>{label}</span>
-                    </div>
-                  ))}
+              )}
+            </div>
+
+            <div className="mt-3">
+              <label style={lbl}>Confirm Password</label>
+              <div className="relative">
+                <input
+                  type={showConfirm ? 'text' : 'password'}
+                  name="confirm-password" autoComplete="new-password"
+                  value={confirm} onChange={e => setConfirm(e.target.value)}
+                  placeholder="กรอกรหัสผ่านอีกครั้ง"
+                  style={{ ...inp, paddingRight: '44px', borderColor: confirm && confirm !== password ? '#ef4444' : '#e5e7eb' }}
+                  onFocus={e => { e.target.style.border = `1.5px solid ${confirm && confirm !== password ? '#ef4444' : '#0d9488'}`; e.target.style.background = '#fff' }}
+                  onBlur={e => { e.target.style.border = `1px solid ${confirm && confirm !== password ? '#ef4444' : '#e5e7eb'}`; e.target.style.background = '#f9fafb' }}
+                  required
+                />
+                <PasswordEye show={showConfirm} onClick={() => setShowConfirm(v => !v)} />
+              </div>
+              {confirm && confirm !== password && (
+                <p className="text-xs mt-1" style={{ color: '#ef4444' }}>รหัสผ่านไม่ตรงกัน</p>
+              )}
+            </div>
+          </section>
+
+          <hr style={{ borderColor: '#f3f4f6' }} />
+
+          {/* ── PERSONAL ── */}
+          <section>
+            <p className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: '#9ca3af' }}>
+              Personal Info
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label style={lbl}>First Name</label>
+                <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)}
+                  placeholder="ชื่อ" style={inp} onFocus={focus} onBlur={blur} required />
+              </div>
+              <div>
+                <label style={lbl}>Last Name</label>
+                <input type="text" value={lastName} onChange={e => setLastName(e.target.value)}
+                  placeholder="นามสกุล" style={inp} onFocus={focus} onBlur={blur} required />
+              </div>
+            </div>
+
+            <div className="mt-3">
+              <label style={lbl}>Profession</label>
+              <select value={profession}
+                onChange={e => { setProfession(e.target.value); setLicenseNum('') }}
+                style={{ ...inp, cursor: 'pointer' }} onFocus={focus} onBlur={blur} required>
+                <option value="">-- เลือกวิชาชีพ --</option>
+                {Object.entries(PROFESSIONS).map(([k, { label }]) => (
+                  <option key={k} value={k}>{label}</option>
+                ))}
+              </select>
+            </div>
+
+            {profession && (
+              <div className="mt-3">
+                <label style={lbl}>
+                  License Number
+                  {prefix && (
+                    <span className="ml-1.5 font-normal text-xs" style={{ color: '#0d9488' }}>
+                      (prefix: {prefix})
+                    </span>
+                  )}
+                </label>
+                <div className="flex items-center gap-2">
+                  {prefix && (
+                    <span className="text-sm font-bold shrink-0 px-3 py-2.5 rounded-xl"
+                      style={{ background: '#f0fdf4', color: '#0d9488', border: '1px solid #d1fae5' }}>
+                      {prefix}
+                    </span>
+                  )}
+                  <input
+                    type="text"
+                    value={licenseNum}
+                    onChange={e => setLicenseNum(e.target.value.replace(/\D/g, ''))}
+                    placeholder={prefix ? '00000' : 'กรอกเลขใบประกอบ (ถ้ามี)'}
+                    style={inp}
+                    onFocus={focus} onBlur={blur}
+                  />
                 </div>
               </div>
             )}
-          </div>
 
-          <div>
-            <label className="text-sm font-medium block mb-1" style={{ color: '#4b5563' }}>ยืนยันรหัสผ่าน</label>
-            <div className="relative">
+            <div className="mt-3">
+              <label style={lbl}>Phone Number</label>
               <input
-                type={showConfirm ? 'text' : 'password'}
-                value={confirm}
-                onChange={e => setConfirm(e.target.value)}
-                placeholder="กรอกรหัสผ่านอีกครั้ง"
-                className="w-full p-3 pr-11 border rounded-xl bg-gray-50 outline-none"
-                style={{ borderColor: confirm && confirm !== password ? '#ef4444' : '#e5e7eb' }}
-                onFocus={e => e.target.style.borderColor = confirm && confirm !== password ? '#ef4444' : '#0d9488'}
-                onBlur={e => e.target.style.borderColor = confirm && confirm !== password ? '#ef4444' : '#e5e7eb'}
-                required
+                type="text"
+                value={phone}
+                onChange={e => setPhone(formatPhone(e.target.value))}
+                placeholder="0xx-xxx-xxxx"
+                style={inp} onFocus={focus} onBlur={blur}
               />
-              <button type="button" onClick={() => setShowConfirm(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: '#0d9488' }}>
-                <i className={`fa-solid ${showConfirm ? 'fa-eye-slash' : 'fa-eye'}`}></i>
-              </button>
             </div>
-            {confirm && confirm !== password && (
-              <p className="text-xs mt-1" style={{ color: '#ef4444' }}>รหัสผ่านไม่ตรงกัน</p>
-            )}
-          </div>
+          </section>
 
+          <hr style={{ borderColor: '#f3f4f6' }} />
+
+          {/* ── HOSPITAL ── */}
+          <section>
+            <p className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: '#9ca3af' }}>
+              Hospital
+            </p>
+            <div>
+              <label style={lbl}>Hospital Name</label>
+              <input type="text" value={hospitalName} onChange={e => setHospitalName(e.target.value)}
+                placeholder="ชื่อโรงพยาบาล / สถานพยาบาล"
+                style={inp} onFocus={focus} onBlur={blur} required />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              <div>
+                <label style={lbl}>Hospital Type</label>
+                <select value={hospitalType} onChange={e => setHospitalType(e.target.value)}
+                  style={{ ...inp, cursor: 'pointer' }} onFocus={focus} onBlur={blur} required>
+                  <option value="">-- เลือกประเภท --</option>
+                  {HOSPITAL_TYPES.map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={lbl}>Department</label>
+                <select value={department}
+                  onChange={e => { setDepartment(e.target.value); if (e.target.value !== 'อื่นๆ') setDepartmentOther('') }}
+                  style={{ ...inp, cursor: 'pointer' }} onFocus={focus} onBlur={blur} required>
+                  <option value="">-- เลือกแผนก --</option>
+                  {DEPARTMENTS.map(d => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {department === 'อื่นๆ' && (
+              <div className="mt-3">
+                <label style={lbl}>ระบุแผนก</label>
+                <input type="text" value={departmentOther}
+                  onChange={e => setDepartmentOther(e.target.value)}
+                  placeholder="กรุณาระบุชื่อแผนกของคุณ"
+                  style={inp} onFocus={focus} onBlur={blur} required />
+              </div>
+            )}
+          </section>
+
+          {/* Error */}
           {error && (
-            <div className="text-sm p-3 rounded-xl flex items-center gap-2" style={{ background: '#fef2f2', color: '#dc2626' }}>
-              <i className="fa-solid fa-circle-exclamation"></i>
+            <div className="text-sm p-3 rounded-xl flex items-center gap-2"
+              style={{ background: '#fef2f2', color: '#dc2626' }}>
+              <i className="fa-solid fa-circle-exclamation" />
               {error}
             </div>
           )}
 
+          {/* Submit */}
           <button
-            type="submit"
-            disabled={loading}
-            className="w-full p-3.5 rounded-xl font-bold text-white shadow-lg transition-all flex items-center justify-center gap-2 mt-2"
-            style={{ background: loading ? '#99f6e4' : '#0f766e' }}
-          >
+            type="submit" disabled={loading}
+            className="w-full p-3.5 rounded-xl font-bold text-white shadow-lg flex items-center justify-center gap-2"
+            style={{ background: loading ? '#99f6e4' : '#0f766e' }}>
             {loading
-              ? <><i className="fa-solid fa-spinner fa-spin"></i>กำลังสมัคร...</>
-              : <><i className="fa-solid fa-user-plus"></i>สมัครสมาชิก</>}
+              ? <><i className="fa-solid fa-spinner fa-spin" />กำลังส่งคำขอ...</>
+              : <><i className="fa-solid fa-paper-plane" />ส่งคำขอสมัครสมาชิก</>}
           </button>
         </form>
 
-        <div className="mt-6 pt-5 border-t" style={{ borderColor: '#f3f4f6' }}>
+        <div className="mt-5 pt-4 border-t text-center" style={{ borderColor: '#f3f4f6' }}>
           <p className="text-sm" style={{ color: '#9ca3af' }}>
-            มีบัญชีแล้ว?{' '}
+            หากท่านเป็นสมาชิกอยู่แล้ว{' '}
             <a href="/login" className="font-semibold" style={{ color: '#0f766e' }}>
-              เข้าสู่ระบบ
+              กรุณาเข้าสู่ระบบ
             </a>
           </p>
         </div>
+
       </div>
     </div>
   )

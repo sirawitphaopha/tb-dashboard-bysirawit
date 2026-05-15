@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
+import PasswordEye from '@/components/PasswordEye'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -10,6 +11,7 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -18,7 +20,6 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
-    // Dev bypass
     if (email === 'sirawit' && password === '1234') {
       document.cookie = 'dev_session=sirawit; path=/'
       router.push('/')
@@ -64,16 +65,19 @@ export default function LoginPage() {
 
           <div style={{ marginBottom: '8px' }}>
             <label style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563', display: 'block', marginBottom: '6px' }}>Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              placeholder="กรอกรหัสผ่าน"
-              style={{ width: '100%', padding: '12px 14px', border: '1px solid #e5e7eb', borderRadius: '12px', background: '#f9fafb', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
-              onFocus={e => { e.target.style.border = '1.5px solid #0d9488'; e.target.style.background = '#fff' }}
-              onBlur={e => { e.target.style.border = '1px solid #e5e7eb'; e.target.style.background = '#f9fafb' }}
-              required
-            />
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="กรอกรหัสผ่าน"
+                style={{ width: '100%', padding: '12px 44px 12px 14px', border: '1px solid #e5e7eb', borderRadius: '12px', background: '#f9fafb', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+                onFocus={e => { e.target.style.border = '1.5px solid #0d9488'; e.target.style.background = '#fff' }}
+                onBlur={e => { e.target.style.border = '1px solid #e5e7eb'; e.target.style.background = '#f9fafb' }}
+                required
+              />
+              <PasswordEye show={showPassword} onClick={() => setShowPassword(v => !v)} />
+            </div>
           </div>
 
           {error && (
@@ -98,9 +102,9 @@ export default function LoginPage() {
 
         <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid #f3f4f6' }}>
           <p style={{ fontSize: '13px', color: '#9ca3af', margin: 0 }}>
-            ยังไม่มีบัญชี?{' '}
+            หากท่านยังไม่เป็นสมาชิก{' '}
             <a href="/register" style={{ color: '#0d9488', fontWeight: 600, textDecoration: 'none' }}>
-              สมัครสมาชิก
+              กรุณาลงทะเบียน
             </a>
           </p>
         </div>
@@ -108,7 +112,7 @@ export default function LoginPage() {
         <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #f3f4f6' }}>
           <p style={{ fontSize: '11px', color: '#9ca3af', margin: '0 0 2px 0' }}>พัฒนาโดย เภสัชกร สิรวิชญ์ เผ่าผา</p>
           <p style={{ fontSize: '11px', color: '#9ca3af', margin: '0 0 4px 0' }}>โรงพยาบาลปรางค์กู่</p>
-          <p style={{ fontSize: '11px', color: '#d1d5db', margin: 0 }}>Version 0.7.0 ·<span style={{ color: '#fbbf24', fontWeight: 600 }}>ยังไม่เผยแพร่</span></p>
+          <p style={{ fontSize: '11px', color: '#d1d5db', margin: 0 }}>Version 0.7.1 · <span style={{ color: '#fbbf24', fontWeight: 600 }}>ยังไม่เผยแพร่</span></p>
         </div>
       </div>
     </div>

@@ -8,13 +8,13 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="th" className="h-full">
+    <html lang="th">
       <head>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet" />
       </head>
-      <body className="h-full m-0 p-0 overflow-hidden" style={{ fontFamily: 'Sarabun, sans-serif' }}>{children}</body>
+      <body className="m-0 p-0" style={{ fontFamily: 'Sarabun, sans-serif' }}>{children}</body>
     </html>
   );
 }

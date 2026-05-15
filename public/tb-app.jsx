@@ -1841,7 +1841,7 @@ function App() {
             <div>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:0,whiteSpace:'nowrap'}}>พัฒนาโดย เภสัชกร สิรวิชญ์ เผ่าผา</p>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:'1px 0 0 0',whiteSpace:'nowrap'}}>โรงพยาบาลปรางค์กู่</p>
-              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.7.0 ·<span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
+              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.7.1 ·<span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
             </div>
           ) : (
             <div style={{display:'flex',justifyContent:'center'}}>
@@ -2027,95 +2027,331 @@ function App() {
   );
 }
 
-const DEMO_USER = {
-  name: 'ภก.สิรวิชญ์ เผ่าผา',
-  nameEn: 'Sirawit Phaophan',
-  position: 'เภสัชกร (Pharmacist)',
-  hospital: 'โรงพยาบาลปรางค์กู่',
-  department: 'กลุ่มงานเภสัชกรรม',
-  licenseNo: 'ภก. 12345',
-  username: 'sirawit.p',
-  email: 'sirawit.p@pranggku.go.th',
-  phone: '045-691-234 ต่อ 201',
-  role: 'Admin',
-  since: '1 ต.ค. 2567',
+const PROFESSIONS = {
+  doctor:       { label: 'แพทย์',                  prefix: 'ว.', avatar: 'นพ.' },
+  dentist:      { label: 'ทันตแพทย์',              prefix: 'ท.', avatar: 'ทพ.' },
+  pharmacist:   { label: 'เภสัชกร',                prefix: 'ภ.', avatar: 'ภก.' },
+  nurse:        { label: 'พยาบาลวิชาชีพ',          prefix: 'ป.', avatar: 'พว.' },
+  medtech:      { label: 'นักเทคนิคการแพทย์',      prefix: '',   avatar: 'นทพ.' },
+  physio:       { label: 'นักกายภาพบำบัด',         prefix: '',   avatar: 'นกบ.' },
+  radio:        { label: 'นักรังสีการแพทย์',       prefix: '',   avatar: 'นรพ.' },
+  publichealth: { label: 'เจ้าหน้าที่สาธารณสุข',   prefix: '',   avatar: 'จสธ.' },
+  officer:      { label: 'เจ้าพนักงาน',            prefix: '',   avatar: 'จพ.' },
+  other:        { label: 'อื่นๆ',                   prefix: '',   avatar: '?' },
 };
 
-function UserProfileModal({ onClose }) {
-  const [editing, setEditing] = React.useState(false);
-  const [form, setForm] = React.useState({...DEMO_USER});
-  const set = k => e => setForm(f=>({...f,[k]:e.target.value}));
+const DEPARTMENTS = ['กลุ่มงานเภสัชกรรม','กลุ่มงานการพยาบาล','กลุ่มงานแพทย์','อื่นๆ'];
 
-  const editableFields = [
-    {icon:'fa-hospital', label:'โรงพยาบาล',             key:'hospital'},
-    {icon:'fa-pills',    label:'แผนก',                  key:'department'},
-    {icon:'fa-id-card',  label:'เลขใบประกอบวิชาชีพ',    key:'licenseNo'},
-    {icon:'fa-user',     label:'ชื่อผู้ใช้',             key:'username'},
-    {icon:'fa-envelope', label:'อีเมล',                  key:'email'},
-    {icon:'fa-phone',    label:'โทรศัพท์',               key:'phone'},
-    {icon:'fa-calendar', label:'ใช้งานระบบตั้งแต่',      key:'since'},
-  ];
+const HOSPITAL_TYPES = [
+  'โรงพยาบาลศูนย์ (ระดับ A)',
+  'โรงพยาบาลทั่วไป (ระดับ S)',
+  'โรงพยาบาลทั่วไป (ระดับ M1)',
+  'โรงพยาบาลชุมชน (ระดับ M2)',
+  'โรงพยาบาลชุมชน (ระดับ F1)',
+  'โรงพยาบาลชุมชน (ระดับ F2)',
+  'โรงพยาบาลชุมชน (ระดับ F3)',
+  'โรงพยาบาลเอกชน',
+  'สำนักงานสาธารณสุข (สสจ./สสอ.)',
+  'โรงพยาบาลส่งเสริมสุขภาพตำบล (รพ.สต.)',
+];
+
+const DEMO_USER = {
+  // identity (read-only)
+  username: 'sirawit.p',
+  email: 'sirawit.p@pranggku.go.th',
+  role: 'Admin',
+  since: '1 ต.ค. 2567',
+  // self-editable
+  phone: '089-980-8521',
+  department: 'กลุ่มงานเภสัชกรรม',
+  // admin-approval required
+  firstName: 'สิรวิชญ์',
+  lastName: 'เผ่าผา',
+  profession: 'pharmacist',
+  licenseNumber: '12345',
+  hospitalName: 'โรงพยาบาลปรางค์กู่',
+  hospitalType: 'โรงพยาบาลชุมชน (ระดับ F2)',
+};
+
+// ───── Sub-modal: ส่งคำขอแก้ไขข้อมูล (admin approval) ─────
+function RequestEditModal({ field, currentValue, onClose }) {
+  const [newValue, setNewValue] = React.useState('');
+  const [reason,   setReason]   = React.useState('');
+
+  const submit = () => {
+    if (!newValue.trim()) { alert('กรุณากรอกค่าใหม่'); return; }
+    // TODO: เรียก API ส่งเมลให้ admin (รอ Resend integration)
+    alert(`ส่งคำขอแก้ไข "${field.label}" ให้ admin เรียบร้อยแล้วค่ะ\n\nค่าเดิม: ${currentValue}\nค่าใหม่: ${newValue}\nเหตุผล: ${reason || '(ไม่ระบุ)'}\n\nรอผู้ดูแลระบบพิจารณาทางอีเมลค่ะ`);
+    onClose();
+  };
+
+  // เลือก input ตามประเภท field
+  const renderInput = () => {
+    if (field.options) {
+      return (
+        <select value={newValue} onChange={e=>setNewValue(e.target.value)}
+          style={{width:'100%',padding:'10px 12px',border:'1px solid #e5e7eb',borderRadius:'10px',background:'#f9fafb',fontSize:'14px',outline:'none',cursor:'pointer'}}>
+          <option value="">-- เลือกใหม่ --</option>
+          {field.options.map(o=><option key={o} value={o}>{o}</option>)}
+        </select>
+      );
+    }
+    return (
+      <input type="text" value={newValue} onChange={e=>setNewValue(e.target.value)}
+        placeholder="กรอกค่าใหม่"
+        style={{width:'100%',padding:'10px 12px',border:'1px solid #e5e7eb',borderRadius:'10px',background:'#f9fafb',fontSize:'14px',outline:'none',boxSizing:'border-box'}}/>
+    );
+  };
 
   return (
-    <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.4)',backdropFilter:'blur(2px)',zIndex:50,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}}
+    <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.5)',backdropFilter:'blur(3px)',zIndex:60,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}}
       onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
-      <div style={{background:'#fff',borderRadius:'20px',width:'100%',maxWidth:'480px',maxHeight:'90vh',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,0.15)',overflow:'hidden'}}>
+      <div style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'420px',boxShadow:'0 20px 60px rgba(0,0,0,0.2)',overflow:'hidden'}}>
 
-        {/* Header — fixed */}
-        <div style={{background:'linear-gradient(135deg,#0f766e,#14b8a6)',padding:'24px 24px 20px',textAlign:'center',position:'relative',flexShrink:0}}>
-          <button onClick={onClose} style={{position:'absolute',top:'14px',right:'14px',width:'28px',height:'28px',borderRadius:'8px',border:'none',background:'rgba(255,255,255,0.2)',color:'#fff',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'13px'}}>
+        <div style={{background:'linear-gradient(135deg,#f59e0b,#fbbf24)',padding:'18px 20px',color:'#fff',display:'flex',alignItems:'center',gap:'10px'}}>
+          <i className="fa-solid fa-shield-halved" style={{fontSize:'20px'}}></i>
+          <div style={{flex:1}}>
+            <p style={{fontSize:'11px',margin:0,opacity:0.9}}>ส่งคำขอแก้ไขข้อมูล</p>
+            <p style={{fontSize:'15px',fontWeight:700,margin:'2px 0 0'}}>{field.label}</p>
+          </div>
+          <button onClick={onClose} style={{width:'28px',height:'28px',borderRadius:'8px',border:'none',background:'rgba(255,255,255,0.25)',color:'#fff',cursor:'pointer'}}>
             <i className="fa-solid fa-xmark"></i>
           </button>
-          <div style={{width:'60px',height:'60px',borderRadius:'50%',background:'rgba(255,255,255,0.2)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:800,fontSize:'18px',margin:'0 auto 10px'}}>ภก</div>
-          <p style={{fontWeight:800,fontSize:'17px',color:'#fff',margin:0}}>{form.name}</p>
-          <p style={{fontSize:'12px',color:'rgba(255,255,255,0.8)',margin:'3px 0 0'}}>{form.position}</p>
-          <span style={{display:'inline-block',marginTop:'7px',background:'rgba(255,255,255,0.2)',color:'#fff',fontSize:'11px',fontWeight:700,padding:'3px 10px',borderRadius:'20px'}}>
-            <i className="fa-solid fa-shield-halved" style={{marginRight:'4px'}}></i>{form.role}
-          </span>
         </div>
 
-        {/* Info rows — scrollable */}
-        <div style={{overflowY:'auto',flex:1,padding:'16px 24px'}}>
-          {editableFields.map(row=>(
-            <div key={row.key} style={{display:'flex',alignItems:'center',gap:'12px',padding:'10px 0',borderBottom:'1px solid #f1f5f9'}}>
-              <span style={{width:'32px',height:'32px',borderRadius:'8px',background:'#f0fdfa',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-                <i className={`fa-solid ${row.icon}`} style={{color:'#0f766e',fontSize:'13px'}}></i>
-              </span>
-              <div style={{flex:1,minWidth:0}}>
-                <p style={{fontSize:'10px',color:'#9ca3af',margin:0}}>{row.label}</p>
-                {editing
-                  ? <input value={form[row.key]} onChange={set(row.key)}
-                      style={{width:'100%',fontSize:'13px',fontWeight:600,color:'#1f2937',border:'none',borderBottom:'1.5px solid #14b8a6',outline:'none',background:'transparent',padding:'2px 0'}}/>
-                  : <p style={{fontSize:'13px',fontWeight:600,color:'#1f2937',margin:0}}>{form[row.key]}</p>
-                }
-              </div>
-            </div>
-          ))}
+        <div style={{padding:'18px 20px'}}>
+          <p style={{fontSize:'11px',color:'#9ca3af',margin:'0 0 4px',fontWeight:600}}>ค่าปัจจุบัน</p>
+          <div style={{padding:'10px 12px',background:'#f9fafb',border:'1px solid #e5e7eb',borderRadius:'10px',fontSize:'14px',color:'#6b7280',marginBottom:'14px'}}>
+            {currentValue || '—'}
+          </div>
+
+          <p style={{fontSize:'11px',color:'#9ca3af',margin:'0 0 4px',fontWeight:600}}>ค่าใหม่ที่ต้องการ</p>
+          {renderInput()}
+
+          <p style={{fontSize:'11px',color:'#9ca3af',margin:'14px 0 4px',fontWeight:600}}>เหตุผล <span style={{fontWeight:400}}>(ไม่บังคับ)</span></p>
+          <textarea value={reason} onChange={e=>setReason(e.target.value)}
+            placeholder="ระบุเหตุผลที่ต้องการแก้ไข เช่น พิมพ์ผิด, เปลี่ยนตำแหน่งงาน ฯลฯ"
+            rows={3}
+            style={{width:'100%',padding:'10px 12px',border:'1px solid #e5e7eb',borderRadius:'10px',background:'#f9fafb',fontSize:'13px',outline:'none',resize:'vertical',boxSizing:'border-box',fontFamily:'inherit'}}/>
+
+          <div style={{background:'#fef3c7',border:'1px solid #fde68a',borderRadius:'10px',padding:'10px 12px',marginTop:'14px',display:'flex',gap:'8px',alignItems:'flex-start'}}>
+            <i className="fa-solid fa-circle-info" style={{color:'#d97706',fontSize:'13px',marginTop:'2px'}}></i>
+            <p style={{fontSize:'11px',color:'#92400e',margin:0,lineHeight:1.5}}>
+              คำขอจะส่งไปยังผู้ดูแลระบบเพื่อพิจารณา และแจ้งผลกลับทางอีเมล
+            </p>
+          </div>
         </div>
 
-        {/* Footer — fixed */}
-        <div style={{padding:'12px 24px 18px',display:'flex',gap:'8px',borderTop:'1px solid #f1f5f9',flexShrink:0}}>
-          {editing ? <>
-            <button onClick={()=>setEditing(false)} style={{flex:1,padding:'10px',borderRadius:'10px',border:'1.5px solid #e5e7eb',background:'#fff',color:'#374151',fontWeight:600,fontSize:'13px',cursor:'pointer'}}>
-              ยกเลิก
-            </button>
-            <button onClick={()=>setEditing(false)} style={{flex:1,padding:'10px',borderRadius:'10px',border:'none',background:'#0f766e',color:'#fff',fontWeight:700,fontSize:'13px',cursor:'pointer'}}>
-              <i className="fa-solid fa-check" style={{marginRight:'6px'}}></i>บันทึก
-            </button>
-          </> : <>
-            <button onClick={()=>setEditing(true)} style={{flex:1,padding:'10px',borderRadius:'10px',border:'1.5px solid #e5e7eb',background:'#fff',color:'#374151',fontWeight:600,fontSize:'13px',cursor:'pointer'}}>
-              <i className="fa-solid fa-pen" style={{marginRight:'6px'}}></i>แก้ไขข้อมูล
-            </button>
-            <button style={{flex:1,padding:'10px',borderRadius:'10px',border:'1.5px solid #e5e7eb',background:'#fff',color:'#374151',fontWeight:600,fontSize:'13px',cursor:'pointer'}}>
-              <i className="fa-solid fa-key" style={{marginRight:'6px'}}></i>เปลี่ยนรหัสผ่าน
-            </button>
-            <button onClick={onClose} style={{flex:1,padding:'10px',borderRadius:'10px',border:'none',background:'#0f766e',color:'#fff',fontWeight:700,fontSize:'13px',cursor:'pointer'}}>
-              ปิด
-            </button>
-          </>}
+        <div style={{padding:'12px 20px 18px',display:'flex',gap:'8px',borderTop:'1px solid #f1f5f9'}}>
+          <button onClick={onClose} style={{flex:1,padding:'10px',borderRadius:'10px',border:'1.5px solid #e5e7eb',background:'#fff',color:'#374151',fontWeight:600,fontSize:'13px',cursor:'pointer'}}>
+            ยกเลิก
+          </button>
+          <button onClick={submit} style={{flex:1,padding:'10px',borderRadius:'10px',border:'none',background:'#f59e0b',color:'#fff',fontWeight:700,fontSize:'13px',cursor:'pointer'}}>
+            <i className="fa-solid fa-paper-plane" style={{marginRight:'6px'}}></i>ส่งคำขอ
+          </button>
         </div>
       </div>
     </div>
+  );
+}
+
+// ───── Main Profile Modal ─────
+function UserProfileModal({ onClose }) {
+  const [form, setForm]               = React.useState({...DEMO_USER});
+  const [editingKey, setEditingKey]   = React.useState(null);   // key of self-editable field being edited
+  const [tempValue, setTempValue]     = React.useState('');
+  const [requestField, setRequestField] = React.useState(null); // field object for sub-modal
+
+  const prof = PROFESSIONS[form.profession] || PROFESSIONS.other;
+  const fullName = `${form.firstName || ''} ${form.lastName || ''}`.trim() || '—';
+  const fullLicense = (prof.prefix || '') + (form.licenseNumber || '');
+
+  // Self-editable fields (เบอร์โทร + แผนก)
+  const selfFields = [
+    { key:'phone',      icon:'fa-phone',   label:'เบอร์โทรศัพท์', type:'text' },
+    { key:'department', icon:'fa-pills',   label:'แผนก',          type:'select', options: DEPARTMENTS },
+  ];
+
+  // Admin-approval required fields
+  const approvalFields = [
+    { key:'fullName',     icon:'fa-user',           label:'ชื่อ-นามสกุล',        currentValue: fullName },
+    { key:'profession',   icon:'fa-user-doctor',    label:'วิชาชีพ',             currentValue: prof.label, options: Object.values(PROFESSIONS).map(p=>p.label) },
+    { key:'license',      icon:'fa-id-card',        label:'เลขใบประกอบ',         currentValue: fullLicense },
+    { key:'hospitalName', icon:'fa-hospital',       label:'โรงพยาบาล',           currentValue: form.hospitalName },
+    { key:'hospitalType', icon:'fa-location-dot',   label:'ประเภทโรงพยาบาล',     currentValue: form.hospitalType, options: HOSPITAL_TYPES },
+  ];
+
+  // Read-only system fields
+  const systemFields = [
+    { key:'email',    icon:'fa-envelope',       label:'อีเมล',              value: form.email },
+    { key:'username', icon:'fa-at',             label:'ชื่อผู้ใช้',          value: form.username },
+    { key:'role',     icon:'fa-shield-halved',  label:'สิทธิ์การใช้งาน',     value: form.role },
+    { key:'since',    icon:'fa-calendar',       label:'ใช้งานระบบตั้งแต่',   value: form.since },
+  ];
+
+  const startEdit = (field) => {
+    setEditingKey(field.key);
+    setTempValue(form[field.key]);
+  };
+  const saveEdit = () => {
+    setForm(f => ({ ...f, [editingKey]: tempValue }));
+    setEditingKey(null);
+  };
+  const cancelEdit = () => setEditingKey(null);
+
+  // Render row helpers
+  const SectionHeader = ({ icon, color, label, hint }) => (
+    <div style={{display:'flex',alignItems:'center',gap:'6px',padding:'14px 0 6px',borderBottom:'1px solid #e5e7eb',marginBottom:'4px'}}>
+      <i className={`fa-solid ${icon}`} style={{color,fontSize:'11px'}}></i>
+      <p style={{fontSize:'11px',fontWeight:700,color,margin:0,textTransform:'uppercase',letterSpacing:'0.5px'}}>{label}</p>
+      {hint && <span style={{fontSize:'10px',color:'#9ca3af',marginLeft:'auto'}}>{hint}</span>}
+    </div>
+  );
+
+  const RowShell = ({ icon, label, children, action }) => (
+    <div style={{display:'flex',alignItems:'center',gap:'12px',padding:'10px 0',borderBottom:'1px solid #f1f5f9'}}>
+      <span style={{width:'32px',height:'32px',borderRadius:'8px',background:'#f0fdfa',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+        <i className={`fa-solid ${icon}`} style={{color:'#0f766e',fontSize:'13px'}}></i>
+      </span>
+      <div style={{flex:1,minWidth:0}}>
+        <p style={{fontSize:'10px',color:'#9ca3af',margin:0}}>{label}</p>
+        {children}
+      </div>
+      {action}
+    </div>
+  );
+
+  return (
+    <>
+      <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.4)',backdropFilter:'blur(2px)',zIndex:50,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}}
+        onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+        <div style={{background:'#fff',borderRadius:'20px',width:'100%',maxWidth:'920px',maxHeight:'88vh',display:'flex',flexDirection:'row',boxShadow:'0 20px 60px rgba(0,0,0,0.15)',overflow:'hidden'}}>
+
+          {/* ═══ LEFT: Header column ═══ */}
+          <div style={{background:'linear-gradient(160deg,#0f766e,#14b8a6)',padding:'32px 24px',width:'280px',flexShrink:0,display:'flex',flexDirection:'column',position:'relative'}}>
+            <button onClick={onClose} style={{position:'absolute',top:'14px',right:'14px',width:'30px',height:'30px',borderRadius:'8px',border:'none',background:'rgba(255,255,255,0.2)',color:'#fff',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'14px'}}>
+              <i className="fa-solid fa-xmark"></i>
+            </button>
+
+            <div style={{textAlign:'center',marginTop:'10px'}}>
+              <div style={{width:'90px',height:'90px',borderRadius:'50%',background:'rgba(255,255,255,0.2)',border:'3px solid rgba(255,255,255,0.3)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:800,fontSize:'22px',margin:'0 auto 16px'}}>
+                {prof.avatar}
+              </div>
+              <p style={{fontWeight:800,fontSize:'18px',color:'#fff',margin:0,lineHeight:1.3}}>{prof.avatar} {fullName}</p>
+              <p style={{fontSize:'13px',color:'rgba(255,255,255,0.85)',margin:'5px 0 0'}}>{prof.label}</p>
+              <span style={{display:'inline-block',marginTop:'12px',background:'rgba(255,255,255,0.2)',color:'#fff',fontSize:'11px',fontWeight:700,padding:'4px 12px',borderRadius:'20px'}}>
+                <i className="fa-solid fa-shield-halved" style={{marginRight:'5px'}}></i>{form.role}
+              </span>
+            </div>
+
+            {/* Mini stats / quick info */}
+            <div style={{marginTop:'24px',padding:'14px',background:'rgba(255,255,255,0.1)',borderRadius:'12px',border:'1px solid rgba(255,255,255,0.15)'}}>
+              <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'10px'}}>
+                <i className="fa-solid fa-hospital" style={{color:'rgba(255,255,255,0.8)',fontSize:'12px',width:'14px'}}></i>
+                <p style={{fontSize:'11px',color:'#fff',margin:0,fontWeight:600,lineHeight:1.3}}>{form.hospitalName}</p>
+              </div>
+              <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'10px'}}>
+                <i className="fa-solid fa-pills" style={{color:'rgba(255,255,255,0.8)',fontSize:'12px',width:'14px'}}></i>
+                <p style={{fontSize:'11px',color:'#fff',margin:0,fontWeight:600}}>{form.department}</p>
+              </div>
+              <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                <i className="fa-solid fa-calendar" style={{color:'rgba(255,255,255,0.8)',fontSize:'12px',width:'14px'}}></i>
+                <p style={{fontSize:'11px',color:'#fff',margin:0,fontWeight:600}}>เริ่มใช้ {form.since}</p>
+              </div>
+            </div>
+
+            {/* Footer buttons inside left col */}
+            <div style={{marginTop:'auto',paddingTop:'20px',display:'flex',flexDirection:'column',gap:'8px'}}>
+              <button disabled title="เร็วๆ นี้ — กำลังพัฒนา"
+                style={{width:'100%',padding:'10px',borderRadius:'10px',border:'1.5px solid rgba(255,255,255,0.25)',background:'rgba(255,255,255,0.1)',color:'rgba(255,255,255,0.6)',fontWeight:600,fontSize:'12px',cursor:'not-allowed'}}>
+                <i className="fa-solid fa-key" style={{marginRight:'6px'}}></i>เปลี่ยนรหัสผ่าน
+                <span style={{fontSize:'9px',marginLeft:'6px',background:'rgba(251,191,36,0.3)',color:'#fef3c7',padding:'1px 5px',borderRadius:'6px'}}>เร็วๆ นี้</span>
+              </button>
+              <button onClick={onClose} style={{width:'100%',padding:'11px',borderRadius:'10px',border:'none',background:'rgba(255,255,255,0.95)',color:'#0f766e',fontWeight:700,fontSize:'13px',cursor:'pointer'}}>
+                ปิดหน้าต่าง
+              </button>
+            </div>
+          </div>
+
+          {/* ═══ RIGHT: Content column ═══ */}
+          <div style={{flex:1,overflowY:'auto',padding:'20px 28px'}}>
+
+            {/* Section 1: Self-editable */}
+            <SectionHeader icon="fa-pen-to-square" color="#0d9488" label="ข้อมูลที่แก้ไขได้เอง" />
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0 20px'}}>
+              {selfFields.map(field => (
+                <RowShell key={field.key} icon={field.icon} label={field.label}
+                  action={editingKey === field.key
+                    ? (
+                      <div style={{display:'flex',gap:'4px'}}>
+                        <button onClick={cancelEdit} style={{width:'28px',height:'28px',borderRadius:'7px',border:'1px solid #e5e7eb',background:'#fff',color:'#6b7280',cursor:'pointer'}}>
+                          <i className="fa-solid fa-xmark" style={{fontSize:'11px'}}></i>
+                        </button>
+                        <button onClick={saveEdit} style={{width:'28px',height:'28px',borderRadius:'7px',border:'none',background:'#0d9488',color:'#fff',cursor:'pointer'}}>
+                          <i className="fa-solid fa-check" style={{fontSize:'11px'}}></i>
+                        </button>
+                      </div>
+                    )
+                    : (
+                      <button onClick={()=>startEdit(field)} title="แก้ไขข้อมูลนี้"
+                        style={{width:'28px',height:'28px',borderRadius:'7px',border:'1px solid #d1fae5',background:'#f0fdfa',color:'#0d9488',cursor:'pointer'}}>
+                        <i className="fa-solid fa-pen" style={{fontSize:'11px'}}></i>
+                      </button>
+                    )
+                  }>
+                  {editingKey === field.key
+                    ? (field.type === 'select'
+                        ? <select value={tempValue} onChange={e=>setTempValue(e.target.value)} autoFocus
+                            style={{width:'100%',fontSize:'13px',fontWeight:600,color:'#1f2937',border:'none',borderBottom:'1.5px solid #14b8a6',outline:'none',background:'transparent',padding:'2px 0',cursor:'pointer'}}>
+                            {field.options.map(o=><option key={o} value={o}>{o}</option>)}
+                          </select>
+                        : <input value={tempValue} onChange={e=>setTempValue(e.target.value)} autoFocus
+                            style={{width:'100%',fontSize:'13px',fontWeight:600,color:'#1f2937',border:'none',borderBottom:'1.5px solid #14b8a6',outline:'none',background:'transparent',padding:'2px 0'}}/>)
+                    : <p style={{fontSize:'13px',fontWeight:600,color:'#1f2937',margin:0}}>{form[field.key]}</p>
+                  }
+                </RowShell>
+              ))}
+            </div>
+
+            {/* Section 2: Admin-approval required */}
+            <SectionHeader icon="fa-shield-halved" color="#d97706" label="ต้องขออนุมัติแก้ไข" hint="🔒 ส่งคำขอถึง admin" />
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0 20px'}}>
+              {approvalFields.map(field => (
+                <RowShell key={field.key} icon={field.icon} label={field.label}
+                  action={
+                    <button onClick={()=>setRequestField(field)} title="ต้องขออนุมัติจากผู้ดูแลระบบ"
+                      style={{width:'28px',height:'28px',borderRadius:'7px',border:'1px solid #fde68a',background:'#fef3c7',color:'#d97706',cursor:'pointer'}}>
+                      <i className="fa-solid fa-lock" style={{fontSize:'11px'}}></i>
+                    </button>
+                  }>
+                  <p style={{fontSize:'13px',fontWeight:600,color:'#1f2937',margin:0}}>{field.currentValue || '—'}</p>
+                </RowShell>
+              ))}
+            </div>
+
+            {/* Section 3: Read-only */}
+            <SectionHeader icon="fa-circle-info" color="#6b7280" label="ข้อมูลระบบ" hint="แก้ไขไม่ได้" />
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0 20px'}}>
+              {systemFields.map(field => (
+                <RowShell key={field.key} icon={field.icon} label={field.label}>
+                  <p style={{fontSize:'13px',fontWeight:600,color:'#1f2937',margin:0,wordBreak:'break-all'}}>{field.value}</p>
+                </RowShell>
+              ))}
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      {/* Sub-modal */}
+      {requestField && (
+        <RequestEditModal
+          field={requestField}
+          currentValue={requestField.currentValue}
+          onClose={()=>setRequestField(null)}
+        />
+      )}
+    </>
   );
 }
 
