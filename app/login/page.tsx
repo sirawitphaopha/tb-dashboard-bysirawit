@@ -27,7 +27,30 @@ export default function LoginPage() {
       return
     }
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    // ถ้าไม่มี @ ใน input → ถือว่าเป็น username → lookup email ก่อน
+    let loginEmail = email
+    if (!email.includes('@')) {
+      try {
+        const res = await fetch('/api/login-lookup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: email }),
+        })
+        const data = await res.json()
+        if (!data.email) {
+          setError('อีเมลหรือรหัสผ่านไม่ถูกต้อง')
+          setLoading(false)
+          return
+        }
+        loginEmail = data.email
+      } catch {
+        setError('เกิดข้อผิดพลาด กรุณาลองใหม่')
+        setLoading(false)
+        return
+      }
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password })
 
     if (error) {
       setError('อีเมลหรือรหัสผ่านไม่ถูกต้อง')
@@ -112,7 +135,7 @@ export default function LoginPage() {
         <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #f3f4f6' }}>
           <p style={{ fontSize: '11px', color: '#9ca3af', margin: '0 0 2px 0' }}>พัฒนาโดย เภสัชกร สิรวิชญ์ เผ่าผา</p>
           <p style={{ fontSize: '11px', color: '#9ca3af', margin: '0 0 4px 0' }}>โรงพยาบาลปรางค์กู่</p>
-          <p style={{ fontSize: '11px', color: '#d1d5db', margin: 0 }}>Version 0.7.1 · <span style={{ color: '#fbbf24', fontWeight: 600 }}>ยังไม่เผยแพร่</span></p>
+          <p style={{ fontSize: '11px', color: '#d1d5db', margin: 0 }}>Version 0.7.2 · <span style={{ color: '#fbbf24', fontWeight: 600 }}>ยังไม่เผยแพร่</span></p>
         </div>
       </div>
     </div>

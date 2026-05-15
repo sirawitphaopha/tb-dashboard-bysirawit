@@ -1685,6 +1685,25 @@ function App() {
   const dirtyToastTimer = useRef(null);
   const EASTER_MSGS = ['จะกดอะไรกันนักกันหนา 😤','จะไม่กดแล้วใช่มั้ย','แน่นะ','หืมมมมมม','เชื่อก็ได้'];
 
+  // Current user profile (จาก Supabase)
+  const [currentUser, setCurrentUser] = useState(null);
+  useEffect(() => {
+    fetch('/api/profile/me')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data?.profile) return;
+        const p = data.profile;
+        const prof = PROFESSIONS[p.profession] || PROFESSIONS.other;
+        setCurrentUser({
+          fullName:    `${prof.avatar} ${p.first_name || ''} ${p.last_name || ''}`.trim(),
+          profession:  prof.label,
+          avatar:      prof.avatar.replace('.', ''),  // "ภก." → "ภก"
+          role:        p.role,
+        });
+      })
+      .catch(()=>{});
+  }, []);
+
   const showDirtyToast = () => {
     if (dirtyToastTimer.current) clearTimeout(dirtyToastTimer.current);
     setDirtyToast(true);
@@ -1810,11 +1829,11 @@ function App() {
             onMouseEnter={e=>e.currentTarget.style.background='#f0fdfa'}
             onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
             <span style={{width:'36px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-              <div style={{width:'32px',height:'32px',borderRadius:'50%',background:'#0f766e',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:'11px'}}>ภก</div>
+              <div style={{width:'32px',height:'32px',borderRadius:'50%',background:'#0f766e',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:'11px'}}>{currentUser?.avatar || '?'}</div>
             </span>
             <div style={{overflow:'hidden',maxWidth:sidebarOpen?'160px':'0px',opacity:sidebarOpen?1:0,transition:'max-width 0.2s ease,opacity 0.15s ease',whiteSpace:'nowrap'}}>
-              <p style={{fontWeight:700,fontSize:'12px',color:'#1f2937',margin:0}}>ภก.สิรวิชญ์ เผ่าผา</p>
-              <p style={{fontSize:'11px',color:'#0f766e',margin:0}}>Pharmacist</p>
+              <p style={{fontWeight:700,fontSize:'12px',color:'#1f2937',margin:0}}>{currentUser?.fullName || '—'}</p>
+              <p style={{fontSize:'11px',color:'#0f766e',margin:0}}>{currentUser?.profession || ''}</p>
             </div>
           </button>
           {/* ปุ่มออกระบบ */}
@@ -1841,7 +1860,7 @@ function App() {
             <div>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:0,whiteSpace:'nowrap'}}>พัฒนาโดย เภสัชกร สิรวิชญ์ เผ่าผา</p>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:'1px 0 0 0',whiteSpace:'nowrap'}}>โรงพยาบาลปรางค์กู่</p>
-              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.7.1 ·<span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
+              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.7.2 ·<span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
             </div>
           ) : (
             <div style={{display:'flex',justifyContent:'center'}}>
@@ -2157,10 +2176,55 @@ function RequestEditModal({ field, currentValue, onClose }) {
 
 // ───── Main Profile Modal ─────
 function UserProfileModal({ onClose }) {
-  const [form, setForm]               = React.useState({...DEMO_USER});
-  const [editingKey, setEditingKey]   = React.useState(null);   // key of self-editable field being edited
-  const [tempValue, setTempValue]     = React.useState('');
-  const [requestField, setRequestField] = React.useState(null); // field object for sub-modal
+  const [form, setForm]                 = React.useState(null);
+  const [loading, setLoading]           = React.useState(true);
+  const [editingKey, setEditingKey]     = React.useState(null);
+  const [tempValue, setTempValue]       = React.useState('');
+  const [requestField, setRequestField] = React.useState(null);
+  const [saving, setSaving]             = React.useState(false);
+
+  // Map DB profile → form ที่ modal ใช้
+  const mapDb = (db) => {
+    if (!db) return null;
+    // license_number ใน DB เก็บแบบเต็ม (เช่น "ภ.12345") → ตัด prefix ออกเพื่อให้ UI เติมกลับ
+    const prefixMatch = (db.license_number || '').match(/^([วทภป]\.)?(.*)$/);
+    return {
+      username:       db.username,
+      email:          db.email,
+      role:           db.role === 'admin' ? 'Admin' : 'User',
+      since:          db.approved_at
+                        ? new Date(db.approved_at).toLocaleDateString('th-TH', { year:'numeric', month:'short', day:'numeric' })
+                        : '—',
+      phone:          db.phone || '—',
+      department:     db.department === 'อื่นๆ' ? (db.department_other || 'อื่นๆ') : db.department,
+      firstName:      db.first_name,
+      lastName:       db.last_name,
+      profession:     db.profession,
+      licenseNumber:  prefixMatch ? prefixMatch[2] : (db.license_number || ''),
+      hospitalName:   db.hospital_name,
+      hospitalType:   db.hospital_type,
+    };
+  };
+
+  // Fetch profile on mount
+  React.useEffect(() => {
+    fetch('/api/profile/me')
+      .then(r => r.json())
+      .then(data => { setForm(mapDb(data.profile)); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  if (loading || !form) {
+    return (
+      <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.4)',backdropFilter:'blur(2px)',zIndex:50,display:'flex',alignItems:'center',justifyContent:'center'}}
+        onClick={onClose}>
+        <div style={{background:'#fff',borderRadius:'20px',padding:'40px',textAlign:'center',color:'#6b7280'}}>
+          <i className="fa-solid fa-spinner fa-spin" style={{fontSize:'24px',color:'#0f766e'}}></i>
+          <p style={{marginTop:'12px',fontSize:'14px'}}>กำลังโหลดข้อมูล...</p>
+        </div>
+      </div>
+    );
+  }
 
   const prof = PROFESSIONS[form.profession] || PROFESSIONS.other;
   const fullName = `${form.firstName || ''} ${form.lastName || ''}`.trim() || '—';
@@ -2191,11 +2255,22 @@ function UserProfileModal({ onClose }) {
 
   const startEdit = (field) => {
     setEditingKey(field.key);
-    setTempValue(form[field.key]);
+    setTempValue(form[field.key] === '—' ? '' : form[field.key]);
   };
-  const saveEdit = () => {
-    setForm(f => ({ ...f, [editingKey]: tempValue }));
-    setEditingKey(null);
+  const saveEdit = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch('/api/profile/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [editingKey]: tempValue }),
+      });
+      if (!res.ok) { const e = await res.json(); alert('บันทึกไม่สำเร็จ: ' + e.error); setSaving(false); return; }
+      setForm(f => ({ ...f, [editingKey]: tempValue || '—' }));
+      setEditingKey(null);
+    } catch (e) {
+      alert('เกิดข้อผิดพลาด: ' + e.message);
+    } finally { setSaving(false); }
   };
   const cancelEdit = () => setEditingKey(null);
 

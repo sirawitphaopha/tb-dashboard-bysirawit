@@ -116,14 +116,31 @@ export default function RegisterPage() {
     setError('')
     if (!passwordOk)           { setError('รหัสผ่านยังไม่ผ่านเกณฑ์ความปลอดภัย (ต้องผ่านอย่างน้อย 4/5 ข้อ และมีความยาว 8 ตัวอักษรขึ้นไป)'); return }
     if (password !== confirm)  { setError('รหัสผ่านไม่ตรงกัน'); return }
+    if (!profession || !hospitalType || !department) { setError('กรุณากรอกข้อมูลให้ครบทุกช่อง'); return }
+    if (department === 'อื่นๆ' && !departmentOther.trim()) { setError('กรุณาระบุชื่อแผนก'); return }
 
     setLoading(true)
-    const { error: authErr } = await supabase.auth.signUp({ email, password })
-    if (authErr) {
-      setError(authErr.message === 'User already registered' ? 'อีเมลนี้มีบัญชีอยู่แล้ว' : 'เกิดข้อผิดพลาด กรุณาลองใหม่')
-      setLoading(false)
-    } else {
+    try {
+      const res = await fetch('/api/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username, email, password,
+          firstName, lastName,
+          profession, licenseNumber: licenseNum, phone,
+          hospitalName, hospitalType, department, departmentOther,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error || 'เกิดข้อผิดพลาด กรุณาลองใหม่')
+        setLoading(false)
+        return
+      }
       setSuccess(true)
+    } catch (err: any) {
+      setError('เกิดข้อผิดพลาด: ' + (err.message || 'ไม่สามารถเชื่อมต่อระบบได้'))
+      setLoading(false)
     }
   }
 
@@ -132,13 +149,11 @@ export default function RegisterPage() {
       style={{ background: 'linear-gradient(135deg, #134e4a 0%, #0f766e 100%)' }}>
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-10 text-center">
         <i className="fa-solid fa-hourglass-half text-6xl mb-4" style={{ color: '#f59e0b' }}></i>
-        <h2 className="text-2xl font-bold mb-2" style={{ color: '#134e4a' }}>ส่งคำขอสำเร็จ!</h2>
-        <p className="text-sm mb-2" style={{ color: '#6b7280' }}>
-          ระบบได้รับข้อมูลของคุณแล้วค่ะ
-        </p>
-        <p className="text-sm mb-6" style={{ color: '#6b7280' }}>
+        <h2 className="text-2xl font-bold mb-4" style={{ color: '#134e4a' }}>ส่งคำขอเรียบร้อย</h2>
+        <p className="text-sm mb-6" style={{ color: '#6b7280', lineHeight: 1.9 }}>
+          ระบบได้รับข้อมูลของท่านเรียบร้อยแล้ว<br />
           กรุณารอผู้ดูแลระบบพิจารณาอนุมัติ<br />
-          เมื่ออนุมัติแล้วจะมีอีเมลแจ้งกลับไปนะคะ
+          เมื่อได้รับการอนุมัติ ระบบจะแจ้งให้ทราบทางอีเมล
         </p>
         <a href="/login"
           className="inline-block w-full p-3.5 rounded-xl font-bold text-white text-center"

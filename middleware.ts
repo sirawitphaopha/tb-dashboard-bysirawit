@@ -28,14 +28,41 @@ export async function middleware(request: NextRequest) {
   const isAuthed = !!user || devSession
 
   const publicPaths = ['/login', '/register', '/reset-password']
-  const isPublic = publicPaths.some(p => pathname.startsWith(p)) || pathname.startsWith('/api/auth')
+  const isPublic = publicPaths.some(p => pathname.startsWith(p))
+                || pathname.startsWith('/api/auth')
+                || pathname.startsWith('/api/register')
+                || pathname.startsWith('/api/login-lookup')
+  const isStatusPage = pathname === '/pending-approval' || pathname === '/rejected'
 
+  // ไม่ login → redirect ไป login (ยกเว้น public)
   if (!isAuthed && !isPublic) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
+  // login แล้ว แต่อยู่หน้า login/register → ไปหน้าหลัก
   if (isAuthed && (pathname === '/login' || pathname === '/register')) {
     return NextResponse.redirect(new URL('/', request.url))
+  }
+
+  // ถ้า login จริง (ไม่ใช่ dev_session) → เช็ค profile status
+  if (user && !isPublic) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('status')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    if (profile) {
+      if (profile.status === 'pending' && pathname !== '/pending-approval') {
+        return NextResponse.redirect(new URL('/pending-approval', request.url))
+      }
+      if (profile.status === 'rejected' && pathname !== '/rejected') {
+        return NextResponse.redirect(new URL('/rejected', request.url))
+      }
+      if (profile.status === 'approved' && isStatusPage) {
+        return NextResponse.redirect(new URL('/', request.url))
+      }
+    }
   }
 
   return supabaseResponse
