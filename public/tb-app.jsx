@@ -1662,7 +1662,6 @@ function KnowledgeBase() {
 
 // ===================== APP =====================
 function App() {
-  const [page, setPage] = useState('login');
   const [nav, setNav] = useState('dashboard');
   const [patients, setPatients] = useState([]);
   const [dbLoading, setDbLoading] = useState(true);
@@ -1671,8 +1670,6 @@ function App() {
   const [showFullNotifs, setShowFullNotifs] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [readAlerts, setReadAlerts] = useState(new Set());
-  const [loggingIn, setLoggingIn] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sidebarHovered, setSidebarHovered] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -1711,7 +1708,6 @@ function App() {
   const markAllRead = () => setReadAlerts(new Set(alerts.map(a => a.id)));
   const openFromNotif = p => { setClinical(p); };
 
-  const login = e => { e.preventDefault(); setLoggingIn(true); setTimeout(() => { setPage('app'); setLoggingIn(false); }, 700); };
   const addPatient = async p => { await savePatient(p); setPatients(ps => [...ps, p]); };
   const updatePatient = async updated => {
     if (!DEMO_IDS.has(updated.id)) await savePatient(updated);
@@ -1730,7 +1726,7 @@ function App() {
     const next = logoClicks + 1;
     if (next >= 10) {
       setLogoClicks(0);
-      if (easterRound === 2) { setPage('login'); setNav('dashboard'); }
+      if (easterRound === 2) { fetch('/api/auth/signout', {method:'POST'}).then(()=>{ window.top.location.href='/login'; }); }
       else setEasterMsgIdx(0);
     } else {
       setLogoClicks(next);
@@ -1754,36 +1750,6 @@ function App() {
   const titles = { dashboard:'Dashboard', 'patient-list':'ทะเบียนผู้ป่วย Active', 'archive-list':'ทะเบียนจบการรักษา', 'all-patients':'ทะเบียนผู้ป่วยทั้งหมด', 'add-patient':'ลงทะเบียนผู้ป่วยใหม่', 'weekly-prep':'เตรียมเคสรายสัปดาห์', reports:'รายงาน และ สถิติ', knowledge:'คลังความรู้วัณโรค', settings:'ตั้งค่าระบบ (Admin)' };
   const pageIcons = { dashboard:'fa-chart-pie', 'patient-list':'fa-users', 'archive-list':'fa-box-archive', 'all-patients':'fa-users', 'add-patient':'fa-user-plus', 'weekly-prep':'fa-calendar-check', reports:'fa-file-contract', knowledge:'fa-book-open-reader', settings:'fa-gear' };
 
-  if (page === 'login') return (
-    <div className="w-full h-screen bg-gradient-to-br from-teal-900 to-teal-700 flex items-center justify-center">
-      <div className="bg-white p-10 rounded-3xl shadow-2xl w-full max-w-md text-center tb-fade">
-        <div className="mb-6"><i className="fa-solid fa-lungs-virus text-6xl text-teal-600"></i></div>
-        <h1 className="text-4xl font-bold text-teal-800 mb-1">TB-CARE LINK</h1>
-        <p className="text-gray-400 mb-8 text-sm">รพ.ปรางค์กู่ · กลุ่มงานเภสัชกรรม</p>
-        <form onSubmit={login} className="space-y-4 text-left">
-          <div><label className="text-sm font-medium text-gray-600 block mb-1">Username</label><input type="text" defaultValue="sirawit.p" className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:ring-2 focus:ring-teal-400 outline-none" required/></div>
-          <div>
-            <label className="text-sm font-medium text-gray-600 block mb-1">รหัสผ่าน</label>
-            <div className="relative">
-              <input type={showPassword ? 'text' : 'password'} defaultValue="password" className="w-full p-3 pr-11 border border-gray-200 rounded-xl bg-gray-50 focus:ring-2 focus:ring-teal-400 outline-none" required/>
-              <button type="button" onClick={()=>setShowPassword(v=>!v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-teal-500 hover:text-teal-700 transition-colors">
-                <i className={`fa-solid ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
-              </button>
-            </div>
-          </div>
-          <button type="submit" className="w-full bg-teal-600 hover:bg-teal-700 text-white p-3.5 rounded-xl font-bold shadow-lg transition-all mt-2 flex items-center justify-center gap-2">
-            {loggingIn ? <><i className="fa-solid fa-spinner fa-spin"></i>กำลังเข้าสู่ระบบ...</> : <><i className="fa-solid fa-right-to-bracket"></i>เข้าสู่ระบบ</>}
-          </button>
-        </form>
-        <div className="mt-8 pt-6 border-t border-gray-100">
-          <p className="text-xs text-gray-400 leading-relaxed">พัฒนาโดย เภสัชกร สิรวิชญ์ เผ่าผา</p>
-          <p className="text-xs text-gray-400">โรงพยาบาลปรางค์กู่</p>
-          <p className="text-xs text-gray-300 mt-1">Version 0.6.21 · <span className="text-amber-400 font-medium">ยังไม่เผยแพร่</span></p>
-        </div>
-      </div>
-    </div>
-  );
-
   // Clinical view กินทั้งจอ — ซ่อน sidebar + header ทั้งหมด
   if (clinical) {
     return (
@@ -1806,7 +1772,7 @@ function App() {
             <span style={{width:'36px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
               <i className="fa-solid fa-lungs-virus" style={{color:'#0f766e',fontSize:'18px'}}></i>
             </span>
-            <span style={{overflow:'hidden',whiteSpace:'nowrap',fontWeight:700,fontSize:'15px',color:'#0f766e',flex:1,maxWidth:sidebarOpen?'140px':'0px',opacity:sidebarOpen?1:0,transition:'max-width 0.2s ease,opacity 0.15s ease'}}>TB-CARE LINK</span>
+            <span style={{overflow:'hidden',whiteSpace:'nowrap',fontWeight:700,fontSize:'15px',color:'#0f766e',flex:1,maxWidth:sidebarOpen?'140px':'0px',opacity:sidebarOpen?1:0,transition:'max-width 0.2s ease,opacity 0.15s ease'}}>TB CARE & JOURNEY</span>
           </div>
         </div>
 
@@ -1853,7 +1819,7 @@ function App() {
           </button>
           {/* ปุ่มออกระบบ */}
           <button
-            onClick={()=>{ setPage('login'); setNav('dashboard'); }}
+            onClick={async ()=>{ await fetch('/api/auth/signout', {method:'POST'}); window.top.location.href='/login'; }}
             title="ออกระบบ"
             style={{width:'100%',display:'flex',alignItems:'center',padding:'7px 8px',borderRadius:'10px',cursor:'pointer',border:'none',background:'transparent',textAlign:'left',marginTop:'2px',transition:'background 0.15s'}}
             onMouseEnter={e=>{ e.currentTarget.style.background='#fef2f2'; e.currentTarget.querySelector('i').style.color='#dc2626'; e.currentTarget.querySelector('span').style.color='#dc2626'; }}
@@ -1875,7 +1841,7 @@ function App() {
             <div>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:0,whiteSpace:'nowrap'}}>พัฒนาโดย เภสัชกร สิรวิชญ์ เผ่าผา</p>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:'1px 0 0 0',whiteSpace:'nowrap'}}>โรงพยาบาลปรางค์กู่</p>
-              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.6.21 · <span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
+              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.7.0 ·<span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
             </div>
           ) : (
             <div style={{display:'flex',justifyContent:'center'}}>

@@ -1,0 +1,116 @@
+'use client'
+
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase-browser'
+
+export default function LoginPage() {
+  const router = useRouter()
+  const supabase = createClient()
+
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+
+    // Dev bypass
+    if (email === 'sirawit' && password === '1234') {
+      document.cookie = 'dev_session=sirawit; path=/'
+      router.push('/')
+      router.refresh()
+      return
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+
+    if (error) {
+      setError('อีเมลหรือรหัสผ่านไม่ถูกต้อง')
+      setLoading(false)
+    } else {
+      router.push('/')
+      router.refresh()
+    }
+  }
+
+  return (
+    <div className="w-full h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #134e4a 0%, #0d9488 100%)' }}>
+      <div style={{ background: '#fff', borderRadius: '24px', boxShadow: '0 25px 60px rgba(0,0,0,0.2)', width: '100%', maxWidth: '420px', padding: '40px', textAlign: 'center' }}>
+
+        <div style={{ marginBottom: '16px' }}>
+          <i className="fa-solid fa-lungs-virus" style={{ fontSize: '56px', color: '#0d9488' }}></i>
+        </div>
+        <h1 style={{ fontSize: '28px', fontWeight: 800, color: '#134e4a', margin: '0 0 4px 0', letterSpacing: '-0.5px' }}>TB CARE & JOURNEY</h1>
+        <p style={{ fontSize: '13px', color: '#9ca3af', margin: '0 0 28px 0' }}>รพ.ปรางค์กู่ · กลุ่มงานเภสัชกรรม</p>
+
+        <form onSubmit={handleLogin} style={{ textAlign: 'left' }}>
+          <div style={{ marginBottom: '14px' }}>
+            <label style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563', display: 'block', marginBottom: '6px' }}>Email / Username</label>
+            <input
+              type="text"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="กรอกอีเมล"
+              style={{ width: '100%', padding: '12px 14px', border: '1px solid #e5e7eb', borderRadius: '12px', background: '#f9fafb', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+              onFocus={e => { e.target.style.border = '1.5px solid #0d9488'; e.target.style.background = '#fff' }}
+              onBlur={e => { e.target.style.border = '1px solid #e5e7eb'; e.target.style.background = '#f9fafb' }}
+              required
+            />
+          </div>
+
+          <div style={{ marginBottom: '8px' }}>
+            <label style={{ fontSize: '13px', fontWeight: 600, color: '#4b5563', display: 'block', marginBottom: '6px' }}>Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="กรอกรหัสผ่าน"
+              style={{ width: '100%', padding: '12px 14px', border: '1px solid #e5e7eb', borderRadius: '12px', background: '#f9fafb', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+              onFocus={e => { e.target.style.border = '1.5px solid #0d9488'; e.target.style.background = '#fff' }}
+              onBlur={e => { e.target.style.border = '1px solid #e5e7eb'; e.target.style.background = '#f9fafb' }}
+              required
+            />
+          </div>
+
+          {error && (
+            <div style={{ fontSize: '13px', padding: '10px 14px', borderRadius: '10px', background: '#fef2f2', color: '#dc2626', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+              <i className="fa-solid fa-circle-exclamation"></i>
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            style={{ width: '100%', padding: '14px', borderRadius: '12px', background: loading ? '#5eead4' : '#0d9488', color: '#fff', fontWeight: 700, fontSize: '15px', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', marginTop: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 4px 14px rgba(13,148,136,0.4)', transition: 'background 0.2s' }}
+            onMouseEnter={e => { if (!loading) (e.target as HTMLButtonElement).style.background = '#0f766e' }}
+            onMouseLeave={e => { if (!loading) (e.target as HTMLButtonElement).style.background = '#0d9488' }}
+          >
+            {loading
+              ? <><i className="fa-solid fa-spinner fa-spin"></i> กำลังเข้าสู่ระบบ...</>
+              : <><i className="fa-solid fa-right-to-bracket"></i> เข้าสู่ระบบ</>}
+          </button>
+        </form>
+
+        <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid #f3f4f6' }}>
+          <p style={{ fontSize: '13px', color: '#9ca3af', margin: 0 }}>
+            ยังไม่มีบัญชี?{' '}
+            <a href="/register" style={{ color: '#0d9488', fontWeight: 600, textDecoration: 'none' }}>
+              สมัครสมาชิก
+            </a>
+          </p>
+        </div>
+
+        <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #f3f4f6' }}>
+          <p style={{ fontSize: '11px', color: '#9ca3af', margin: '0 0 2px 0' }}>พัฒนาโดย เภสัชกร สิรวิชญ์ เผ่าผา</p>
+          <p style={{ fontSize: '11px', color: '#9ca3af', margin: '0 0 4px 0' }}>โรงพยาบาลปรางค์กู่</p>
+          <p style={{ fontSize: '11px', color: '#d1d5db', margin: 0 }}>Version 0.7.0 ·<span style={{ color: '#fbbf24', fontWeight: 600 }}>ยังไม่เผยแพร่</span></p>
+        </div>
+      </div>
+    </div>
+  )
+}
