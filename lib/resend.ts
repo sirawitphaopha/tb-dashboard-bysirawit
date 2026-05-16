@@ -10,9 +10,8 @@ export function getResend(): Resend {
   return _resend
 }
 
-// Email sender — ใช้ onboarding@resend.dev ตอนนี้เพราะยังไม่ได้ verify domain
-// ในอนาคต ถ้าซื้อ domain (เช่น tbcare.co.th) ก็มาเปลี่ยนเป็น noreply@tbcare.co.th
-export const EMAIL_FROM = 'TB CARE & JOURNEY <onboarding@resend.dev>'
+// Email sender — ใช้ noreply@tbjourney.care (domain verify ใน Resend แล้ว 2026-05-16)
+export const EMAIL_FROM = 'TB CARE & JOURNEY <noreply@tbjourney.care>'
 
 // รองรับหลาย email (คั่นด้วย comma ใน .env.local)
 export const ADMIN_EMAILS: string[] = (process.env.ADMIN_EMAIL || '')
