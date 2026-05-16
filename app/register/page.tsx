@@ -150,11 +150,21 @@ export default function RegisterPage() {
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-10 text-center">
         <i className="fa-solid fa-hourglass-half text-6xl mb-4" style={{ color: '#f59e0b' }}></i>
         <h2 className="text-2xl font-bold mb-4" style={{ color: '#134e4a' }}>ส่งคำขอเรียบร้อย</h2>
-        <p className="text-sm mb-6" style={{ color: '#6b7280', lineHeight: 1.9 }}>
+        <p className="text-sm mb-4" style={{ color: '#6b7280', lineHeight: 1.9 }}>
           ระบบได้รับข้อมูลของท่านเรียบร้อยแล้ว<br />
           กรุณารอผู้ดูแลระบบพิจารณาอนุมัติ<br />
           เมื่อได้รับการอนุมัติ ระบบจะแจ้งให้ทราบทางอีเมล
         </p>
+
+        {/* หมายเหตุเรื่อง spam */}
+        <div className="mb-6 p-3 rounded-xl text-left flex gap-3"
+          style={{ background: '#fef3c7', border: '1px solid #fde68a' }}>
+          <i className="fa-solid fa-triangle-exclamation flex-shrink-0 mt-0.5" style={{ color: '#d97706' }}></i>
+          <div className="text-xs" style={{ color: '#92400e', lineHeight: 1.7 }}>
+            <strong>ไม่เจออีเมล?</strong> กรุณาตรวจสอบที่ <strong>กล่องสแปม (Spam / Junk)</strong> หรือโฟลเดอร์ "โปรโมชั่น" — บางครั้ง Gmail/Hotmail อาจคัดกรองไปเก็บไว้ที่นั่น
+          </div>
+        </div>
+
         <a href="/login"
           className="inline-block w-full p-3.5 rounded-xl font-bold text-white text-center"
           style={{ background: '#0f766e' }}>

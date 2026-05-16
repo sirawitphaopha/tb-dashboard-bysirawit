@@ -90,39 +90,47 @@ function DOTCalendar({patient,onUpdate}){
   );
 }
 
-function useNotifHelpers(alerts,patients,readAlerts,onRead,onOpen,onClose){
-  const cols={critical:'border-l-4 border-red-500',warning:'border-l-4 border-amber-400',info:'border-l-4 border-blue-400'};
-  const unreadBg={critical:'bg-red-50',warning:'bg-amber-50',info:'bg-blue-50'};
+function useNotifHelpers(alerts,patients,readAlerts,onRead,onOpen,onClose,onNavTarget){
+  const cols={admin:'border-l-4 border-teal-600',critical:'border-l-4 border-red-500',warning:'border-l-4 border-amber-400',info:'border-l-4 border-blue-400'};
+  const unreadBg={admin:'bg-gradient-to-r from-teal-50 to-teal-100/40',critical:'bg-red-50',warning:'bg-amber-50',info:'bg-blue-50'};
 
   const sorted=React.useMemo(()=>{
     const order={critical:0,warning:1,info:2};
-    const appts=alerts.filter(a=>a.id.startsWith('appt-'));
-    const others=alerts.filter(a=>!a.id.startsWith('appt-'));
+    const admins=alerts.filter(a=>a.navTarget);                          // admin → บนสุด
+    const appts=alerts.filter(a=>!a.navTarget && a.id.startsWith('appt-'));
+    const others=alerts.filter(a=>!a.navTarget && !a.id.startsWith('appt-'));
     const grouped=[...others];
     if(appts.length===1) grouped.unshift(appts[0]);
     else if(appts.length>1) grouped.unshift({id:'appt-group',type:'info',patient:null,patientId:null,msg:`มีนัดพรุ่งนี้ ${appts.length} ราย`,time:'วันนี้'});
-    return grouped.sort((a,b)=>(order[a.type]??2)-(order[b.type]??2));
+    return [...admins, ...grouped.sort((a,b)=>(order[a.type]??2)-(order[b.type]??2))];
   },[alerts]);
 
   const handleClick=a=>{
     onRead(a.id);
     if(a.patientId&&onOpen){const p=(patients||[]).find(x=>x.id===a.patientId);if(p){onOpen(p);if(onClose)onClose();}}
+    else if(a.navTarget&&onNavTarget){onNavTarget(a.navTarget);if(onClose)onClose();}
   };
 
   const renderItem=(a,i)=>{
     const isRead=readAlerts.has(a.id);
-    const bg=!isRead?(unreadBg[a.type]||'bg-blue-50'):'bg-white';
+    const isAdmin=!!a.navTarget;
+    const effectiveType=isAdmin?'admin':a.type;
+    const bg=!isRead?(unreadBg[effectiveType]||'bg-blue-50'):'bg-white';
     return(
-      <div key={a.id+i} onClick={()=>handleClick(a)} className={'p-4 transition-colors '+cols[a.type]+' '+bg+(a.patientId?' cursor-pointer':'')+' hover:bg-teal-50'}>
+      <div key={a.id+i} onClick={()=>handleClick(a)} className={'p-4 transition-colors '+cols[effectiveType]+' '+bg+((a.patientId||a.navTarget)?' cursor-pointer':'')+' hover:bg-teal-50'}>
         <div className="flex justify-between items-start gap-2">
-          <div className="flex-1 min-w-0">
-            {a.patient&&<p className="font-bold text-xs text-gray-700 mb-0.5">{a.patient}</p>}
-            <p className={'text-sm '+(isRead?'text-gray-400':'text-gray-700 font-medium')}>{a.msg}</p>
-            <p className="text-xs text-gray-400 mt-1">{a.time}</p>
+          <div className="flex-1 min-w-0 flex items-start gap-2.5">
+            {isAdmin && <div className="w-8 h-8 rounded-xl bg-teal-600 text-white flex items-center justify-center flex-shrink-0 mt-0.5"><i className="fa-solid fa-user-shield text-sm"></i></div>}
+            <div className="flex-1 min-w-0">
+              {isAdmin && <p className="text-xs font-bold text-teal-700 uppercase tracking-wide mb-0.5">Admin · จัดการผู้ใช้</p>}
+              {a.patient&&<p className="font-bold text-xs text-gray-700 mb-0.5">{a.patient}</p>}
+              <p className={'text-sm '+(isRead?'text-gray-400':(isAdmin?'text-teal-900 font-bold':'text-gray-700 font-medium'))}>{a.msg}</p>
+              <p className="text-xs text-gray-400 mt-1">{a.time}</p>
+            </div>
           </div>
           <div className="flex items-center gap-1.5 flex-shrink-0 mt-0.5">
             {!isRead&&<button type="button" onClick={e=>{e.stopPropagation();onRead(a.id);}} className="text-xs bg-teal-100 text-teal-700 px-2 py-0.5 rounded-lg hover:bg-teal-200 transition-colors font-bold" title="รับทราบ">✓</button>}
-            {a.patientId&&<i className="fa-solid fa-chevron-right text-xs text-teal-400"></i>}
+            {(a.patientId||a.navTarget)&&<i className="fa-solid fa-chevron-right text-xs text-teal-400"></i>}
           </div>
         </div>
       </div>
@@ -131,9 +139,9 @@ function useNotifHelpers(alerts,patients,readAlerts,onRead,onOpen,onClose){
   return {sorted,renderItem};
 }
 
-function NotificationPanel({alerts,patients,readAlerts,onRead,onReadAll,onOpen,onClose,onExpand}){
+function NotificationPanel({alerts,patients,readAlerts,onRead,onReadAll,onOpen,onClose,onExpand,onNavTarget}){
   const unread=alerts.filter(a=>!readAlerts.has(a.id)).length;
-  const {sorted,renderItem}=useNotifHelpers(alerts,patients,readAlerts,onRead,onOpen,onClose);
+  const {sorted,renderItem}=useNotifHelpers(alerts,patients,readAlerts,onRead,onOpen,onClose,onNavTarget);
   return(
     <div className="absolute right-0 top-full mt-2 bg-white rounded-2xl shadow-2xl border border-gray-200 z-50 tb-fade overflow-hidden" style={{width:'360px'}}>
       <div className="p-4 border-b border-gray-100 flex justify-between items-center">
@@ -151,9 +159,9 @@ function NotificationPanel({alerts,patients,readAlerts,onRead,onReadAll,onOpen,o
   );
 }
 
-function NotificationFullModal({alerts,patients,readAlerts,onRead,onReadAll,onOpen,onClose}){
+function NotificationFullModal({alerts,patients,readAlerts,onRead,onReadAll,onOpen,onClose,onNavTarget}){
   const unread=alerts.filter(a=>!readAlerts.has(a.id)).length;
-  const {sorted,renderItem}=useNotifHelpers(alerts,patients,readAlerts,onRead,onOpen,null);
+  const {sorted,renderItem}=useNotifHelpers(alerts,patients,readAlerts,onRead,onOpen,()=>onClose&&onClose(),onNavTarget);
   return(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.45)'}}>
       <div className="bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden notif-modal" style={{width:'min(90vw,920px)',maxHeight:'82vh'}}>
@@ -2048,7 +2056,7 @@ function InfoBar({patient,onUpdate}){
   );
 }
 
-function ClinicalModal({patient,onClose,onUpdate,settings,onArchive}){
+function ClinicalModal({patient,onClose,onUpdate,settings,onArchive,currentUser,onSoftDelete}){
   const [tab,setTab]=useState('timeline');
   const tabs=[
     {id:'timeline',icon:'fa-timeline',label:'Timeline'},
@@ -2138,7 +2146,7 @@ function ClinicalModal({patient,onClose,onUpdate,settings,onArchive}){
           {tab==='dot'&&<div className="max-w-lg"><DOTCalendar patient={patient} onUpdate={onUpdate}/></div>}
           {tab==='adr'&&<ADRTab patient={patient} onUpdate={onUpdate}/>}
           
-          {tab==='summary'&&<PharmSummaryTab patient={patient}/>}
+          {tab==='summary'&&<PharmSummaryTab patient={patient} currentUser={currentUser} onSoftDelete={onSoftDelete}/>}
         </div>
     </div>
   );
@@ -2255,12 +2263,24 @@ function AddPatientPage({onBack,onAdd,settings,onDirtyChange}){
 
 
 // ─── PHARM SUMMARY TAB ───────────────────────────────────────────────────────
-function PharmSummaryTab({ patient }) {
+function PharmSummaryTab({ patient, currentUser, onSoftDelete }) {
   const visits = patient.visits || [];
   const consults = visits.filter(v => v.consult?.type);
   const drps = visits.flatMap(v => (v.drp||[]).map(d => ({...d, date:v.date})));
   const safeAdr = migrateAdr(patient.adr);
   const adrFound = ADR_LIST.filter(a => safeAdr[a.key]?.checked);
+
+  // ── ระบบลบผู้ป่วย ──
+  const isAdmin = currentUser?.role === 'admin';
+  const [deleteStep, setDeleteStep] = useState(0);  // 0=ปิด, 1=ใส่เหตุผล, 2=ยืนยัน60วัน
+  const [deleteReason, setDeleteReason] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const handleConfirmDelete = async () => {
+    setDeleting(true);
+    const ok = await onSoftDelete(patient.id, deleteReason.trim());
+    setDeleting(false);
+    if (!ok) alert('ลบไม่สำเร็จ — ลองอีกครั้งหรือเช็ค console');
+  };
 
   const exportCSV = () => {
     const rows = [['วันที่','BW','Vitals','ขนาดยา','Consult Type','Consult Note','DRP Code','DRP Note']];
@@ -2322,8 +2342,514 @@ function PharmSummaryTab({ patient }) {
         </div>
       )}
       {visits.length === 0 && <p className="text-center text-gray-400 py-10">ยังไม่มีข้อมูล Visit</p>}
+
+      {/* ── โซนลบผู้ป่วย (ล่างสุด — ปุ่มเล็ก ชิดขวา) ── */}
+      {onSoftDelete && (
+        <div className="mt-8 pt-6 border-t border-gray-200 flex justify-end">
+          {isAdmin ? (
+            <button type="button" onClick={()=>{ setDeleteStep(1); setDeleteReason(''); }}
+              className="flex items-center gap-2 px-3 py-1.5 bg-white hover:bg-red-50 text-red-600 rounded-lg text-xs font-semibold border border-red-200 transition-colors">
+              <i className="fa-solid fa-trash"></i>ลบผู้ป่วย
+            </button>
+          ) : (
+            <button type="button" disabled
+              className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 text-gray-400 rounded-lg text-xs font-semibold border border-gray-200 cursor-not-allowed">
+              <i className="fa-solid fa-lock"></i>ลบผู้ป่วย (Admin)
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ── Dialog 1: ใส่เหตุผล ── */}
+      {deleteStep === 1 && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center text-red-600"><i className="fa-solid fa-triangle-exclamation"></i></div>
+              <h3 className="font-bold text-gray-800">ยืนยันลบ "{patient.name}"?</h3>
+            </div>
+            <p className="text-xs text-gray-500 mb-3">ข้อมูลทั้งหมด (Visit, Lab, ADR, DOT) จะถูกย้ายไปถังขยะ</p>
+            <label className="block text-xs font-bold text-gray-700 mb-1">เหตุผลในการลบ <span className="text-red-500">*</span></label>
+            <textarea value={deleteReason} onChange={e=>setDeleteReason(e.target.value)} rows={3}
+              placeholder="เช่น ข้อมูลซ้ำ, ย้ายไป รพ. อื่น, ลงผิดราย"
+              className="w-full p-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-teal-400"/>
+            <div className="flex gap-2 mt-4">
+              <button type="button" onClick={()=>setDeleteStep(0)} className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold">ยกเลิก</button>
+              <button type="button" onClick={()=>setDeleteStep(2)} disabled={!deleteReason.trim()}
+                className="flex-1 px-4 py-2 bg-red-500 hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl text-sm font-bold">ถัดไป</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Dialog 2: ยืนยันสุดท้าย 60 วัน ── */}
+      {deleteStep === 2 && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600"><i className="fa-solid fa-trash-can"></i></div>
+              <h3 className="font-bold text-gray-800">ลบไปถังขยะ 60 วัน</h3>
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4 text-xs text-amber-900">
+              <p className="font-bold mb-1"><i className="fa-solid fa-circle-info mr-1"></i>ข้อมูลจะถูกเก็บในถังขยะ 60 วัน</p>
+              <p>• Admin สามารถกู้คืนได้ในระยะเวลานี้</p>
+              <p>• หลัง 60 วัน ระบบจะลบถาวรอัตโนมัติ</p>
+            </div>
+            <div className="flex gap-2">
+              <button type="button" onClick={handleConfirmDelete} disabled={deleting}
+                className="flex-1 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm font-bold disabled:opacity-50">
+                {deleting ? <><i className="fa-solid fa-spinner fa-spin mr-1"></i>กำลังลบ...</> : 'ยืนยันลบ'}
+              </button>
+              <button type="button" onClick={()=>setDeleteStep(1)} disabled={deleting} className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold disabled:opacity-50">ย้อนกลับ</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-Object.assign(window,{DoseCalculator,DOTCalendar,DrugInteractionPanel,RegimenHistoryTab,NotificationPanel,NotificationFullModal,AddPatientPage,ClinicalModal,InfoBar,LabTab,ADRTab,TimelineTab,DiagnosisTab,MedsTab,PharmSummaryTab,ConfirmModal,hasResistance,afbCombined,isAfbPositive,getSputumConversion,isDelayedConversion});
+// ─────────────────────────────────────────────────────
+// หน้าถังขยะ — list คนที่ลบแล้ว + Restore / Hard delete
+// ─────────────────────────────────────────────────────
+function TrashList({ currentUser, onRestore, onHardDelete }) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [actionId, setActionId] = useState(null);     // id ที่กำลังทำงาน (loading)
+  const [hardDelTarget, setHardDelTarget] = useState(null);  // patient ที่จะลบถาวร
+  const [confirmHn, setConfirmHn] = useState('');
+  const [confirmCheck, setConfirmCheck] = useState(false);
+  const isAdmin = currentUser?.role === 'admin';
+
+  const refresh = async () => {
+    setLoading(true);
+    const data = await window.loadTrashedPatients();
+    setItems(data);
+    setLoading(false);
+  };
+  useEffect(() => { refresh(); }, []);
+
+  // คำนวณวันที่เหลือ (60 - days since deleted_at)
+  const daysLeft = (deletedAt) => {
+    if (!deletedAt) return 60;
+    const elapsed = Math.floor((Date.now() - new Date(deletedAt).getTime()) / 86400000);
+    return Math.max(0, 60 - elapsed);
+  };
+
+  const handleRestore = async (id) => {
+    setActionId(id);
+    const ok = await onRestore(id);
+    setActionId(null);
+    if (ok) { refresh(); }
+    else alert('กู้คืนไม่สำเร็จ');
+  };
+
+  const handleConfirmHardDelete = async () => {
+    if (!hardDelTarget) return;
+    setActionId(hardDelTarget.id);
+    const ok = await onHardDelete(hardDelTarget.id);
+    setActionId(null);
+    if (ok) {
+      setHardDelTarget(null);
+      setConfirmHn(''); setConfirmCheck(false);
+      refresh();
+    } else {
+      alert('ลบถาวรไม่สำเร็จ');
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+        <div className="flex items-start gap-3">
+          <i className="fa-solid fa-trash text-amber-600 text-xl mt-0.5"></i>
+          <div>
+            <p className="font-bold text-amber-800 text-sm">ถังขยะ — ผู้ป่วยที่ถูกลบ</p>
+            <p className="text-xs text-amber-700 mt-0.5">เก็บไว้ 60 วัน หลังจากนั้นจะลบถาวรอัตโนมัติ · กู้คืน/ลบถาวร = Admin เท่านั้น</p>
+          </div>
+        </div>
+      </div>
+
+      {loading && <p className="text-center text-gray-400 py-10"><i className="fa-solid fa-spinner fa-spin mr-2"></i>กำลังโหลด...</p>}
+
+      {!loading && items.length === 0 && (
+        <div className="text-center py-16 text-gray-400">
+          <i className="fa-solid fa-inbox text-5xl mb-3 block"></i>
+          <p className="text-sm">ถังขยะว่าง</p>
+        </div>
+      )}
+
+      {!loading && items.length > 0 && (
+        <div className="space-y-2">
+          {items.map(p => {
+            const left = daysLeft(p.deletedAt);
+            const isBusy = actionId === p.id;
+            return (
+              <div key={p.id} className="bg-white border border-gray-200 rounded-2xl p-4 flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-gray-200 flex items-center justify-center text-gray-500 font-bold flex-shrink-0">{(p.firstName||p.name||'?').substring(0,1)}</div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-gray-800 text-sm">{p.name} <span className="text-xs text-gray-400 font-mono ml-2">HN: {p.hn}</span></p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    ลบเมื่อ {new Date(p.deletedAt).toLocaleDateString('th-TH',{year:'numeric',month:'short',day:'numeric'})} ·
+                    เหลือ <strong className={left<=7?'text-red-600':'text-amber-700'}>{left} วัน</strong>
+                  </p>
+                  {p.deleteReason && <p className="text-xs text-gray-600 mt-1 italic">เหตุผล: {p.deleteReason}</p>}
+                </div>
+                {isAdmin && (
+                  <div className="flex gap-2 flex-shrink-0">
+                    <button type="button" disabled={isBusy} onClick={()=>handleRestore(p.id)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-lg text-xs font-semibold border border-teal-200 disabled:opacity-50">
+                      <i className="fa-solid fa-rotate-left"></i>กู้คืน
+                    </button>
+                    <button type="button" disabled={isBusy} onClick={()=>{ setHardDelTarget(p); setConfirmHn(''); setConfirmCheck(false); }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg text-xs font-semibold border border-red-200 disabled:opacity-50">
+                      <i className="fa-solid fa-fire"></i>ลบถาวร
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── Dialog ลบถาวร: พิมพ์ HN + checkbox ── */}
+      {hardDelTarget && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center text-red-600"><i className="fa-solid fa-fire"></i></div>
+              <h3 className="font-bold text-gray-800">ลบถาวร "{hardDelTarget.name}"</h3>
+            </div>
+            <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4 text-xs text-red-900">
+              <p className="font-bold mb-1"><i className="fa-solid fa-triangle-exclamation mr-1"></i>คำเตือน — กู้คืนไม่ได้</p>
+              <p>ข้อมูลทั้งหมดของผู้ป่วยจะถูกลบออกจากระบบถาวร — กู้คืนไม่ได้แล้ว</p>
+              <p className="mt-1">(จะมีการบันทึก audit log: ใคร/เมื่อไหร่/HN/ชื่อ ไว้ตรวจสอบ)</p>
+            </div>
+
+            <label className="block text-xs font-bold text-gray-700 mb-1">พิมพ์ HN เพื่อยืนยัน: <span className="font-mono text-red-600">{hardDelTarget.hn}</span></label>
+            <input value={confirmHn} onChange={e=>setConfirmHn(e.target.value)} placeholder="พิมพ์ HN ที่นี่"
+              className="w-full p-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-red-400 mb-3"/>
+
+            <label className="flex items-start gap-2 text-xs text-gray-700 cursor-pointer mb-4">
+              <input type="checkbox" checked={confirmCheck} onChange={e=>setConfirmCheck(e.target.checked)} className="mt-0.5"/>
+              <span>ข้าพเจ้าเข้าใจว่าข้อมูลนี้จะถูกลบถาวรและกู้คืนไม่ได้</span>
+            </label>
+
+            <div className="flex gap-2">
+              <button type="button" onClick={handleConfirmHardDelete}
+                disabled={confirmHn !== hardDelTarget.hn || !confirmCheck || actionId===hardDelTarget.id}
+                className="flex-1 px-4 py-2 bg-red-500 hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl text-sm font-bold">
+                {actionId===hardDelTarget.id ? <><i className="fa-solid fa-spinner fa-spin mr-1"></i>กำลังลบ...</> : 'ลบถาวร'}
+              </button>
+              <button type="button" onClick={()=>setHardDelTarget(null)} disabled={actionId===hardDelTarget.id}
+                className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold">
+                ยกเลิก
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────
+// AdminUsersTab — จัดการผู้ใช้ (admin เท่านั้น) — embedded ใน dashboard
+// ─────────────────────────────────────────────────────
+const PROFESSION_LABELS_TH = {
+  doctor:'แพทย์', dentist:'ทันตแพทย์', pharmacist:'เภสัชกร', nurse:'พยาบาลวิชาชีพ',
+  medtech:'นักเทคนิคการแพทย์', physio:'นักกายภาพบำบัด', radio:'นักรังสีการแพทย์',
+  publichealth:'เจ้าหน้าที่สาธารณสุข', officer:'เจ้าพนักงาน', other:'อื่นๆ',
+};
+const STATUS_STYLE = {
+  pending:  { bg:'#fef3c7', fg:'#92400e', label:'⏳ รออนุมัติ' },
+  approved: { bg:'#d1fae5', fg:'#065f46', label:'✅ อนุมัติแล้ว' },
+  rejected: { bg:'#fee2e2', fg:'#991b1b', label:'❌ ปฏิเสธ' },
+};
+
+function AdminUsersTab({ currentUser, onPendingChange }) {
+  const [profiles, setProfiles] = useState([]);
+  const [filter, setFilter] = useState('pending');
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [rejectingId, setRejectingId] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [search, setSearch] = useState('');
+  const [viewMode, setViewMode] = useState('list');  // 'list' = แถวกะทัดรัด, 'card' = การ์ดละเอียด
+
+  const load = async () => {
+    setLoading(true);
+    const { data } = await window._sb.from('profiles').select('*').order('created_at', { ascending: false });
+    setProfiles(data || []);
+    setLoading(false);
+    // อัปเดต badge ใน sidebar
+    if (onPendingChange) onPendingChange((data||[]).filter(p => p.status === 'pending').length);
+  };
+  useEffect(() => { load(); }, []);
+
+  const handleApprove = async (userId) => {
+    setBusy(true);
+    const res = await fetch('/api/admin/approve', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId }),
+    });
+    setBusy(false);
+    if (res.ok) { alert('อนุมัติเรียบร้อยค่ะ — ส่งเมลแจ้ง user แล้ว'); load(); }
+    else { const e = await res.json(); alert('Error: ' + e.error); }
+  };
+
+  const submitReject = async () => {
+    if (!rejectReason.trim()) return alert('กรุณาระบุเหตุผล');
+    setBusy(true);
+    const res = await fetch('/api/admin/reject', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: rejectingId, reason: rejectReason }),
+    });
+    setBusy(false);
+    if (res.ok) { alert('ปฏิเสธเรียบร้อย — ส่งเมลแจ้ง user แล้ว'); setRejectingId(null); setRejectReason(''); load(); }
+    else { const e = await res.json(); alert('Error: ' + e.error); }
+  };
+
+  if (currentUser?.role !== 'admin') {
+    return (
+      <div className="text-center py-16">
+        <i className="fa-solid fa-lock text-5xl text-red-400 mb-3"></i>
+        <p className="text-sm text-gray-500">เฉพาะ Admin เท่านั้น</p>
+      </div>
+    );
+  }
+
+  const counts = {
+    pending: profiles.filter(p => p.status === 'pending').length,
+    approved: profiles.filter(p => p.status === 'approved').length,
+    rejected: profiles.filter(p => p.status === 'rejected').length,
+  };
+  const searchLower = search.trim().toLowerCase();
+  const filtered = (filter === 'all' ? profiles : profiles.filter(p => p.status === filter))
+    .filter(p => {
+      if (!searchLower) return true;
+      const hay = `${p.first_name||''} ${p.last_name||''} ${p.username||''} ${p.email||''} ${p.hospital_name||''} ${p.license_number||''}`.toLowerCase();
+      return hay.includes(searchLower);
+    });
+
+  return (
+    <div className="space-y-4 tb-fade">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-teal-700 to-teal-600 rounded-2xl p-5 text-white shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center">
+            <i className="fa-solid fa-user-shield text-2xl"></i>
+          </div>
+          <div>
+            <h2 className="font-bold text-lg">จัดการผู้ใช้</h2>
+            <p className="text-xs text-teal-100">อนุมัติหรือปฏิเสธคำขอสมัครสมาชิก · มองเห็นเฉพาะ Admin</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Filter cards — compact, hover-state, ข้อความตรงกลาง
+           Roadmap: ในอนาคตเพิ่ม view mode (list/grid/timeline) ดูที่ pending master ข้อ 30 */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        {[
+          { key:'pending',  label:'รออนุมัติ',  count:counts.pending,  color:'#f59e0b', bg:'#fef3c7', hover:'#fde68a', icon:'fa-clock' },
+          { key:'approved', label:'อนุมัติแล้ว', count:counts.approved, color:'#0d9488', bg:'#ccfbf1', hover:'#99f6e4', icon:'fa-check-circle' },
+          { key:'rejected', label:'ปฏิเสธ',     count:counts.rejected, color:'#ef4444', bg:'#fee2e2', hover:'#fecaca', icon:'fa-circle-xmark' },
+          { key:'all',      label:'ทั้งหมด',     count:profiles.length, color:'#0f766e', bg:'#f0fdfa', hover:'#ccfbf1', icon:'fa-layer-group' },
+        ].map(c => {
+          const active = filter === c.key;
+          return (
+            <button key={c.key} type="button" onClick={()=>setFilter(c.key)}
+              className="rounded-xl px-3 py-2.5 transition-all border"
+              style={{
+                background: active ? c.color : '#fff',
+                borderColor: active ? c.color : '#e5e7eb',
+                boxShadow: active ? '0 4px 12px '+c.color+'40' : 'none',
+              }}
+              onMouseEnter={e=>{ if(!active) e.currentTarget.style.background = c.hover; }}
+              onMouseLeave={e=>{ if(!active) e.currentTarget.style.background = '#fff'; }}>
+              <div className="flex items-center justify-center gap-2">
+                <i className={'fa-solid '+c.icon} style={{ fontSize:'13px', color: active ? '#fff' : c.color }}></i>
+                <span className="text-sm font-bold" style={{ color: active ? '#fff' : '#374151' }}>{c.label}</span>
+                <span className="text-sm font-bold px-1.5 rounded-md"
+                      style={{ background: active ? 'rgba(255,255,255,0.25)' : c.bg, color: active ? '#fff' : c.color }}>
+                  {c.count}
+                </span>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Search + view mode toggle */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="relative flex-1 min-w-[220px]">
+          <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+          <input type="text" value={search} onChange={e=>setSearch(e.target.value)}
+            placeholder="ค้นหาชื่อ / username / email / รพ. / เลขใบประกอบ"
+            className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:border-teal-400 bg-white"/>
+        </div>
+        <div className="flex bg-white rounded-xl border border-gray-200 p-1">
+          {[
+            { key:'list', icon:'fa-list', title:'มุมมองรายการ (กะทัดรัด)' },
+            { key:'card', icon:'fa-grip', title:'มุมมองการ์ด (ละเอียด)' },
+          ].map(v => (
+            <button key={v.key} type="button" onClick={()=>setViewMode(v.key)} title={v.title}
+              className="px-3 py-1.5 rounded-lg text-sm transition-colors"
+              style={{ background: viewMode===v.key ? '#0f766e' : 'transparent', color: viewMode===v.key ? '#fff' : '#6b7280' }}>
+              <i className={'fa-solid '+v.icon}></i>
+            </button>
+          ))}
+        </div>
+        <span className="text-xs text-gray-500 whitespace-nowrap">{filtered.length} คน</span>
+      </div>
+
+      {/* List */}
+      {loading ? (
+        <div className="text-center py-16 text-gray-400">
+          <i className="fa-solid fa-spinner fa-spin text-3xl mb-2 block text-teal-500"></i>
+          <p className="text-sm">กำลังโหลด...</p>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="bg-white rounded-2xl p-16 text-center border border-gray-100">
+          <i className="fa-solid fa-inbox text-5xl text-gray-300 mb-3 block"></i>
+          <p className="text-sm text-gray-400">{search ? 'ไม่พบผู้ใช้ตามคำค้นหา' : 'ไม่มีผู้ใช้ในหมวดนี้'}</p>
+        </div>
+      ) : viewMode === 'list' ? (
+        /* ── List view: แถวกะทัดรัด เหมาะกับเยอะๆ ── */
+        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+          <div className="grid grid-cols-12 gap-3 px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs font-bold text-gray-500">
+            <div className="col-span-3">ชื่อ</div>
+            <div className="col-span-2">วิชาชีพ</div>
+            <div className="col-span-3">โรงพยาบาล / แผนก</div>
+            <div className="col-span-2">สถานะ</div>
+            <div className="col-span-2 text-right">การกระทำ</div>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {filtered.map(p => {
+              const sc = STATUS_STYLE[p.status];
+              const dept = p.department === 'อื่นๆ' ? (p.department_other || 'อื่นๆ') : p.department;
+              return (
+                <div key={p.id} className="grid grid-cols-12 gap-3 px-4 py-3 items-center hover:bg-teal-50/40 transition-colors text-sm">
+                  <div className="col-span-3 min-w-0">
+                    <p className="font-bold text-teal-900 truncate">{p.first_name} {p.last_name} {p.role === 'admin' && <span className="text-xs">👑</span>}</p>
+                    <p className="text-xs text-gray-400 truncate">@{p.username} · {p.email || '—'}</p>
+                  </div>
+                  <div className="col-span-2 text-xs text-gray-600 truncate">
+                    <p>{PROFESSION_LABELS_TH[p.profession] || p.profession}</p>
+                    {p.license_number && <p className="text-gray-400">{p.license_number}</p>}
+                  </div>
+                  <div className="col-span-3 text-xs text-gray-600 truncate">
+                    <p className="truncate">{p.hospital_name}</p>
+                    <p className="text-gray-400 truncate">{dept}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-md inline-block" style={{ background:sc.bg, color:sc.fg }}>{sc.label}</span>
+                  </div>
+                  <div className="col-span-2 flex justify-end gap-1.5">
+                    {p.status === 'pending' && (
+                      <>
+                        <button type="button" onClick={()=>handleApprove(p.id)} disabled={busy}
+                          className="px-2.5 py-1 rounded-lg font-bold text-white text-xs bg-teal-600 hover:bg-teal-700 disabled:opacity-50" title="อนุมัติ">
+                          <i className="fa-solid fa-check"></i>
+                        </button>
+                        <button type="button" onClick={()=>{ setRejectingId(p.id); setRejectReason(''); }} disabled={busy}
+                          className="px-2.5 py-1 rounded-lg font-bold text-white text-xs bg-red-500 hover:bg-red-600 disabled:opacity-50" title="ปฏิเสธ">
+                          <i className="fa-solid fa-xmark"></i>
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        /* ── Card view: ละเอียด เหมือนเดิม ── */
+        <div className="space-y-3">
+          {filtered.map(p => {
+            const sc = STATUS_STYLE[p.status];
+            const dept = p.department === 'อื่นๆ' ? (p.department_other || 'อื่นๆ') : p.department;
+            return (
+              <div key={p.id} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 hover:border-teal-200 hover:shadow-md transition-all">
+                <div className="flex items-start justify-between gap-4 mb-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <h3 className="text-base font-bold text-teal-900">{p.first_name} {p.last_name}</h3>
+                      <span className="text-xs font-bold px-2 py-0.5 rounded-md" style={{ background:sc.bg, color:sc.fg }}>{sc.label}</span>
+                      {p.role === 'admin' && <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-purple-100 text-purple-800">👑 Admin</span>}
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      {PROFESSION_LABELS_TH[p.profession] || p.profession}
+                      {p.license_number && ` · ${p.license_number}`}
+                    </p>
+                  </div>
+                  {p.status === 'pending' && (
+                    <div className="flex gap-2 flex-shrink-0">
+                      <button type="button" onClick={() => handleApprove(p.id)} disabled={busy}
+                        className="px-4 py-2 rounded-xl font-bold text-white text-xs bg-teal-600 hover:bg-teal-700 disabled:opacity-50">
+                        <i className="fa-solid fa-check mr-1"></i>อนุมัติ
+                      </button>
+                      <button type="button" onClick={() => { setRejectingId(p.id); setRejectReason(''); }} disabled={busy}
+                        className="px-4 py-2 rounded-xl font-bold text-white text-xs bg-red-500 hover:bg-red-600 disabled:opacity-50">
+                        <i className="fa-solid fa-xmark mr-1"></i>ปฏิเสธ
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 text-xs pt-3 border-t border-gray-100">
+                  <Field label="โรงพยาบาล" value={p.hospital_name} />
+                  <Field label="ประเภท" value={p.hospital_type} />
+                  <Field label="แผนก" value={dept} />
+                  <Field label="Username" value={p.username} />
+                  <Field label="Email" value={p.email || '—'} />
+                  <Field label="เบอร์โทร" value={p.phone || '—'} />
+                </div>
+                {p.status === 'rejected' && p.rejected_reason && (
+                  <div className="mt-3 p-3 rounded-xl text-xs bg-red-50 text-red-800 border border-red-100">
+                    <strong>เหตุผลปฏิเสธ:</strong> {p.rejected_reason}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Reject Modal */}
+      {rejectingId && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <h3 className="text-lg font-bold text-red-700 mb-2">
+              <i className="fa-solid fa-circle-xmark mr-2"></i>ปฏิเสธคำขอสมัคร
+            </h3>
+            <p className="text-xs text-gray-500 mb-3">กรุณาระบุเหตุผล (จะแจ้งผู้สมัครทางเมล)</p>
+            <textarea value={rejectReason} onChange={e=>setRejectReason(e.target.value)} rows={4}
+              placeholder="เช่น ข้อมูลไม่ครบถ้วน, ไม่ใช่บุคลากรในระบบ ฯลฯ"
+              className="w-full p-3 border border-gray-200 rounded-xl text-sm outline-none focus:border-red-400 bg-gray-50"/>
+            <div className="flex gap-2 mt-4">
+              <button type="button" onClick={()=>{ setRejectingId(null); setRejectReason(''); }} disabled={busy}
+                className="flex-1 py-2.5 rounded-xl font-bold text-sm bg-gray-100 hover:bg-gray-200 text-gray-700">ยกเลิก</button>
+              <button type="button" onClick={submitReject} disabled={busy || !rejectReason.trim()}
+                className="flex-1 py-2.5 rounded-xl font-bold text-sm text-white bg-red-500 hover:bg-red-600 disabled:opacity-50">
+                {busy ? <><i className="fa-solid fa-spinner fa-spin mr-1"></i>กำลังส่ง...</> : 'ยืนยันปฏิเสธ'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Field({ label, value }) {
+  return (
+    <div>
+      <p className="text-xs text-gray-400">{label}</p>
+      <p className="text-sm font-semibold mt-0.5 text-gray-800">{value}</p>
+    </div>
+  );
+}
+
+Object.assign(window,{DoseCalculator,DOTCalendar,DrugInteractionPanel,RegimenHistoryTab,NotificationPanel,NotificationFullModal,AddPatientPage,ClinicalModal,InfoBar,LabTab,ADRTab,TimelineTab,DiagnosisTab,MedsTab,PharmSummaryTab,TrashList,AdminUsersTab,ConfirmModal,hasResistance,afbCombined,isAfbPositive,getSputumConversion,isDelayedConversion});

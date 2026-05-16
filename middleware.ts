@@ -24,8 +24,7 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   const { pathname } = request.nextUrl
 
-  const devSession = request.cookies.get('dev_session')?.value === 'sirawit'
-  const isAuthed = !!user || devSession
+  const isAuthed = !!user
 
   const publicPaths = ['/login', '/register', '/reset-password']
   const isPublic = publicPaths.some(p => pathname.startsWith(p))
@@ -44,7 +43,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/', request.url))
   }
 
-  // ถ้า login จริง (ไม่ใช่ dev_session) → เช็ค profile status
+  // เช็ค profile status (pending/rejected redirect ไปหน้าเฉพาะ)
   if (user && !isPublic) {
     const { data: profile } = await supabase
       .from('profiles')

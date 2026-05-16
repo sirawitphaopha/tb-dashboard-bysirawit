@@ -1235,12 +1235,13 @@ function Reports({ patients }) {
 }
 
 // ===================== ADMIN SETTINGS =====================
-function AdminSettings({ settings, setSettings }) {
+function AdminSettings({ settings, setSettings, setNav }) {
   const [newComorbidity, setNewComorbidity] = useState({ name: '', abbr: '' });
   const [newDrug, setNewDrug] = useState('');
   const [newReason, setNewReason] = useState('');
   const [newLabField, setNewLabField] = useState({ label:'', key:'', unit:'', lo:'', hi:'', group:'lft' });
   const [activeTab, setActiveTab] = useState('comorbidity');
+
 
   const addComorbidity = () => {
     const name = newComorbidity.name.trim();
@@ -1312,11 +1313,6 @@ function AdminSettings({ settings, setSettings }) {
 
   return (
     <div className="space-y-5 tb-fade">
-      <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl flex items-center gap-3">
-        <i className="fa-solid fa-shield-halved text-amber-500 text-xl"></i>
-        <div><p className="font-bold text-amber-800 text-sm">Admin Settings</p><p className="text-xs text-amber-600">การเปลี่ยนแปลงมีผลทันที — มองเห็นเฉพาะ Admin</p></div>
-      </div>
-
       {/* Tab bar */}
       <div className="flex gap-2 flex-wrap">
         {adminTabs.map(t => (
@@ -1687,6 +1683,19 @@ function App() {
 
   // Current user profile (จาก Supabase)
   const [currentUser, setCurrentUser] = useState(null);
+  // จำนวน user ที่รออนุมัติ (สำหรับ badge ใน sidebar)
+  const [pendingUserCount, setPendingUserCount] = useState(0);
+  useEffect(() => {
+    if (currentUser?.role !== 'admin') return;
+    (async () => {
+      try {
+        const { count } = await window._sb.from('profiles')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'pending');
+        setPendingUserCount(count || 0);
+      } catch (e) { console.error('Load pending count failed:', e); }
+    })();
+  }, [currentUser]);
   useEffect(() => {
     fetch('/api/profile/me')
       .then(r => r.ok ? r.json() : null)
@@ -1695,6 +1704,7 @@ function App() {
         const p = data.profile;
         const prof = PROFESSIONS[p.profession] || PROFESSIONS.other;
         setCurrentUser({
+          id:          p.id,
           fullName:    `${prof.avatar} ${p.first_name || ''} ${p.last_name || ''}`.trim(),
           profession:  prof.label,
           avatar:      prof.avatar.replace('.', ''),  // "ภก." → "ภก"
@@ -1715,13 +1725,26 @@ function App() {
   const [archiveDashFilter, setArchiveDashFilter] = useState(null);
 
   useEffect(() => {
-    loadPatients().then(data => {
-      setPatients([...INITIAL_PATIENTS, ...data]);
-      setDbLoading(false);
-    });
+    // รอ session bridge เสร็จก่อน (เพื่อให้ Supabase รู้ว่า user คนไหนกำลัง query)
+    (window._sbReady || Promise.resolve())
+      .then(() => loadPatients())
+      .then(data => {
+        setPatients([...INITIAL_PATIENTS, ...data]);
+        setDbLoading(false);
+      });
   }, []);
 
-  const alerts = generateAlerts(patients);
+  // alerts = clinical alerts จากผู้ป่วย + admin alerts (pending users)
+  const adminAlerts = (currentUser?.role === 'admin' && pendingUserCount > 0) ? [{
+    id: 'admin-pending-users',
+    type: 'warning',
+    patient: null,
+    patientId: null,
+    navTarget: 'admin-users',
+    msg: `มี ${pendingUserCount} ผู้ใช้ใหม่รออนุมัติ — คลิกเพื่อจัดการ`,
+    time: 'ใหม่',
+  }] : [];
+  const alerts = [...adminAlerts, ...generateAlerts(patients)];
   const unreadCount = alerts.filter(a => !readAlerts.has(a.id)).length;
   const markRead = id => setReadAlerts(s => new Set([...s, id]));
   const markAllRead = () => setReadAlerts(new Set(alerts.map(a => a.id)));
@@ -1738,6 +1761,32 @@ function App() {
     updatePatient({ ...p, archived: true });
     setClinical(null);
     setNav('archive-list');
+  };
+
+  // ลบผู้ป่วย (soft delete — admin เท่านั้น)
+  const softDeletePatient = async (patientId, reason) => {
+    if (!currentUser?.id) return false;
+    const ok = await window.softDeletePatient(patientId, currentUser.id, reason);
+    if (!ok) return false;
+    setPatients(ps => ps.filter(p => p.id !== patientId));  // เอาออกจาก list ปัจจุบัน
+    setClinical(null);  // ปิด clinical modal
+    return true;
+  };
+
+  // กู้คืนจากถังขยะ (admin เท่านั้น)
+  const restorePatient = async (patientId) => {
+    const ok = await window.restorePatient(patientId);
+    if (!ok) return false;
+    // โหลดผู้ป่วยใหม่หลัง restore (เพื่อให้คนนั้นกลับมาในหน้า list ปกติ)
+    const data = await loadPatients();
+    setPatients([...INITIAL_PATIENTS, ...data]);
+    return true;
+  };
+
+  // ลบถาวร (admin เท่านั้น) — กู้คืนไม่ได้
+  const hardDeletePatient = async (patientId) => {
+    const ok = await window.hardDeletePatient(patientId);
+    return ok;
   };
 
   const handleLogoClick = () => {
@@ -1764,16 +1813,18 @@ function App() {
     { id:'weekly-prep',   icon:'fa-calendar-check',   label:'เตรียมเคสรายสัปดาห์' },
     { id:'reports',       icon:'fa-file-contract',    label:'รายงาน & สถิติ' },
     { id:'knowledge',     icon:'fa-book-open-reader', label:'คลังความรู้วัณโรค' },
-    { id:'settings',      icon:'fa-gear',             label:'ตั้งค่าระบบ (Admin)', divider:true },
+    { id:'settings',      icon:'fa-gear',             label:'ตั้งค่าระบบ', divider:true },
+    ...(currentUser?.role === 'admin' ? [{ id:'admin-users', icon:'fa-user-shield', label:'จัดการผู้ใช้', badge: pendingUserCount }] : []),
+    { id:'trash',         icon:'fa-trash',            label:'ถังขยะ' },
   ];
-  const titles = { dashboard:'Dashboard', 'patient-list':'ทะเบียนผู้ป่วย Active', 'archive-list':'ทะเบียนจบการรักษา', 'all-patients':'ทะเบียนผู้ป่วยทั้งหมด', 'add-patient':'ลงทะเบียนผู้ป่วยใหม่', 'weekly-prep':'เตรียมเคสรายสัปดาห์', reports:'รายงาน และ สถิติ', knowledge:'คลังความรู้วัณโรค', settings:'ตั้งค่าระบบ (Admin)' };
-  const pageIcons = { dashboard:'fa-chart-pie', 'patient-list':'fa-users', 'archive-list':'fa-box-archive', 'all-patients':'fa-users', 'add-patient':'fa-user-plus', 'weekly-prep':'fa-calendar-check', reports:'fa-file-contract', knowledge:'fa-book-open-reader', settings:'fa-gear' };
+  const titles = { dashboard:'Dashboard', 'patient-list':'ทะเบียนผู้ป่วย Active', 'archive-list':'ทะเบียนจบการรักษา', 'all-patients':'ทะเบียนผู้ป่วยทั้งหมด', 'add-patient':'ลงทะเบียนผู้ป่วยใหม่', 'weekly-prep':'เตรียมเคสรายสัปดาห์', reports:'รายงาน และ สถิติ', knowledge:'คลังความรู้วัณโรค', settings:'ตั้งค่าระบบ', 'admin-users':'จัดการผู้ใช้', trash:'ถังขยะ' };
+  const pageIcons = { dashboard:'fa-chart-pie', 'patient-list':'fa-users', 'archive-list':'fa-box-archive', 'all-patients':'fa-users', 'add-patient':'fa-user-plus', 'weekly-prep':'fa-calendar-check', reports:'fa-file-contract', knowledge:'fa-book-open-reader', settings:'fa-gear', 'admin-users':'fa-user-shield', trash:'fa-trash' };
 
   // Clinical view กินทั้งจอ — ซ่อน sidebar + header ทั้งหมด
   if (clinical) {
     return (
       <div className="flex h-screen bg-white overflow-hidden">
-        <ClinicalModal patient={clinical} onClose={() => setClinical(null)} onUpdate={updatePatient} settings={settings} onArchive={archivePatient}/>
+        <ClinicalModal patient={clinical} onClose={() => setClinical(null)} onUpdate={updatePatient} settings={settings} onArchive={archivePatient} currentUser={currentUser} onSoftDelete={softDeletePatient}/>
       </div>
     );
   }
@@ -1797,7 +1848,9 @@ function App() {
 
         {/* Nav items */}
         <nav style={{flex:1,overflowY:'auto',padding:'10px 8px 10px 2px'}}>
-          {navItems.map(n => (
+          {navItems.map(n => {
+            const hasBadge = n.badge && n.badge > 0;
+            return (
             <div key={n.id}>
               {n.divider && <div style={{margin:'6px 0',borderTop:'1px solid #f1f5f9'}}></div>}
               <button
@@ -1805,22 +1858,27 @@ function App() {
                   if(formDirty && nav==='add-patient' && n.id!=='add-patient'){
                     showDirtyToast(); return;
                   }
+                  // External link (เช่น /admin/users) → ออกจาก iframe ไปหน้าเต็ม
+                  if (n.external) { window.top.location.href = n.external; return; }
                   setNav(n.id);setLogoClicks(0);if(n.id!=='add-patient')setFormDirty(false);
                 }}
                 title={!sidebarOpen?n.label:undefined}
-                style={{display:'flex',width:'100%',alignItems:'center',padding:'9px 8px',borderRadius:'8px',border:'none',cursor:'pointer',marginBottom:'2px',transition:'background 0.15s',background:nav===n.id?'#ccfbf1':'transparent',fontWeight:nav===n.id?700:500,fontSize:'14px',color:nav===n.id?'#0f766e':'#374151'}}
-                onMouseEnter={e=>{if(nav!==n.id){e.currentTarget.style.background='#f0fdfa';e.currentTarget.style.color='#0f766e';}}}
-                onMouseLeave={e=>{if(nav!==n.id){e.currentTarget.style.background='transparent';e.currentTarget.style.color='#374151';}}}
+                style={{display:'flex',width:'100%',alignItems:'center',padding:'9px 8px',borderRadius:'8px',border:'none',cursor:'pointer',marginBottom:'2px',transition:'background 0.15s',background:hasBadge?'#fef2f2':(nav===n.id?'#ccfbf1':'transparent'),fontWeight:nav===n.id||hasBadge?700:500,fontSize:'14px',color:hasBadge?'#b91c1c':(nav===n.id?'#0f766e':'#374151')}}
+                onMouseEnter={e=>{if(nav!==n.id&&!hasBadge){e.currentTarget.style.background='#f0fdfa';e.currentTarget.style.color='#0f766e';}}}
+                onMouseLeave={e=>{if(nav!==n.id&&!hasBadge){e.currentTarget.style.background='transparent';e.currentTarget.style.color='#374151';}}}
               >
                 {/* icon คงที่ 36px ไม่ขยับ */}
                 <span style={{width:'36px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-                  <i className={`fa-solid ${n.icon}`} style={{fontSize:'17px',color:'#0f766e'}}></i>
+                  <i className={`fa-solid ${n.icon}`} style={{fontSize:'17px',color:hasBadge?'#dc2626':'#0f766e'}}></i>
                 </span>
                 {/* label fade */}
-                <span style={{overflow:'hidden',whiteSpace:'nowrap',maxWidth:sidebarOpen?'160px':'0px',opacity:sidebarOpen?1:0,transition:'max-width 0.2s ease,opacity 0.15s ease'}}>{n.label}</span>
+                <span style={{overflow:'hidden',whiteSpace:'nowrap',maxWidth:sidebarOpen?'160px':'0px',opacity:sidebarOpen?1:0,transition:'max-width 0.2s ease,opacity 0.15s ease',display:'flex',alignItems:'center',gap:'6px'}}>
+                  {n.label}
+                  {hasBadge && sidebarOpen && <span className="tb-pulse-badge" style={{background:'#ef4444',color:'#fff',fontSize:'10px',fontWeight:700,padding:'1px 7px',borderRadius:'10px'}}>{n.badge}</span>}
+                </span>
               </button>
             </div>
-          ))}
+          )})}
         </nav>
 
         {/* User profile */}
@@ -1860,7 +1918,7 @@ function App() {
             <div>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:0,whiteSpace:'nowrap'}}>พัฒนาโดย เภสัชกร สิรวิชญ์ เผ่าผา</p>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:'1px 0 0 0',whiteSpace:'nowrap'}}>โรงพยาบาลปรางค์กู่</p>
-              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.7.3 ·<span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
+              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.7.4 ·<span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
             </div>
           ) : (
             <div style={{display:'flex',justifyContent:'center'}}>
@@ -1994,6 +2052,7 @@ function App() {
               alerts={alerts} patients={patients} readAlerts={readAlerts}
               onRead={markRead} onReadAll={markAllRead}
               onOpen={p=>{openFromNotif(p);setShowNotifs(false);}}
+              onNavTarget={target=>{ setNav(target); setShowNotifs(false); }}
               onClose={()=>setShowNotifs(false)}
               onExpand={()=>{setShowNotifs(false);setShowFullNotifs(true);}}
             />}
@@ -2010,7 +2069,9 @@ function App() {
           {!dbLoading && nav==='weekly-prep'   && <WeeklyPrep patients={patients.filter(p=>!p.archived)} onOpen={setClinical}/>}
           {!dbLoading && nav==='reports'       && <Reports patients={patients}/>}
           {!dbLoading && nav==='knowledge'     && <KnowledgeBase/>}
-          {!dbLoading && nav==='settings'      && <AdminSettings settings={settings} setSettings={setSettings}/>}
+          {!dbLoading && nav==='settings'      && <AdminSettings settings={settings} setSettings={setSettings} setNav={setNav}/>}
+          {!dbLoading && nav==='admin-users'   && <AdminUsersTab currentUser={currentUser} onPendingChange={setPendingUserCount}/>}
+          {!dbLoading && nav==='trash'         && <TrashList currentUser={currentUser} onRestore={restorePatient} onHardDelete={hardDeletePatient}/>}
         </div>
       </main>
 
@@ -2040,6 +2101,7 @@ function App() {
         alerts={alerts} patients={patients} readAlerts={readAlerts}
         onRead={markRead} onReadAll={markAllRead}
         onOpen={p=>{openFromNotif(p);}}
+        onNavTarget={target=>{ setNav(target); setShowFullNotifs(false); }}
         onClose={()=>setShowFullNotifs(false)}
       />}
     </div>

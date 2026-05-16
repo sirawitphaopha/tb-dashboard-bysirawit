@@ -630,6 +630,22 @@ const _SUPA_URL = 'https://cioswzdbonnbhbyynrhh.supabase.co';
 const _SUPA_KEY = 'sb_publishable_SuzwNfnSbCFCdNmDsMhydA_Yd8Nl0Yc';
 window._sb = window.supabase.createClient(_SUPA_URL, _SUPA_KEY);
 
+// ดึง session จาก Next.js (ชั้นนอก) แล้วบอก _sb ว่า "user คนนี้ login อยู่"
+// ต้องเรียกก่อน loadPatients() เพื่อให้ RLS รู้ว่าใครเป็นคน query
+window._sbReady = (async () => {
+  try {
+    const res = await fetch('/api/auth/session');
+    if (!res.ok) { console.warn('No session found'); return; }
+    const { session } = await res.json();
+    if (session?.access_token && session?.refresh_token) {
+      await window._sb.auth.setSession({
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+      });
+    }
+  } catch (e) { console.error('Session bridge error:', e); }
+})();
+
 window.dbToPatient = r => ({
   id:r.id, hn:r.hn, prefix:r.prefix, firstName:r.first_name, lastName:r.last_name,
   name:r.name, age:r.age, gender:r.gender, weight:r.weight, regimen:r.regimen,
@@ -660,9 +676,17 @@ window.patientToDb = p => ({
 });
 
 window.loadPatients = async () => {
-  const { data, error } = await window._sb.from('tb_patients').select('*').order('created_at');
+  // กรองออกคนที่อยู่ในถังขยะ (deleted_at != null) — หน้าหลักไม่ต้องเห็น
+  const { data, error } = await window._sb.from('tb_patients').select('*').is('deleted_at', null).order('created_at');
   if (error) { console.error('Supabase load error:', error); return []; }
   return (data||[]).map(window.dbToPatient);
+};
+
+// โหลดคนในถังขยะ (สำหรับหน้าถังขยะ)
+window.loadTrashedPatients = async () => {
+  const { data, error } = await window._sb.from('tb_patients').select('*').not('deleted_at','is',null).order('deleted_at',{ascending:false});
+  if (error) { console.error('Supabase load trash error:', error); return []; }
+  return (data||[]).map(r => ({ ...window.dbToPatient(r), deletedAt: r.deleted_at, deletedBy: r.deleted_by, deleteReason: r.delete_reason }));
 };
 
 window.savePatient = async p => {
@@ -673,4 +697,31 @@ window.savePatient = async p => {
 window.removePatient = async id => {
   const { error } = await window._sb.from('tb_patients').delete().eq('id', id);
   if (error) console.error('Supabase delete error:', error);
+};
+
+// soft delete — ย้ายเข้าถังขยะ 60 วัน
+window.softDeletePatient = async (id, deletedBy, reason) => {
+  const { error } = await window._sb.from('tb_patients').update({
+    deleted_at: new Date().toISOString(),
+    deleted_by: deletedBy,
+    delete_reason: reason,
+  }).eq('id', id);
+  if (error) { console.error('Soft delete error:', error); return false; }
+  return true;
+};
+
+// restore — เอากลับมาจากถังขยะ
+window.restorePatient = async id => {
+  const { error } = await window._sb.from('tb_patients').update({
+    deleted_at: null, deleted_by: null, delete_reason: null,
+  }).eq('id', id);
+  if (error) { console.error('Restore error:', error); return false; }
+  return true;
+};
+
+// hard delete — ลบถาวรจาก DB (trigger จะ log อัตโนมัติ)
+window.hardDeletePatient = async id => {
+  const { error } = await window._sb.from('tb_patients').delete().eq('id', id);
+  if (error) { console.error('Hard delete error:', error); return false; }
+  return true;
 };
