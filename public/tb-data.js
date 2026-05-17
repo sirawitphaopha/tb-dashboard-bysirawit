@@ -730,6 +730,10 @@ window.restorePatient = async id => {
     deleted_at: null, deleted_by: null, delete_reason: null,
   }).eq('id', id);
   if (error) { console.error('Restore error:', error); return false; }
+  await window._sb.from('tb_delete_requests')
+    .update({ status: 'restored' })
+    .eq('patient_id', id)
+    .eq('status', 'pending');
   return true;
 };
 
@@ -770,7 +774,7 @@ window.loadMyPendingDeleteRequests = async (userId) => {
   const { data } = await window._sb.from('tb_delete_requests')
     .select('id, patient_id, status, requested_by')
     .eq('requested_by', userId)
-    .in('status', ['pending', 'approved']);
+    .eq('status', 'pending');
   return data || [];
 };
 

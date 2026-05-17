@@ -36,14 +36,18 @@ export async function POST(req: NextRequest) {
       : 'ผู้ใช้'
 
     // อัปเดต status = 'cancelled' (ใช้ admin client ไม่ติด RLS)
-    const { error } = await admin
+    const { data: updated, error } = await admin
       .from('tb_delete_requests')
       .update({ status: 'cancelled' })
       .eq('patient_id', patientId)
       .eq('requested_by', user.id)
       .eq('status', 'pending')
+      .select('id')
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (!updated || updated.length === 0) {
+      return NextResponse.json({ error: 'no pending request found' }, { status: 404 })
+    }
 
     // ส่งเมลแจ้ง Admin
     if (ADMIN_EMAILS.length > 0) {

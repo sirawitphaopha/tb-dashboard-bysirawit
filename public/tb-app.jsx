@@ -1908,7 +1908,7 @@ function App() {
       body: JSON.stringify({ patientId: patient.id, patientName: patient.name, patientHn: patient.hn }),
     });
     if (!res.ok) return false;
-    const reqs = await window.loadPendingDeleteRequests();
+    const reqs = await window.loadMyPendingDeleteRequests(currentUser.id);
     setPendingDeleteRequests(reqs);
     const cancelled = await window.loadCancelledDeleteCount();
     setCancelledDeleteCount(cancelled);
@@ -2126,7 +2126,7 @@ function App() {
             <div>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:0,whiteSpace:'nowrap'}}>พัฒนาโดย เภสัชกร สิรวิชญ์ เผ่าผา</p>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:'1px 0 0 0',whiteSpace:'nowrap'}}>โรงพยาบาลปรางค์กู่</p>
-              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.7.7 ·<span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
+              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.7.7.1 ·<span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
             </div>
           ) : (
             <div style={{display:'flex',justifyContent:'center'}}>
