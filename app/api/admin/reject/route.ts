@@ -37,14 +37,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'admin only' }, { status: 403 })
     }
 
-    const { data: target, error: updErr } = await admin
+    // query ก่อนเพื่อเอา rejection week data ปัจจุบัน
+    const { data: current } = await admin
       .from('profiles')
-      .update({ status: 'rejected', rejected_reason: reason })
+      .select('first_name, last_name, rejection_week_start, rejection_week_count')
       .eq('id', userId)
-      .select('first_name, last_name')
       .single()
 
+    // คำนวณ weekly counter — ถ้าผ่านไป 7 วันแล้ว รีเซ็ตใหม่
+    const now = new Date()
+    const weekStart = current?.rejection_week_start ? new Date(current.rejection_week_start) : null
+    const isNewWeek = !weekStart || (now.getTime() - weekStart.getTime()) >= 7 * 24 * 60 * 60 * 1000
+    const newWeekStart = isNewWeek ? now.toISOString().split('T')[0] : current?.rejection_week_start
+    const newWeekCount = isNewWeek ? 1 : (current?.rejection_week_count ?? 0) + 1
+
+    const { error: updErr } = await admin
+      .from('profiles')
+      .update({
+        status: 'rejected',
+        rejected_reason: reason,
+        rejection_week_start: newWeekStart,
+        rejection_week_count: newWeekCount,
+      })
+      .eq('id', userId)
+
     if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 })
+
+    const target = current
 
     const { data: authData } = await admin.auth.admin.getUserById(userId)
     const userEmail = authData?.user?.email

@@ -150,11 +150,14 @@ export default function RegisterPage() {
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-10 text-center">
         <i className="fa-solid fa-hourglass-half text-6xl mb-4" style={{ color: '#f59e0b' }}></i>
         <h2 className="text-2xl font-bold mb-4" style={{ color: '#134e4a' }}>ส่งคำขอเรียบร้อย</h2>
-        <p className="text-sm mb-4" style={{ color: '#6b7280', lineHeight: 1.9 }}>
+        <p className="text-sm mb-3" style={{ color: '#6b7280', lineHeight: 1.9 }}>
           ระบบได้รับข้อมูลของท่านเรียบร้อยแล้ว<br />
-          กรุณารอผู้ดูแลระบบพิจารณาอนุมัติ<br />
-          เมื่อได้รับการอนุมัติ ระบบจะแจ้งให้ทราบทางอีเมล
+          กรุณารอผู้ดูแลระบบพิจารณาอนุมัติ
         </p>
+        <div className="mb-4 p-3 rounded-xl text-left" style={{ background: '#f0fdfa', border: '1px solid #99f6e4' }}>
+          <p className="text-xs mb-1" style={{ color: '#0f766e' }}>ผลการอนุมัติจะส่งไปที่</p>
+          <p className="font-bold text-sm" style={{ color: '#134e4a' }}>{email}</p>
+        </div>
 
         {/* หมายเหตุเรื่อง spam */}
         <div className="mb-6 p-3 rounded-xl text-left flex gap-3"
@@ -213,6 +216,10 @@ export default function RegisterPage() {
                 <input type="email" name="email" autoComplete="email"
                   value={email} onChange={e => setEmail(e.target.value)}
                   placeholder="email@example.com" style={inp} onFocus={focus} onBlur={blur} required />
+                <p style={{ fontSize: '11px', color: '#d97706', marginTop: '5px', lineHeight: 1.5 }}>
+                  <i className="fa-solid fa-triangle-exclamation" style={{ marginRight: '4px' }}></i>
+                  กรุณาตรวจสอบให้ถูกต้อง — ระบบจะแจ้งผลอนุมัติทางอีเมลนี้เท่านั้น
+                </p>
               </div>
             </div>
 

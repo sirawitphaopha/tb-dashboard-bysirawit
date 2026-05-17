@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
     // 1) เช็คว่า email นี้เคยมีไหม — ถ้าเคย reject สามารถสมัครใหม่ได้ (reset เป็น pending)
     const { data: existingByEmail } = await admin
       .from('profiles')
-      .select('id, status')
+      .select('id, status, rejection_week_start, rejection_week_count')
       .eq('email', email)
       .maybeSingle()
 
@@ -49,6 +49,23 @@ export async function POST(req: NextRequest) {
 
     if (existingByEmail && !isReregister) {
       return NextResponse.json({ error: 'อีเมลนี้มีคนสมัครแล้ว' }, { status: 400 })
+    }
+
+    // Rate limiting: ถ้าถูก reject ครบ 3 ครั้งภายในสัปดาห์นี้ → บล็อกชั่วคราว
+    if (isReregister) {
+      const weekStart = existingByEmail?.rejection_week_start
+        ? new Date(existingByEmail.rejection_week_start)
+        : null
+      const now = new Date()
+      const isCurrentWeek = weekStart && (now.getTime() - weekStart.getTime()) < 7 * 24 * 60 * 60 * 1000
+
+      if (isCurrentWeek && (existingByEmail?.rejection_week_count ?? 0) >= 3) {
+        const unlockDate = new Date(weekStart!.getTime() + 7 * 24 * 60 * 60 * 1000)
+        const unlockStr = unlockDate.toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
+        return NextResponse.json({
+          error: `ท่านถูกปฏิเสธครบ 3 ครั้งในสัปดาห์นี้แล้ว กรุณาลองใหม่หลังวันที่ ${unlockStr}`,
+        }, { status: 400 })
+      }
     }
 
     // 2) Check username ซ้ำ — ยกเว้น profile ของตัวเอง (กรณี re-register)

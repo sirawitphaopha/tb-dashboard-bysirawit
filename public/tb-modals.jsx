@@ -2859,6 +2859,30 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
     }
   };
 
+  const handleResetRejectionLimit = async (p) => {
+    if (!window.confirm(`ปลดล็อกให้ ${p.first_name||''} ${p.last_name||''} สมัครใหม่ได้ทันทีใช่ไหมคะ?`)) return;
+    setBusy(true);
+    const res = await fetch('/api/admin/reset-rejection-limit', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: p.id }),
+    });
+    setBusy(false);
+    if (res.ok) { alert('ปลดล็อกเรียบร้อยค่ะ — user สมัครใหม่ได้แล้ว'); load(); }
+    else { const e = await res.json(); alert('Error: ' + e.error); }
+  };
+
+  const handleDeactivateUser = async (p) => {
+    if (!window.confirm(`ปิดบัญชี ${p.first_name||''} ${p.last_name||''} ?\nจะเปลี่ยนสถานะเป็น "ปฏิเสธ" — กู้คืนได้โดยอนุมัติใหม่`)) return;
+    setBusy(true);
+    const res = await fetch('/api/admin/deactivate-user', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: p.id }),
+    });
+    setBusy(false);
+    if (res.ok) { alert('ปิดบัญชีเรียบร้อยค่ะ — user ยังสามารถอนุมัติใหม่ได้ภายหลัง'); load(); }
+    else { const e = await res.json(); alert('Error: ' + e.error); }
+  };
+
   const submitReject = async () => {
     if (!rejectReason.trim()) return alert('กรุณาระบุเหตุผล');
     setBusy(true);
@@ -3019,12 +3043,30 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
                         </button>
                       </>
                     )}
-                    {p.status === 'rejected' && (
-                      <button type="button" onClick={()=>{ setHardDelTarget(p); setConfirmText(''); }} disabled={busy}
-                        className="px-2.5 py-1 rounded-lg font-bold text-white text-xs bg-gray-600 hover:bg-red-600 disabled:opacity-50" title="ลบถาวร">
-                        <i className="fa-solid fa-fire"></i>
+                    {p.status === 'approved' && p.role !== 'admin' && (
+                      <button type="button" onClick={()=>handleDeactivateUser(p)} disabled={busy}
+                        className="px-2.5 py-1 rounded-lg font-bold text-white text-xs bg-orange-500 hover:bg-orange-600 disabled:opacity-50" title="ปิดบัญชี">
+                        <i className="fa-solid fa-user-slash"></i>
                       </button>
                     )}
+                    {p.status === 'rejected' && (() => {
+                      const ws = p.rejection_week_start ? new Date(p.rejection_week_start) : null;
+                      const isBlocked = ws && (new Date() - ws) < 7*24*60*60*1000 && (p.rejection_week_count||0) >= 3;
+                      return (
+                        <>
+                          {isBlocked && (
+                            <button type="button" onClick={()=>handleResetRejectionLimit(p)} disabled={busy}
+                              className="px-2.5 py-1 rounded-lg font-bold text-white text-xs bg-amber-500 hover:bg-amber-600 disabled:opacity-50" title="ปลดล็อก — ให้สมัครใหม่ได้">
+                              <i className="fa-solid fa-lock-open"></i>
+                            </button>
+                          )}
+                          <button type="button" onClick={()=>{ setHardDelTarget(p); setConfirmText(''); }} disabled={busy}
+                            className="px-2.5 py-1 rounded-lg font-bold text-white text-xs bg-gray-600 hover:bg-red-600 disabled:opacity-50" title="ลบถาวร">
+                            <i className="fa-solid fa-fire"></i>
+                          </button>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               );
@@ -3063,14 +3105,32 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
                       </button>
                     </div>
                   )}
-                  {p.status === 'rejected' && (
+                  {p.status === 'approved' && p.role !== 'admin' && (
                     <div className="flex gap-2 flex-shrink-0">
-                      <button type="button" onClick={()=>{ setHardDelTarget(p); setConfirmText(''); }} disabled={busy}
-                        className="px-4 py-2 rounded-xl font-bold text-white text-xs bg-gray-600 hover:bg-red-600 disabled:opacity-50">
-                        <i className="fa-solid fa-fire mr-1"></i>ลบถาวร
+                      <button type="button" onClick={()=>handleDeactivateUser(p)} disabled={busy}
+                        className="px-4 py-2 rounded-xl font-bold text-white text-xs bg-orange-500 hover:bg-orange-600 disabled:opacity-50">
+                        <i className="fa-solid fa-user-slash mr-1"></i>ปิดบัญชี
                       </button>
                     </div>
                   )}
+                  {p.status === 'rejected' && (() => {
+                    const ws = p.rejection_week_start ? new Date(p.rejection_week_start) : null;
+                    const isBlocked = ws && (new Date() - ws) < 7*24*60*60*1000 && (p.rejection_week_count||0) >= 3;
+                    return (
+                      <div className="flex gap-2 flex-shrink-0">
+                        {isBlocked && (
+                          <button type="button" onClick={()=>handleResetRejectionLimit(p)} disabled={busy}
+                            className="px-4 py-2 rounded-xl font-bold text-white text-xs bg-amber-500 hover:bg-amber-600 disabled:opacity-50">
+                            <i className="fa-solid fa-lock-open mr-1"></i>ปลดล็อก
+                          </button>
+                        )}
+                        <button type="button" onClick={()=>{ setHardDelTarget(p); setConfirmText(''); }} disabled={busy}
+                          className="px-4 py-2 rounded-xl font-bold text-white text-xs bg-gray-600 hover:bg-red-600 disabled:opacity-50">
+                          <i className="fa-solid fa-fire mr-1"></i>ลบถาวร
+                        </button>
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 text-xs pt-3 border-t border-gray-100">
                   <Field label="โรงพยาบาล" value={p.hospital_name} />

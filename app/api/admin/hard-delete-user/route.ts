@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { createAdminClient } from '@/lib/supabase-admin'
+import { getResend, EMAIL_FROM } from '@/lib/resend'
+import { userAccountDeletedEmail } from '@/lib/email-templates'
 
 // ลบ user ถาวร — ใช้กรณีต้องการเคลียร์ rejected user ออกจากระบบ
 // (อนุญาตเฉพาะ user ที่ status = 'rejected' เท่านั้น เพื่อความปลอดภัย)
@@ -38,7 +40,7 @@ export async function POST(req: NextRequest) {
     // ตรวจ target = rejected เท่านั้น (กันลบ admin/approved user เผลอ)
     const { data: target } = await admin
       .from('profiles')
-      .select('status, email')
+      .select('status, email, first_name')
       .eq('id', userId)
       .single()
     if (!target) return NextResponse.json({ error: 'user not found' }, { status: 404 })
@@ -52,6 +54,19 @@ export async function POST(req: NextRequest) {
 
     const { error: authErr } = await admin.auth.admin.deleteUser(userId)
     if (authErr) return NextResponse.json({ error: 'ลบ auth user ไม่สำเร็จ: ' + authErr.message }, { status: 500 })
+
+    // แจ้ง user ว่าบัญชีถูกลบถาวรแล้ว
+    if (target.email) {
+      const mail = userAccountDeletedEmail(target.first_name || 'ผู้ใช้')
+      try {
+        await getResend().emails.send({
+          from: EMAIL_FROM,
+          to: target.email,
+          subject: mail.subject,
+          html: mail.html,
+        })
+      } catch (e) { console.error('account-deleted email failed:', e) }
+    }
 
     return NextResponse.json({ success: true })
   } catch (e: any) {

@@ -286,6 +286,30 @@ export function deleteRequestRestoredEmail(firstName: string, patientName: strin
 }
 
 // ═════════════════════════════════════════════════════════
+// 10) User Account Deleted — admin ลบบัญชีผู้ใช้ถาวร (กรณีปฏิเสธแล้วลบทิ้ง)
+// ═════════════════════════════════════════════════════════
+export function userAccountDeletedEmail(firstName: string) {
+  const subject = 'แจ้งยกเลิกสิทธิ์การเข้าใช้งานระบบ TB CARE & JOURNEY'
+  const body = `
+    <h2 style="margin:0 0 16px;color:${BRAND_TEAL_DARK};font-size:18px;">เรียน คุณ${firstName}</h2>
+    <p style="margin:0 0 16px;font-size:14px;color:#4b5563;line-height:1.7;">
+      ขอเรียนแจ้งให้ทราบว่า ผู้ดูแลระบบได้ทำการ<strong>ยกเลิกบัญชีผู้ใช้</strong>ของท่านออกจากระบบแล้ว
+    </p>
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:16px;margin:20px 0;">
+      <p style="margin:0 0 6px;font-size:12px;color:#991b1b;font-weight:700;">สถานะบัญชี</p>
+      <p style="margin:0;font-size:14px;color:#7f1d1d;line-height:1.6;">
+        บัญชีของท่านถูกลบออกจากระบบถาวร — ท่านจะไม่สามารถเข้าสู่ระบบได้อีก
+      </p>
+    </div>
+    <p style="margin:0 0 8px;font-size:14px;color:#4b5563;line-height:1.7;">
+      หากท่านเชื่อว่าเกิดความผิดพลาด หรือต้องการสอบถามเพิ่มเติม กรุณาติดต่อผู้ดูแลระบบโดยตรง
+    </p>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB CARE &amp; JOURNEY</p>
+  `
+  return { subject, html: wrap(subject, body) }
+}
+
+// ═════════════════════════════════════════════════════════
 // 9) User Delete Hard Deleted — admin ลบถาวร
 // ═════════════════════════════════════════════════════════
 export function deleteRequestHardDeletedEmail(firstName: string, patientName: string) {
