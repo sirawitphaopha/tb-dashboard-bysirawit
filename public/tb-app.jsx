@@ -1760,6 +1760,70 @@ function App() {
         .catch(() => {});
     }
   }, [currentUser]);
+
+  // Realtime: ฟังการเปลี่ยนแปลงของ tb_delete_requests (สำหรับ admin)
+  useEffect(() => {
+    if (currentUser?.role !== 'admin') return;
+    const channel = window._sb
+      .channel('delete-requests-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tb_delete_requests' }, async () => {
+        try {
+          const reqs = await window.loadPendingDeleteRequests();
+          setPendingDeleteRequests(reqs);
+          const cancelled = await window.loadCancelledDeleteCount();
+          setCancelledDeleteCount(cancelled);
+        } catch (e) { console.error('Realtime reload failed:', e); }
+      })
+      .subscribe();
+    return () => { window._sb.removeChannel(channel); };
+  }, [currentUser]);
+
+  // Realtime: ฟัง bell notification ของ user (สำหรับ user ทั่วไป)
+  useEffect(() => {
+    if (!currentUser?.id || currentUser.role === 'admin') return;
+    const channel = window._sb
+      .channel('user-notifications-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tb_notifications', filter: `user_id=eq.${currentUser.id}` }, async () => {
+        try {
+          const notifs = await window.loadUserNotifications();
+          setUserDbNotifs(notifs);
+        } catch (e) { console.error('Realtime user notifs failed:', e); }
+      })
+      .subscribe();
+    return () => { window._sb.removeChannel(channel); };
+  }, [currentUser]);
+
+  // Realtime: ฟังการเปลี่ยนแปลงของรายชื่อผู้ป่วย (ทุก user)
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    const channel = window._sb
+      .channel('patients-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tb_patients' }, async () => {
+        try {
+          const data = await loadPatients();
+          setPatients([...INITIAL_PATIENTS, ...data]);
+        } catch (e) { console.error('Realtime patients failed:', e); }
+      })
+      .subscribe();
+    return () => { window._sb.removeChannel(channel); };
+  }, [currentUser]);
+
+  // Realtime: ฟัง user ใหม่สมัคร / เปลี่ยนสถานะ (สำหรับ admin)
+  useEffect(() => {
+    if (currentUser?.role !== 'admin') return;
+    const channel = window._sb
+      .channel('profiles-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, async () => {
+        try {
+          const { count } = await window._sb.from('profiles')
+            .select('id', { count: 'exact', head: true })
+            .eq('status', 'pending');
+          setPendingUserCount(count || 0);
+        } catch (e) { console.error('Realtime profiles failed:', e); }
+      })
+      .subscribe();
+    return () => { window._sb.removeChannel(channel); };
+  }, [currentUser]);
   useEffect(() => {
     fetch('/api/profile/me')
       .then(r => r.ok ? r.json() : null)
@@ -2126,7 +2190,7 @@ function App() {
             <div>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:0,whiteSpace:'nowrap'}}>พัฒนาโดย เภสัชกร สิรวิชญ์ เผ่าผา</p>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:'1px 0 0 0',whiteSpace:'nowrap'}}>โรงพยาบาลปรางค์กู่</p>
-              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.7.7.1 ·<span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
+              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.7.7.2 ·<span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
             </div>
           ) : (
             <div style={{display:'flex',justifyContent:'center'}}>
