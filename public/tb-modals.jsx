@@ -2121,7 +2121,7 @@ function InfoBar({patient,onUpdate}){
   );
 }
 
-function ClinicalModal({patient,onClose,onUpdate,settings,onArchive,currentUser,onSoftDelete,onRequestDelete,pendingDeleteRequests}){
+function ClinicalModal({patient,onClose,onUpdate,settings,onArchive,currentUser,onSoftDelete,onRequestDelete,onCancelDeleteRequest,pendingDeleteRequests}){
   const [tab,setTab]=useState('timeline');
   const hasPendingRequest=(pendingDeleteRequests||[]).some(r=>r.patient_id===patient.id);
   const safeUpdate=hasPendingRequest?()=>{}:onUpdate;
@@ -2214,7 +2214,7 @@ function ClinicalModal({patient,onClose,onUpdate,settings,onArchive,currentUser,
           {tab==='dot'&&<div className="max-w-lg"><DOTCalendar patient={patient} onUpdate={safeUpdate} locked={hasPendingRequest}/></div>}
           {tab==='adr'&&<ADRTab patient={patient} onUpdate={safeUpdate} locked={hasPendingRequest}/>}
 
-          {tab==='summary'&&<PharmSummaryTab patient={patient} currentUser={currentUser} onSoftDelete={onSoftDelete} onRequestDelete={onRequestDelete} pendingDeleteRequests={pendingDeleteRequests}/>}
+          {tab==='summary'&&<PharmSummaryTab patient={patient} currentUser={currentUser} onSoftDelete={onSoftDelete} onRequestDelete={onRequestDelete} onCancelDeleteRequest={onCancelDeleteRequest} pendingDeleteRequests={pendingDeleteRequests}/>}
         </div>
     </div>
   );
@@ -2332,7 +2332,7 @@ function AddPatientPage({onBack,onAdd,settings,onDirtyChange}){
 
 
 // ─── PHARM SUMMARY TAB ───────────────────────────────────────────────────────
-function PharmSummaryTab({ patient, currentUser, onSoftDelete, onRequestDelete, pendingDeleteRequests }) {
+function PharmSummaryTab({ patient, currentUser, onSoftDelete, onRequestDelete, onCancelDeleteRequest, pendingDeleteRequests }) {
   const visits = patient.visits || [];
   const consults = visits.filter(v => v.consult?.type);
   const drps = visits.flatMap(v => (v.drp||[]).map(d => ({...d, date:v.date})));
@@ -2356,6 +2356,15 @@ function PharmSummaryTab({ patient, currentUser, onSoftDelete, onRequestDelete, 
   const [requestStep, setRequestStep] = useState(0);  // 0=ปิด, 1=ใส่เหตุผล, 2=ยืนยัน
   const [requestReason, setRequestReason] = useState('');
   const [requesting, setRequesting] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const handleCancelRequest = async () => {
+    if (!onCancelDeleteRequest) return;
+    setCancelling(true);
+    setShowCancelConfirm(false);
+    await onCancelDeleteRequest(patient);
+    setCancelling(false);
+  };
   const isValidReason = t => t.trim().length >= 3 && /[a-zA-Zก-๙]/.test(t.trim());
   const handleSubmitDeleteRequest = async () => {
     setRequesting(true);
@@ -2435,8 +2444,16 @@ function PharmSummaryTab({ patient, currentUser, onSoftDelete, onRequestDelete, 
               <i className="fa-solid fa-trash"></i>ลบผู้ป่วย
             </button>
           ) : hasPendingRequest ? (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 text-amber-700 rounded-lg text-xs font-semibold border border-amber-200">
-              <i className="fa-solid fa-clock"></i>รออนุมัติการลบจาก Admin — ระบบจะแจ้งผลทางอีเมล
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 text-amber-700 rounded-lg text-xs font-semibold border border-amber-200">
+                <i className="fa-solid fa-clock"></i>รออนุมัติการลบจาก Admin
+              </div>
+              {onCancelDeleteRequest && (
+                <button type="button" onClick={() => setShowCancelConfirm(true)} disabled={cancelling}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-white hover:bg-gray-50 text-gray-500 rounded-lg text-xs font-semibold border border-gray-200 transition-colors disabled:opacity-50">
+                  <i className="fa-solid fa-xmark"></i>{cancelling ? 'กำลังยกเลิก...' : 'ยกเลิกคำขอ'}
+                </button>
+              )}
             </div>
           ) : onRequestDelete ? (
             <button type="button" onClick={()=>{ setRequestStep(1); setRequestReason(''); }}
@@ -2444,6 +2461,37 @@ function PharmSummaryTab({ patient, currentUser, onSoftDelete, onRequestDelete, 
               <i className="fa-solid fa-paper-plane"></i>ขอลบผู้ป่วย
             </button>
           ) : null}
+        </div>
+      )}
+
+      {/* ── Modal ยืนยันยกเลิกคำขอลบ ── */}
+      {showCancelConfirm && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0">
+                <i className="fa-solid fa-rotate-left text-amber-600 text-xl"></i>
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-800">ยืนยันการยกเลิกคำขอ</h3>
+                <p className="text-xs text-gray-500 mt-0.5">คำขอลบ "{patient.name}"</p>
+              </div>
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-5 text-sm text-amber-800 leading-relaxed">
+              คำขอลบจะถูกยกเลิก ผู้ป่วยจะกลับมาอยู่ในระบบตามปกติ<br/>
+              <span className="text-xs text-amber-600 mt-1 block">ระบบจะส่งเมลแจ้ง Admin ให้ทราบด้วยอัตโนมัติ</span>
+            </div>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setShowCancelConfirm(false)}
+                className="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold">
+                ไม่ยกเลิก
+              </button>
+              <button type="button" onClick={handleCancelRequest} disabled={cancelling}
+                className="flex-1 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-xl text-sm font-bold">
+                {cancelling ? <><i className="fa-solid fa-spinner fa-spin mr-1"></i>กำลังดำเนินการ...</> : 'ยืนยันยกเลิกคำขอ'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -2571,10 +2619,23 @@ function TrashList({ currentUser, onRestore, onHardDelete, pendingDeleteRequests
   };
   useEffect(() => { refresh(); }, []);
 
-  // ── คำขอลบ ──
+  // ── คำขอลบ + cancelled ──
   const [reqActionId, setReqActionId] = useState(null);
   const [rejectTarget, setRejectTarget] = useState(null);
   const [rejectNote, setRejectNote] = useState('');
+  const [cancelledRequests, setCancelledRequests] = useState([]);
+
+  useEffect(() => {
+    (async () => {
+      const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const { data } = await window._sb.from('tb_delete_requests')
+        .select('*, patient:tb_patients(hn, name), requester:profiles!requested_by(first_name, last_name)')
+        .eq('status', 'cancelled')
+        .gte('requested_at', since)
+        .order('requested_at', { ascending: false });
+      setCancelledRequests(data || []);
+    })();
+  }, []);
 
   const handleApprove = async (req) => {
     const name = req.patient?.name || req.patient_id;
@@ -2668,6 +2729,38 @@ function TrashList({ currentUser, onRestore, onHardDelete, pendingDeleteRequests
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* ── Section คำขอที่ยกเลิกแล้ว (admin เท่านั้น) ── */}
+      {isAdmin && cancelledRequests.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 px-1">
+            <i className="fa-solid fa-ban text-gray-400 text-sm"></i>
+            <p className="text-xs font-bold text-gray-400">คำขอที่ถูกยกเลิกโดยผู้ใช้ ({cancelledRequests.length} รายการ)</p>
+          </div>
+          {cancelledRequests.map(req => {
+            const requesterName = req.requester
+              ? `${req.requester.first_name || ''} ${req.requester.last_name || ''}`.trim() || 'ผู้ใช้'
+              : 'ผู้ใช้'
+            return (
+              <div key={req.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex items-center gap-3 opacity-70">
+                <div className="w-8 h-8 rounded-lg bg-gray-200 flex items-center justify-center text-gray-400 flex-shrink-0">
+                  <i className="fa-solid fa-ban text-xs"></i>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-600">
+                    {req.patient?.name || 'ไม่ทราบชื่อ'}
+                    {req.patient?.hn && <span className="text-xs text-gray-400 font-mono ml-2">HN: {req.patient.hn}</span>}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-0.5">ขอโดย {requesterName} — เหตุผลเดิม: {req.reason}</p>
+                </div>
+                <span className="flex-shrink-0 text-xs font-bold px-2 py-1 rounded-full bg-gray-200 text-gray-500">
+                  ผู้ใช้ยกเลิกแล้ว
+                </span>
+              </div>
+            )
+          })}
         </div>
       )}
 
@@ -3272,4 +3365,100 @@ function Field({ label, value }) {
   );
 }
 
-Object.assign(window,{DoseCalculator,DOTCalendar,DrugInteractionPanel,RegimenHistoryTab,NotificationPanel,NotificationFullModal,AddPatientPage,ClinicalModal,InfoBar,LabTab,ADRTab,TimelineTab,DiagnosisTab,MedsTab,PharmSummaryTab,TrashList,AdminUsersTab,ConfirmModal,hasResistance,afbCombined,isAfbPositive,getSputumConversion,isDelayedConversion});
+// ─────────────────────────────────────────────────────
+// AuditLogTab — ประวัติการลบผู้ป่วยถาวร (admin เท่านั้น)
+// ─────────────────────────────────────────────────────
+function AuditLogTab() {
+  const [logs, setLogs] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await window._sb
+        .from('tb_patients_deleted_log')
+        .select('*, admin:deleted_by(first_name, last_name)')
+        .order('deleted_at', { ascending: false })
+      setLogs(data || [])
+      setLoading(false)
+    })()
+  }, [])
+
+  const fmtDate = (iso) => iso
+    ? new Date(iso).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : '—'
+
+  return (
+    <div className="p-4 max-w-5xl mx-auto">
+      <div className="flex items-center gap-3 mb-5">
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: '#fee2e2' }}>
+          <i className="fa-solid fa-clock-rotate-left" style={{ color: '#dc2626' }}></i>
+        </div>
+        <div>
+          <h2 className="font-bold text-gray-800">ประวัติการลบถาวร</h2>
+          <p className="text-xs text-gray-500">บันทึกอัตโนมัติทุกครั้งที่มีการลบผู้ป่วยออกจากระบบถาวร</p>
+        </div>
+        {!loading && (
+          <span className="ml-auto text-xs font-bold px-3 py-1 rounded-full" style={{ background: '#fee2e2', color: '#991b1b' }}>
+            {logs.length} รายการ
+          </span>
+        )}
+      </div>
+
+      {loading && (
+        <div className="text-center py-16 text-gray-400">
+          <i className="fa-solid fa-spinner fa-spin text-2xl mb-2"></i>
+          <p className="text-sm">กำลังโหลด...</p>
+        </div>
+      )}
+
+      {!loading && logs.length === 0 && (
+        <div className="text-center py-16 text-gray-400">
+          <i className="fa-solid fa-shield-check text-4xl mb-3" style={{ color: '#d1fae5' }}></i>
+          <p className="font-semibold text-gray-500">ยังไม่มีประวัติการลบถาวร</p>
+          <p className="text-xs mt-1">ระบบจะบันทึกที่นี่ทุกครั้งที่มีการลบผู้ป่วยออกจากระบบ</p>
+        </div>
+      )}
+
+      {!loading && logs.length > 0 && (
+        <div className="bg-white rounded-2xl shadow overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr style={{ background: '#134e4a', color: 'white' }}>
+                <th className="px-4 py-3 text-left font-semibold text-xs">HN</th>
+                <th className="px-4 py-3 text-left font-semibold text-xs">ชื่อผู้ป่วย</th>
+                <th className="px-4 py-3 text-left font-semibold text-xs">สูตรยา</th>
+                <th className="px-4 py-3 text-left font-semibold text-xs">ลบโดย</th>
+                <th className="px-4 py-3 text-left font-semibold text-xs">วันที่ลบ</th>
+                <th className="px-4 py-3 text-left font-semibold text-xs">เหตุผล</th>
+              </tr>
+            </thead>
+            <tbody>
+              {logs.map((log, i) => {
+                const adminName = log.admin
+                  ? `${log.admin.first_name || ''} ${log.admin.last_name || ''}`.trim() || 'Admin'
+                  : 'Admin'
+                return (
+                  <tr key={log.id} style={{ background: i % 2 === 0 ? '#fff' : '#f9fafb' }}>
+                    <td className="px-4 py-3 font-mono text-xs text-gray-500">{log.patient_hn || '—'}</td>
+                    <td className="px-4 py-3 font-medium text-gray-800">{log.patient_name || '—'}</td>
+                    <td className="px-4 py-3 text-xs text-gray-500">{log.regimen || '—'}</td>
+                    <td className="px-4 py-3 text-gray-600 text-xs">{adminName}</td>
+                    <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{fmtDate(log.deleted_at)}</td>
+                    <td className="px-4 py-3 text-gray-600 text-xs">{log.reason || '—'}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <p className="text-xs text-gray-400 mt-4 text-center">
+        <i className="fa-solid fa-circle-info mr-1"></i>
+        ประวัตินี้ลบไม่ได้ — บันทึกเพื่อใช้เป็นหลักฐานตรวจสอบเท่านั้น
+      </p>
+    </div>
+  )
+}
+
+Object.assign(window,{DoseCalculator,DOTCalendar,DrugInteractionPanel,RegimenHistoryTab,NotificationPanel,NotificationFullModal,AddPatientPage,ClinicalModal,InfoBar,LabTab,ADRTab,TimelineTab,DiagnosisTab,MedsTab,PharmSummaryTab,TrashList,AdminUsersTab,AuditLogTab,ConfirmModal,hasResistance,afbCombined,isAfbPositive,getSputumConversion,isDelayedConversion});

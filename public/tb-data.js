@@ -774,6 +774,25 @@ window.loadMyPendingDeleteRequests = async (userId) => {
   return data || [];
 };
 
+window.loadCancelledDeleteCount = async () => {
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const { count } = await window._sb.from('tb_delete_requests')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'cancelled')
+    .gte('requested_at', since);
+  return count || 0;
+};
+
+window.cancelDeleteRequest = async (patientId, userId) => {
+  const { error } = await window._sb.from('tb_delete_requests')
+    .update({ status: 'cancelled' })
+    .eq('patient_id', patientId)
+    .eq('requested_by', userId)
+    .eq('status', 'pending');
+  if (error) { console.error('Cancel delete request error:', error); return false; }
+  return true;
+};
+
 window.approveDeleteRequest = async (requestId, patientId, reviewedBy, reason) => {
   const ok = await window.softDeletePatient(patientId, reviewedBy, reason);
   if (!ok) return false;

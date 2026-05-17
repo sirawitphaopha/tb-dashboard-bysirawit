@@ -365,6 +365,33 @@ export function userAccountDeletedEmail(firstName: string) {
 // ═════════════════════════════════════════════════════════
 // 9) User Delete Hard Deleted — admin ลบถาวร
 // ═════════════════════════════════════════════════════════
+export function adminDeleteRequestCancelledEmail(
+  patientName: string, patientHn: string, requesterName: string
+) {
+  const subject = `[ยกเลิกแล้ว] คำขอลบผู้ป่วย: ${patientName} (HN: ${patientHn})`
+  const body = `
+    <h2 style="margin:0 0 16px;color:#92400e;font-size:18px;">คำขอลบถูกยกเลิกโดยผู้ใช้แล้ว</h2>
+    <p style="margin:0 0 20px;font-size:14px;color:#4b5563;line-height:1.7;">
+      ผู้ใช้ได้ยกเลิกคำขอลบข้อมูลผู้ป่วยด้วยตัวเองแล้ว ไม่จำเป็นต้องดำเนินการใดๆ
+    </p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:16px;margin-bottom:20px;">
+      <tr><td style="padding:6px 0;font-size:12px;color:#6b7280;width:130px;">ชื่อผู้ป่วย</td>
+          <td style="padding:6px 0;font-size:14px;font-weight:700;color:#1f2937;">${patientName}</td></tr>
+      <tr><td style="padding:6px 0;font-size:12px;color:#6b7280;">HN</td>
+          <td style="padding:6px 0;font-size:14px;font-weight:700;color:#1f2937;font-family:monospace;">${patientHn || '—'}</td></tr>
+      <tr><td style="padding:6px 0;font-size:12px;color:#6b7280;">ยกเลิกโดย</td>
+          <td style="padding:6px 0;font-size:14px;font-weight:600;color:#1f2937;">${requesterName}</td></tr>
+    </table>
+    <div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:10px;padding:14px;margin-bottom:20px;">
+      <p style="margin:0;font-size:13px;color:#134e4a;">
+        ผู้ป่วยยังคงอยู่ในระบบตามปกติ ไม่มีการเปลี่ยนแปลงข้อมูลใดๆ
+      </p>
+    </div>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB CARE &amp; JOURNEY</p>
+  `
+  return { subject, html: wrap(subject, body) }
+}
+
 export function deleteRequestHardDeletedEmail(firstName: string, patientName: string) {
   const subject = `✅ ข้อมูลผู้ป่วยถูกลบถาวรแล้ว: ${patientName}`
   const body = `

@@ -1733,6 +1733,7 @@ function App() {
   // จำนวน user ที่รออนุมัติ (สำหรับ badge ใน sidebar)
   const [pendingUserCount, setPendingUserCount] = useState(0);
   const [pendingDeleteRequests, setPendingDeleteRequests] = useState([]);
+  const [cancelledDeleteCount, setCancelledDeleteCount] = useState(0);
   useEffect(() => {
     if (!currentUser?.id) return;
     if (currentUser.role === 'admin') {
@@ -1744,6 +1745,8 @@ function App() {
           setPendingUserCount(count || 0);
           const reqs = await window.loadPendingDeleteRequests();
           setPendingDeleteRequests(reqs);
+          const cancelled = await window.loadCancelledDeleteCount();
+          setCancelledDeleteCount(cancelled);
         } catch (e) { console.error('Load pending count failed:', e); }
       })();
     } else {
@@ -1810,6 +1813,15 @@ function App() {
       msg: `มี ${pendingDeleteRequests.length} คำขอลบผู้ป่วยรออนุมัติ — คลิกเพื่อจัดการ`,
       time: 'ใหม่',
     }] : []),
+    ...(currentUser?.role === 'admin' && cancelledDeleteCount > 0 ? [{
+      id: 'admin-cancelled-deletes',
+      type: 'info',
+      patient: null,
+      patientId: null,
+      navTarget: 'trash',
+      msg: `มี ${cancelledDeleteCount} คำขอลบที่ผู้ใช้ยกเลิกเองแล้ว — คลิกเพื่อดู`,
+      time: 'ล่าสุด',
+    }] : []),
   ];
   const alerts = [...adminAlerts, ...generateAlerts(patients)];
   const unreadCount = alerts.filter(a => !readAlerts.has(a.id)).length;
@@ -1849,6 +1861,22 @@ function App() {
       window.loadPendingDeleteRequests().then(reqs => setPendingDeleteRequests(reqs));
     }
     return ok;
+  };
+
+  // ยกเลิกคำขอลบ (user เจ้าของคำขอเท่านั้น) — ใช้ API route เพื่อ bypass RLS + ส่งเมล Admin
+  const cancelDeletePatient = async (patient) => {
+    if (!currentUser?.id) return false;
+    const res = await fetch('/api/patient/cancel-delete-request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ patientId: patient.id, patientName: patient.name, patientHn: patient.hn }),
+    });
+    if (!res.ok) return false;
+    const reqs = await window.loadPendingDeleteRequests();
+    setPendingDeleteRequests(reqs);
+    const cancelled = await window.loadCancelledDeleteCount();
+    setCancelledDeleteCount(cancelled);
+    return true;
   };
 
   // อนุมัติคำขอลบ (admin เท่านั้น)
@@ -1959,16 +1987,17 @@ function App() {
     { id:'knowledge',     icon:'fa-book-open-reader', label:'คลังความรู้วัณโรค' },
     { id:'settings',      icon:'fa-gear',             label:'ตั้งค่าระบบ', divider:true },
     ...(currentUser?.role === 'admin' ? [{ id:'admin-users', icon:'fa-user-shield', label:'จัดการผู้ใช้', badge: pendingUserCount }] : []),
-    { id:'trash', icon:'fa-trash', label:'ถังขยะ', badge: currentUser?.role==='admin' && pendingDeleteRequests.length > 0 ? pendingDeleteRequests.length : undefined },
+    { id:'trash', icon:'fa-trash', label:'ถังขยะ', badge: currentUser?.role==='admin' && pendingDeleteRequests.length > 0 ? pendingDeleteRequests.length : undefined, greenBadge: currentUser?.role==='admin' && pendingDeleteRequests.length === 0 && cancelledDeleteCount > 0 },
+    ...(currentUser?.role === 'admin' ? [{ id:'audit-log', icon:'fa-clock-rotate-left', label:'ประวัติลบถาวร' }] : []),
   ];
-  const titles = { dashboard:'Dashboard', 'patient-list':'ทะเบียนผู้ป่วย Active', 'archive-list':'ทะเบียนจบการรักษา', 'all-patients':'ทะเบียนผู้ป่วยทั้งหมด', 'add-patient':'ลงทะเบียนผู้ป่วยใหม่', 'weekly-prep':'เตรียมเคสรายสัปดาห์', reports:'รายงาน และ สถิติ', knowledge:'คลังความรู้วัณโรค', settings:'ตั้งค่าระบบ', 'admin-users':'จัดการผู้ใช้', trash:'ถังขยะ' };
-  const pageIcons = { dashboard:'fa-chart-pie', 'patient-list':'fa-users', 'archive-list':'fa-box-archive', 'all-patients':'fa-users', 'add-patient':'fa-user-plus', 'weekly-prep':'fa-calendar-check', reports:'fa-file-contract', knowledge:'fa-book-open-reader', settings:'fa-gear', 'admin-users':'fa-user-shield', trash:'fa-trash' };
+  const titles = { dashboard:'Dashboard', 'patient-list':'ทะเบียนผู้ป่วย Active', 'archive-list':'ทะเบียนจบการรักษา', 'all-patients':'ทะเบียนผู้ป่วยทั้งหมด', 'add-patient':'ลงทะเบียนผู้ป่วยใหม่', 'weekly-prep':'เตรียมเคสรายสัปดาห์', reports:'รายงาน และ สถิติ', knowledge:'คลังความรู้วัณโรค', settings:'ตั้งค่าระบบ', 'admin-users':'จัดการผู้ใช้', trash:'ถังขยะ', 'audit-log':'ประวัติการลบถาวร' };
+  const pageIcons = { dashboard:'fa-chart-pie', 'patient-list':'fa-users', 'archive-list':'fa-box-archive', 'all-patients':'fa-users', 'add-patient':'fa-user-plus', 'weekly-prep':'fa-calendar-check', reports:'fa-file-contract', knowledge:'fa-book-open-reader', settings:'fa-gear', 'admin-users':'fa-user-shield', trash:'fa-trash', 'audit-log':'fa-clock-rotate-left' };
 
   // Clinical view กินทั้งจอ — ซ่อน sidebar + header ทั้งหมด
   if (clinical) {
     return (
       <div className="flex h-screen bg-white overflow-hidden">
-        <ClinicalModal patient={clinical} onClose={() => setClinical(null)} onUpdate={updatePatient} settings={settings} onArchive={archivePatient} currentUser={currentUser} onSoftDelete={softDeletePatient} onRequestDelete={requestDeletePatient} pendingDeleteRequests={pendingDeleteRequests}/>
+        <ClinicalModal patient={clinical} onClose={() => setClinical(null)} onUpdate={updatePatient} settings={settings} onArchive={archivePatient} currentUser={currentUser} onSoftDelete={softDeletePatient} onRequestDelete={requestDeletePatient} onCancelDeleteRequest={cancelDeletePatient} pendingDeleteRequests={pendingDeleteRequests}/>
       </div>
     );
   }
@@ -1994,6 +2023,7 @@ function App() {
         <nav style={{flex:1,overflowY:'auto',padding:'10px 8px 10px 2px'}}>
           {navItems.map(n => {
             const hasBadge = n.badge && n.badge > 0;
+            const hasGreenBadge = !hasBadge && n.greenBadge;
             return (
             <div key={n.id}>
               {n.divider && <div style={{margin:'6px 0',borderTop:'1px solid #f1f5f9'}}></div>}
@@ -2002,7 +2032,6 @@ function App() {
                   if(formDirty && nav==='add-patient' && n.id!=='add-patient'){
                     showDirtyToast(); return;
                   }
-                  // External link (เช่น /admin/users) → ออกจาก iframe ไปหน้าเต็ม
                   if (n.external) { window.top.location.href = n.external; return; }
                   setNav(n.id);setLogoClicks(0);if(n.id!=='add-patient')setFormDirty(false);
                 }}
@@ -2011,14 +2040,13 @@ function App() {
                 onMouseEnter={e=>{if(nav!==n.id&&!hasBadge){e.currentTarget.style.background='#f0fdfa';e.currentTarget.style.color='#0f766e';}}}
                 onMouseLeave={e=>{if(nav!==n.id&&!hasBadge){e.currentTarget.style.background='transparent';e.currentTarget.style.color='#374151';}}}
               >
-                {/* icon คงที่ 36px ไม่ขยับ */}
                 <span style={{width:'36px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
                   <i className={`fa-solid ${n.icon}`} style={{fontSize:'17px',color:hasBadge?'#dc2626':'#0f766e'}}></i>
                 </span>
-                {/* label fade */}
                 <span style={{overflow:'hidden',whiteSpace:'nowrap',maxWidth:sidebarOpen?'160px':'0px',opacity:sidebarOpen?1:0,transition:'max-width 0.2s ease,opacity 0.15s ease',display:'flex',alignItems:'center',gap:'6px'}}>
                   {n.label}
                   {hasBadge && sidebarOpen && <span className="tb-pulse-badge" style={{background:'#ef4444',color:'#fff',fontSize:'10px',fontWeight:700,padding:'1px 7px',borderRadius:'10px'}}>{n.badge}</span>}
+                  {hasGreenBadge && sidebarOpen && <span style={{background:'#16a34a',color:'#fff',fontSize:'10px',fontWeight:700,padding:'1px 7px',borderRadius:'10px'}}>{cancelledDeleteCount}</span>}
                 </span>
               </button>
             </div>
@@ -2062,7 +2090,7 @@ function App() {
             <div>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:0,whiteSpace:'nowrap'}}>พัฒนาโดย เภสัชกร สิรวิชญ์ เผ่าผา</p>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:'1px 0 0 0',whiteSpace:'nowrap'}}>โรงพยาบาลปรางค์กู่</p>
-              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.7.6.1 ·<span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
+              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.7.6.2 ·<span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
             </div>
           ) : (
             <div style={{display:'flex',justifyContent:'center'}}>
@@ -2216,6 +2244,7 @@ function App() {
           {!dbLoading && nav==='settings'      && <AdminSettings settings={settings} setSettings={setSettings} setNav={setNav}/>}
           {!dbLoading && nav==='admin-users'   && <AdminUsersTab currentUser={currentUser} onPendingChange={setPendingUserCount}/>}
           {!dbLoading && nav==='trash'         && <TrashList currentUser={currentUser} onRestore={restorePatient} onHardDelete={hardDeletePatient} pendingDeleteRequests={pendingDeleteRequests} onApproveDelete={approveDeleteRequest} onRejectDelete={rejectDeleteRequest}/>}
+          {!dbLoading && nav==='audit-log'     && <AuditLogTab/>}
         </div>
       </main>
 
