@@ -14,7 +14,8 @@ export function getResend(): Resend {
 export const EMAIL_FROM = 'TB CARE & JOURNEY <noreply@tbjourney.care>'
 
 // รองรับหลาย email (คั่นด้วย comma ใน .env.local)
-export const ADMIN_EMAILS: string[] = (process.env.ADMIN_EMAIL || '')
+// fallback เป็น email แอดมินตายตัว กันกรณี env var หายหลัง deploy
+export const ADMIN_EMAILS: string[] = (process.env.ADMIN_EMAIL || 'siravitphoapha9928@gmail.com,siravitphoapha9928@hotmail.com')
   .split(',')
   .map(e => e.trim())
   .filter(Boolean)
