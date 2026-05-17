@@ -855,7 +855,7 @@ const TL_ICONS = { start:'fa-flag', regimen:'fa-pills', lab:'fa-flask', sputum:'
 const TL_COLORS = { start:'bg-teal-500', regimen:'bg-purple-500', lab:'bg-blue-500', sputum:'bg-cyan-500', visit:'bg-slate-500', 'alert-high':'bg-red-500', 'alert-warn':'bg-amber-500', 'alert-good':'bg-green-500', 'alert-miss':'bg-orange-500' };
 const TL_BORDER = { start:'border-teal-200 bg-teal-50', regimen:'border-purple-200 bg-purple-50', lab:'border-blue-200 bg-blue-50', sputum:'border-cyan-200 bg-cyan-50', visit:'border-gray-200 bg-white', 'alert-high':'border-red-200 bg-red-50', 'alert-warn':'border-amber-200 bg-amber-50', 'alert-good':'border-green-200 bg-green-50', 'alert-miss':'border-orange-200 bg-orange-50' };
 
-function TimelineTab({ patient, onUpdate, settings }) {
+function TimelineTab({ patient, onUpdate, settings, locked }) {
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState(null);
   const [filter, setFilter] = useState('all');
@@ -964,8 +964,9 @@ function TimelineTab({ patient, onUpdate, settings }) {
       {/* Header */}
       <div className="flex justify-between items-center">
         <h3 className="font-bold text-gray-800 text-sm"><i className="fa-solid fa-timeline mr-2 text-teal-600"></i>Timeline การรักษา</h3>
-        <button type="button" onClick={() => { setEditId(null); setShowForm(!showForm); }}
-          className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-colors">
+        <button type="button" onClick={() => { if(!locked){setEditId(null); setShowForm(!showForm);} }}
+          disabled={locked}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors ${locked?'bg-gray-200 text-gray-400 cursor-not-allowed':'bg-teal-600 hover:bg-teal-700 text-white'}`}>
           <i className="fa-solid fa-plus mr-1"></i>บันทึก Visit
         </button>
       </div>
@@ -982,7 +983,7 @@ function TimelineTab({ patient, onUpdate, settings }) {
 
       {/* Confirm delete modal */}
       {confirmDelete && <ConfirmModal message="ต้องการลบ Visit นี้ใช่ไหม?" onConfirm={()=>deleteVisit(confirmDelete)} onCancel={()=>setConfirmDelete(null)}/>}
-      <div ref={formRef}>{showForm && <VisitForm key={editId||'new'} initial={editInitialForm} onSave={saveVisit} onCancel={() => { setShowForm(false); setEditId(null); }} patient={{...patient,_labGroups:(settings?.labGroups)||LAB_GROUPS}}/>}</div>
+      <div ref={formRef}>{showForm && !locked && <VisitForm key={editId||'new'} initial={editInitialForm} onSave={saveVisit} onCancel={() => { setShowForm(false); setEditId(null); }} patient={{...patient,_labGroups:(settings?.labGroups)||LAB_GROUPS}}/>}</div>
 
       {/* Timeline */}
       {filteredGroups.length === 0 ? (
@@ -2121,6 +2122,8 @@ function InfoBar({patient,onUpdate}){
 
 function ClinicalModal({patient,onClose,onUpdate,settings,onArchive,currentUser,onSoftDelete,onRequestDelete,pendingDeleteRequests}){
   const [tab,setTab]=useState('timeline');
+  const hasPendingRequest=(pendingDeleteRequests||[]).some(r=>r.patient_id===patient.id);
+  const safeUpdate=hasPendingRequest?()=>{}:onUpdate;
   const tabs=[
     {id:'timeline',icon:'fa-timeline',label:'Timeline'},
     {id:'meds',icon:'fa-pills',label:'ยา & Interaction'},
@@ -2200,15 +2203,16 @@ function ClinicalModal({patient,onClose,onUpdate,settings,onArchive,currentUser,
         <div className="flex border-b border-gray-200 bg-white flex-shrink-0 overflow-x-auto">
           {tabs.map(t=><button key={t.id} type="button" onClick={()=>setTab(t.id)} className={'flex items-center gap-2 px-5 py-3 text-xs font-bold border-b-2 transition-all whitespace-nowrap '+(tab===t.id?'border-teal-600 text-teal-700 bg-teal-50/50':'border-transparent text-gray-500 hover:text-teal-600 hover:bg-gray-50')}><i className={'fa-solid '+t.icon}></i>{t.label}</button>)}
         </div>
+        {hasPendingRequest&&<div style={{background:'#fef3c7',borderBottom:'1px solid #fcd34d',padding:'8px 20px',display:'flex',alignItems:'center',gap:'8px',flexShrink:0}}><i className="fa-solid fa-clock" style={{color:'#d97706',fontSize:'12px'}}></i><span style={{fontSize:'12px',color:'#92400e',fontWeight:600}}>ผู้ป่วยรายนี้มีคำขอลบรออนุมัติ — ไม่สามารถบันทึกข้อมูลเพิ่มเติมได้จนกว่า Admin จะตัดสินใจ</span></div>}
         <div className="flex-1 overflow-y-auto p-6 bg-slate-50/30">
-          {tab==='timeline'&&<TimelineTab patient={patient} onUpdate={onUpdate} settings={settings}/>}
-          {tab==='meds'&&<MedsTab patient={patient} onUpdate={onUpdate} settings={settings}/>}
-          {tab==='regimen-history'&&<RegimenHistoryTab patient={patient} onUpdate={onUpdate} settings={settings}/>}
-          {tab==='labs'&&<LabTab patient={patient} onUpdate={onUpdate}/>}
-          {tab==='sputum'&&<DiagnosisTab patient={patient} onUpdate={onUpdate}/>}
-          {tab==='dot'&&<div className="max-w-lg"><DOTCalendar patient={patient} onUpdate={onUpdate}/></div>}
-          {tab==='adr'&&<ADRTab patient={patient} onUpdate={onUpdate}/>}
-          
+          {tab==='timeline'&&<TimelineTab patient={patient} onUpdate={safeUpdate} settings={settings} locked={hasPendingRequest}/>}
+          {tab==='meds'&&<MedsTab patient={patient} onUpdate={safeUpdate} settings={settings}/>}
+          {tab==='regimen-history'&&<RegimenHistoryTab patient={patient} onUpdate={safeUpdate} settings={settings}/>}
+          {tab==='labs'&&<LabTab patient={patient} onUpdate={safeUpdate}/>}
+          {tab==='sputum'&&<DiagnosisTab patient={patient} onUpdate={safeUpdate}/>}
+          {tab==='dot'&&<div className="max-w-lg"><DOTCalendar patient={patient} onUpdate={safeUpdate}/></div>}
+          {tab==='adr'&&<ADRTab patient={patient} onUpdate={safeUpdate}/>}
+
           {tab==='summary'&&<PharmSummaryTab patient={patient} currentUser={currentUser} onSoftDelete={onSoftDelete} onRequestDelete={onRequestDelete} pendingDeleteRequests={pendingDeleteRequests}/>}
         </div>
     </div>
