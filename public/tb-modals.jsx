@@ -9,10 +9,12 @@ const { ADR_LIST, migrateAdr, calcDoses, calcCrCl, crClStage,
         CONSULT_TYPES, DRP_TYPES, LAB_GROUPS, getLabStatus, LAB_STATUS_STYLE } = window;
 const INP = `w-full p-2.5 border rounded-xl bg-gray-50 outline-none focus:ring-2 focus:ring-teal-400 text-sm`;
 const HOSP_STRENGTHS = {
-  R:[{label:'R300',value:300},{label:'R450',value:450}],
-  H:[{label:'I100',value:100},{label:'Iso Syrup 50mg/ml',value:'syrup'}],
-  Z:[{label:'Z500',value:500}],
-  E:[{label:'E400',value:400},{label:'E500',value:500}],
+  R:  [{label:'R300',value:300},{label:'R450',value:450}],
+  H:  [{label:'I100',value:100},{label:'Iso Syrup 50mg/ml',value:'syrup'}],
+  Z:  [{label:'Z500',value:500}],
+  E:  [{label:'E400',value:400},{label:'E500',value:500}],
+  Lfx:[{label:'Lfx 250',value:250},{label:'Lfx 500',value:500},{label:'Lfx 750',value:750}],
+  Am: [{label:'Am 250',value:250},{label:'Am 500',value:500}],
 };
 
 function FormSection({icon,title,children}){return(<div><div className="flex items-center gap-2 mb-4"><div className="w-7 h-7 bg-teal-100 text-teal-700 rounded-lg flex items-center justify-center text-xs"><i className={`fa-solid ${icon}`}></i></div><h3 className="font-bold text-gray-800 text-sm">{title}</h3></div>{children}</div>);}
@@ -20,13 +22,12 @@ function FieldError({msg}){return msg?<p className="text-red-500 text-xs mt-1">{
 function RangeStatus({status,mgkg}){const c={ok:{bg:'bg-green-100',t:'text-green-700',l:'เหมาะสม'},low:{bg:'bg-amber-100',t:'text-amber-700',l:'ต่ำ'},high:{bg:'bg-red-100',t:'text-red-700',l:'สูง'}}[status]||{bg:'bg-gray-100',t:'text-gray-500',l:'-'};return<div className="text-right flex-shrink-0"><p className={'font-bold text-sm '+c.t}>{mgkg}</p><span className={'text-xs px-2 py-0.5 rounded-full font-bold '+c.bg+' '+c.t}>{c.l}</span></div>;}
 function Badge({label,color='bg-gray-100 text-gray-600'}){return<span className={'px-2.5 py-0.5 rounded-full text-xs font-bold '+color}>{label}</span>;}
 
-function DoseCalculator({weight,regimen,manualMode,manualDoses,onToggle,onManualChange}){
-  const [sel,setSel]=useState({R:300,H:100,Z:500,E:400});
+function DoseCalculator({weight,regimen,manualMode,manualDoses,onToggle,onManualChange,strengths,onStrChange}){
   const w=parseFloat(weight);
   const base=calcDoses(weight,regimen,null);
   const autoTabs=(key,str)=>{if(!w||str==='syrup')return 1;const d=DRUG_RANGES[key];return Math.max(1,Math.round(Math.min(w*(d.min+d.max)/2,d.absMax)/str));};
   const getDose=d=>{
-    const str=sel[d.key]??d.strength;
+    const str=(strengths&&strengths[d.key]!=null)?strengths[d.key]:d.strength;
     if(str==='syrup'){const ml=w>0?+(w*5/50).toFixed(1):0;return{...d,strength:str,isSyrup:true,ml,mlMonth:+(ml*30).toFixed(0),bottles:Math.ceil(ml*30/30),mgkg:5,status:'ok'};}
     const tabs=manualMode?(manualDoses[d.key]??autoTabs(d.key,str)):autoTabs(d.key,str);
     const dose=tabs*str;const mgkg=w>0?+(dose/w).toFixed(1):0;
@@ -52,7 +53,7 @@ function DoseCalculator({weight,regimen,manualMode,manualDoses,onToggle,onManual
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1 flex-wrap mb-0.5">
                       <span className="font-black text-sm text-teal-700 w-5">{d.key}</span>
-                      {opts.map(o=><button key={String(o.value)} type="button" onClick={()=>setSel(s=>({...s,[d.key]:o.value}))} className={'text-xs px-2 py-0.5 rounded-lg font-bold border transition-all '+(sel[d.key]===o.value?'bg-teal-600 border-teal-600 text-white':'border-gray-200 text-gray-500 hover:border-teal-300')}>{o.label}</button>)}
+                      {opts.map(o=><button key={String(o.value)} type="button" onClick={()=>onStrChange&&onStrChange(d.key,o.value)} className={'text-xs px-2 py-0.5 rounded-lg font-bold border transition-all '+(((strengths&&strengths[d.key]!=null)?strengths[d.key]:d.strength)===o.value?'bg-teal-600 border-teal-600 text-white':'border-gray-200 text-gray-500 hover:border-teal-300')}>{o.label}</button>)}
                     </div>
                     <p className="text-xs text-gray-400">{d.min}–{d.max} mg/kg · max {d.absMax}mg</p>
                   </div>
@@ -1852,6 +1853,9 @@ function DiagnosisTab({patient, onUpdate}) {
 function MedsTab({patient,onUpdate,settings}){
   const [editDoses,setEditDoses]=useState(false);
   const [customDoses,setCustomDoses]=useState(patient.customDoses||{});
+  const [customStrengths,setCustomStrengths]=useState(patient.drugStrengths||{});
+  const [extraTbDrugs,setExtraTbDrugs]=useState(patient.extraTbDrugs||[]);
+  const [newExtraKey,setNewExtraKey]=useState('Lfx');
   const [newDrugName,setNewDrugName]=useState('');
   const [newDrugDose,setNewDrugDose]=useState('');
   const [newDrugRoute,setNewDrugRoute]=useState('');
@@ -1859,14 +1863,18 @@ function MedsTab({patient,onUpdate,settings}){
 
   // Dose history from visits
   const doseHistory=(patient.visits||[]).filter(v=>v.drugDoses).map(v=>({date:v.date,doses:v.drugDoses})).sort((a,b)=>b.date.localeCompare(a.date));
-  // Latest dose from visits or calcDoses
-  const latestDoseStr=doseHistory.length>0?doseHistory[0].doses:'';
-  const doses=calcDoses(patient.weight,patient.regimen,editDoses?customDoses:patient.customDoses);
+  const doses=calcDoses(patient.weight,patient.regimen,editDoses?customDoses:patient.customDoses,editDoses?customStrengths:patient.drugStrengths);
 
   const saveDoses=()=>{
-    onUpdate({...patient,customDoses});setEditDoses(false);
+    onUpdate({...patient,customDoses,drugStrengths:customStrengths,extraTbDrugs});setEditDoses(false);
   };
-  const resetDoses=()=>{setCustomDoses({});onUpdate({...patient,customDoses:null});setEditDoses(false);};
+  const resetDoses=()=>{setCustomDoses({});setCustomStrengths({});setExtraTbDrugs([]);onUpdate({...patient,customDoses:null,drugStrengths:null,extraTbDrugs:[]});setEditDoses(false);};
+  const addExtraDrug=()=>{
+    const d=DRUG_RANGES[newExtraKey];if(!d)return;
+    const str=(HOSP_STRENGTHS[newExtraKey]||[])[0]?.value||d.strength;
+    setExtraTbDrugs(prev=>[...prev,{key:newExtraKey,tabs:1,strength:str}]);
+  };
+  const removeExtraDrug=i=>setExtraTbDrugs(prev=>prev.filter((_,idx)=>idx!==i));
 
   const addDrug=()=>{
     if(!newDrugName.trim())return;
@@ -1948,25 +1956,80 @@ function MedsTab({patient,onUpdate,settings}){
           <tbody className="divide-y divide-gray-100">{doses.map(d=>{
             const mgkgCls='p-3 font-bold '+(d.status==='ok'?'text-green-700':d.status==='high'?'text-red-600':'text-amber-600');
             const badge=d.status==='ok'?<Badge label="เหมาะสม" color="bg-green-100 text-green-700"/>:d.status==='high'?<Badge label="สูง" color="bg-red-100 text-red-700"/>:<Badge label="ต่ำ" color="bg-amber-100 text-amber-700"/>;
+            const opts=(HOSP_STRENGTHS[d.key]||[]);
             return<tr key={d.key}>
-              <td className="p-3 pl-4 font-bold">{d.name} <span className="text-gray-400 font-normal text-xs">({d.strength}mg)</span></td>
+              <td className="p-3 pl-4 font-bold">
+                {d.name}
+                {editDoses&&opts.length>1?(
+                  <div className="flex gap-1 mt-1 flex-wrap">
+                    {opts.map(o=><button key={String(o.value)} type="button" onClick={()=>setCustomStrengths(s=>({...s,[d.key]:o.value}))} className={'text-xs px-2 py-0.5 rounded-lg border font-bold transition-all '+((customStrengths[d.key]??d.strength)===o.value?'bg-teal-600 border-teal-600 text-white':'border-gray-200 text-gray-400 hover:border-teal-300')}>{o.label}</button>)}
+                  </div>
+                ):<span className="text-gray-400 font-normal text-xs ml-1">({d.strength}mg)</span>}
+              </td>
               <td className={mgkgCls}>{d.mgkg}</td>
               <td className="p-3">
                 {editDoses?(
                   <div className="flex items-center gap-1">
-                    <input type="number" min={1} max={8} value={customDoses[d.key]??d.tabs}
-                      onChange={e=>setCustomDoses(c=>({...c,[d.key]:Math.max(1,parseInt(e.target.value)||1)}))}
-                      className="w-12 p-1 border-2 border-teal-300 rounded-lg text-center font-bold text-sm outline-none"/>
+                    <input type="number" min={0.5} max={12} step={0.5} value={customDoses[d.key]??d.tabs}
+                      onChange={e=>setCustomDoses(c=>({...c,[d.key]:Math.max(0.5,parseFloat(e.target.value)||0.5)}))}
+                      className="w-14 p-1 border-2 border-teal-300 rounded-lg text-center font-bold text-sm outline-none"/>
                     <span className="text-xs text-gray-400">tab</span>
                   </div>
                 ):<span className="font-semibold">{d.tabs} tab OD ac</span>}
               </td>
-              <td className="p-3 font-mono font-bold text-teal-700">{d.tabs*30} tab</td>
+              <td className="p-3 font-mono font-bold text-teal-700">{(d.tabs*30).toFixed(d.tabs%1?1:0)} tab</td>
               <td className="p-3">{badge}</td>
             </tr>;
           })}</tbody></table>
         </div>
         {patient.status==='critical'&&<div className="mt-2 bg-red-50 border-l-4 border-red-500 p-3 rounded-r-2xl"><p className="font-bold text-red-700 text-sm"><i className="fa-solid fa-hand mr-2"></i>HOLD ยาทุกตัว — ALT &gt; 3× ULN</p></div>}
+
+        {/* Extra TB drugs (Lfx, Am etc.) */}
+        {(extraTbDrugs.length>0||editDoses)&&(
+          <div className="mt-3">
+            {extraTbDrugs.length>0&&(
+              <table className="w-full text-sm mt-2 border border-dashed border-teal-200 rounded-xl overflow-hidden">
+                <thead className="bg-teal-50 text-xs text-teal-600 uppercase"><tr><th className="p-2 pl-3 text-left">ยาเสริม</th><th className="p-2 text-left">ความแรง</th><th className="p-2 text-left">จำนวน</th><th className="p-2 text-left">/เดือน</th><th className="p-2"></th></tr></thead>
+                <tbody className="divide-y divide-teal-100">{extraTbDrugs.map((ex,i)=>{
+                  const d=DRUG_RANGES[ex.key]||{};
+                  const w=parseFloat(patient.weight);
+                  const mgkg=w>0?+((ex.tabs*ex.strength)/w).toFixed(1):'-';
+                  const unit=d.unit||'tab';
+                  return<tr key={i}>
+                    <td className="p-2 pl-3 font-bold text-teal-700">{d.name||ex.key}</td>
+                    <td className="p-2">
+                      {editDoses?(
+                        <div className="flex gap-1 flex-wrap">
+                          {(HOSP_STRENGTHS[ex.key]||[]).map(o=><button key={String(o.value)} type="button" onClick={()=>setExtraTbDrugs(prev=>prev.map((e,j)=>j===i?{...e,strength:o.value}:e))} className={'text-xs px-2 py-0.5 rounded border font-bold '+(ex.strength===o.value?'bg-teal-600 text-white border-teal-600':'border-gray-200 text-gray-400')}>{o.label}</button>)}
+                        </div>
+                      ):<span className="text-xs text-gray-500">{ex.strength}mg</span>}
+                    </td>
+                    <td className="p-2">
+                      {editDoses?(
+                        <div className="flex items-center gap-1">
+                          <input type="number" min={0.5} max={12} step={0.5} value={ex.tabs}
+                            onChange={e=>setExtraTbDrugs(prev=>prev.map((x,j)=>j===i?{...x,tabs:Math.max(0.5,parseFloat(e.target.value)||0.5)}:x))}
+                            className="w-14 p-1 border-2 border-teal-300 rounded-lg text-center font-bold text-sm outline-none"/>
+                          <span className="text-xs text-gray-400">{unit}</span>
+                        </div>
+                      ):<span className="font-semibold text-sm">{ex.tabs} {unit} · {mgkg} mg/kg</span>}
+                    </td>
+                    <td className="p-2 text-xs text-teal-700 font-mono font-bold">{(ex.tabs*30).toFixed(ex.tabs%1?1:0)} {unit}</td>
+                    <td className="p-2 text-right">{editDoses&&<button type="button" onClick={()=>removeExtraDrug(i)} className="text-red-400 hover:text-red-600"><i className="fa-solid fa-xmark text-xs"></i></button>}</td>
+                  </tr>;
+                })}</tbody>
+              </table>
+            )}
+            {editDoses&&(
+              <div className="flex items-center gap-2 mt-2">
+                <select value={newExtraKey} onChange={e=>setNewExtraKey(e.target.value)} className="p-2 border border-gray-200 rounded-lg text-sm bg-white outline-none">
+                  {['Lfx','Am'].map(k=><option key={k} value={k}>{DRUG_RANGES[k]?.name||k}</option>)}
+                </select>
+                <button type="button" onClick={addExtraDrug} className="px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm font-bold"><i className="fa-solid fa-plus mr-1"></i>เพิ่มยาเสริม</button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Dose history mini-timeline */}
@@ -2056,7 +2119,7 @@ function InfoBar({patient,onUpdate}){
   );
 }
 
-function ClinicalModal({patient,onClose,onUpdate,settings,onArchive,currentUser,onSoftDelete}){
+function ClinicalModal({patient,onClose,onUpdate,settings,onArchive,currentUser,onSoftDelete,onRequestDelete,pendingDeleteRequests}){
   const [tab,setTab]=useState('timeline');
   const tabs=[
     {id:'timeline',icon:'fa-timeline',label:'Timeline'},
@@ -2146,7 +2209,7 @@ function ClinicalModal({patient,onClose,onUpdate,settings,onArchive,currentUser,
           {tab==='dot'&&<div className="max-w-lg"><DOTCalendar patient={patient} onUpdate={onUpdate}/></div>}
           {tab==='adr'&&<ADRTab patient={patient} onUpdate={onUpdate}/>}
           
-          {tab==='summary'&&<PharmSummaryTab patient={patient} currentUser={currentUser} onSoftDelete={onSoftDelete}/>}
+          {tab==='summary'&&<PharmSummaryTab patient={patient} currentUser={currentUser} onSoftDelete={onSoftDelete} onRequestDelete={onRequestDelete} pendingDeleteRequests={pendingDeleteRequests}/>}
         </div>
     </div>
   );
@@ -2157,6 +2220,7 @@ function AddPatientPage({onBack,onAdd,settings,onDirtyChange}){
   const [form,setForm]=useState({hn:'',prefix:'นาย',firstName:'',lastName:'',age:'',gender:'M',patientType:'New',diseaseLocation:'Pulmonary',extraPulmonaryType:'',weight:'',regimen:'2HRZE/4HR',customRegimen:'',subdistrict:'พิมาย',comorbidities:[],concomitantDrugs:[],startDate:new Date().toISOString().split('T')[0]});
   const [manualMode,setManualMode]=useState(false);
   const [manualDoses,setManualDoses]=useState({});
+  const [drugStrengths,setDrugStrengths]=useState({R:300,H:100,Z:500,E:400});
   const [errors,setErrors]=useState({});
   const [drugInput,setDrugInput]=useState('');
   const [showLeaveConfirm,setShowLeaveConfirm]=useState(false);
@@ -2170,7 +2234,7 @@ function AddPatientPage({onBack,onAdd,settings,onDirtyChange}){
   const removeDrug=i=>{setForm(f=>({...f,concomitantDrugs:f.concomitantDrugs.filter((_,idx)=>idx!==i)}));markDirty();};
   const finalReg=form.regimen==='อื่นๆ'?form.customRegimen:form.regimen;
   const validate=()=>{const e={};if(!form.hn.trim())e.hn='กรุณากรอก HN';if(!form.firstName.trim())e.firstName='กรุณากรอกชื่อ';if(!form.lastName.trim())e.lastName='กรุณากรอกนามสกุล';if(!form.weight||+form.weight<10)e.weight='น้ำหนักไม่ถูกต้อง';return e;};
-  const submit=()=>{const e=validate();if(Object.keys(e).length){setErrors(e);return;}onAdd({id:'P'+Date.now(),hn:form.hn,prefix:form.prefix,firstName:form.firstName,lastName:form.lastName,name:form.prefix+' '+form.firstName+' '+form.lastName,age:+form.age,gender:form.gender,patientType:form.patientType,diseaseLocation:form.diseaseLocation,extraPulmonaryType:form.extraPulmonaryType,subdistrict:form.subdistrict,weight:+form.weight,regimen:finalReg,regimenHistory:[{regimen:finalReg,startDate:form.startDate,reason:'เริ่มรักษาครั้งแรก',isCurrent:true}],phase:'Intensive',month:0,day:1,status:'normal',adherence:100,comorbidities:form.comorbidities,concomitantDrugs:form.concomitantDrugs,hivStatus:null,hivNote:'',nextAppt:'นัดครั้งแรก',daysUntil:30,startDate:form.startDate,labs:[],sputum:[],adr:{},visits:[],dot:{},customDoses:manualMode?manualDoses:null});onBack();};
+  const submit=()=>{const e=validate();if(Object.keys(e).length){setErrors(e);return;}onAdd({id:'P'+Date.now(),hn:form.hn,prefix:form.prefix,firstName:form.firstName,lastName:form.lastName,name:form.prefix+' '+form.firstName+' '+form.lastName,age:+form.age,gender:form.gender,patientType:form.patientType,diseaseLocation:form.diseaseLocation,extraPulmonaryType:form.extraPulmonaryType,subdistrict:form.subdistrict,weight:+form.weight,regimen:finalReg,regimenHistory:[{regimen:finalReg,startDate:form.startDate,reason:'เริ่มรักษาครั้งแรก',isCurrent:true}],phase:'Intensive',month:0,day:1,status:'normal',adherence:100,comorbidities:form.comorbidities,concomitantDrugs:form.concomitantDrugs,hivStatus:null,hivNote:'',nextAppt:'นัดครั้งแรก',daysUntil:30,startDate:form.startDate,labs:[],sputum:[],adr:{},visits:[],dot:{},customDoses:manualMode?manualDoses:null,drugStrengths,extraTbDrugs:[]});onBack();};
   return(
     <div className="flex flex-col h-full tb-fade">
       <div className="flex items-center justify-between mb-5 flex-shrink-0">
@@ -2231,7 +2295,7 @@ function AddPatientPage({onBack,onAdd,settings,onDirtyChange}){
                   <div><label className="block text-xs font-bold text-gray-600 mb-1">สูตรยาเริ่มต้น</label><select value={form.regimen} onChange={e=>set('regimen',e.target.value)} className={`${INP} border-gray-200 font-mono text-teal-800 font-bold`}>{(settings?.regimens||REGIMENS).map(r=><option key={r}>{r}</option>)}<option value="อื่นๆ">อื่นๆ</option></select>{form.regimen==='อื่นๆ'&&<input value={form.customRegimen} onChange={e=>set('customRegimen',e.target.value)} placeholder="กรอกสูตรยา" className="w-full mt-2 p-2.5 border-2 border-teal-300 rounded-xl bg-teal-50 outline-none font-mono text-sm"/>}</div>
                   <div><label className="block text-xs font-bold text-gray-600 mb-1">วันที่เริ่มรักษา</label><input type="date" value={form.startDate} onChange={e=>set('startDate',e.target.value)} className={`${INP} border-gray-200`}/></div>
                 </div>
-                <DoseCalculator weight={form.weight} regimen={finalReg} manualMode={manualMode} manualDoses={manualDoses} onToggle={()=>setManualMode(m=>!m)} onManualChange={(k,v)=>setManualDoses(d=>({...d,[k]:v}))}/>
+                <DoseCalculator weight={form.weight} regimen={finalReg} manualMode={manualMode} manualDoses={manualDoses} onToggle={()=>setManualMode(m=>!m)} onManualChange={(k,v)=>setManualDoses(d=>({...d,[k]:v}))} strengths={drugStrengths} onStrChange={(k,v)=>setDrugStrengths(s=>({...s,[k]:v}))}/>
               </div>
             </FormSection>
             <hr className="border-gray-100"/>
@@ -2263,7 +2327,7 @@ function AddPatientPage({onBack,onAdd,settings,onDirtyChange}){
 
 
 // ─── PHARM SUMMARY TAB ───────────────────────────────────────────────────────
-function PharmSummaryTab({ patient, currentUser, onSoftDelete }) {
+function PharmSummaryTab({ patient, currentUser, onSoftDelete, onRequestDelete, pendingDeleteRequests }) {
   const visits = patient.visits || [];
   const consults = visits.filter(v => v.consult?.type);
   const drps = visits.flatMap(v => (v.drp||[]).map(d => ({...d, date:v.date})));
@@ -2272,6 +2336,7 @@ function PharmSummaryTab({ patient, currentUser, onSoftDelete }) {
 
   // ── ระบบลบผู้ป่วย ──
   const isAdmin = currentUser?.role === 'admin';
+  const hasPendingRequest = (pendingDeleteRequests||[]).some(r => r.patient_id === patient.id);
   const [deleteStep, setDeleteStep] = useState(0);  // 0=ปิด, 1=ใส่เหตุผล, 2=ยืนยัน60วัน
   const [deleteReason, setDeleteReason] = useState('');
   const [deleting, setDeleting] = useState(false);
@@ -2280,6 +2345,19 @@ function PharmSummaryTab({ patient, currentUser, onSoftDelete }) {
     const ok = await onSoftDelete(patient.id, deleteReason.trim());
     setDeleting(false);
     if (!ok) alert('ลบไม่สำเร็จ — ลองอีกครั้งหรือเช็ค console');
+  };
+
+  // ── ระบบขอลบ (user ทั่วไป) ──
+  const [requestStep, setRequestStep] = useState(0);  // 0=ปิด, 1=ใส่เหตุผล, 2=ยืนยัน
+  const [requestReason, setRequestReason] = useState('');
+  const [requesting, setRequesting] = useState(false);
+  const isValidReason = t => t.trim().length >= 3 && /[a-zA-Zก-๙]/.test(t.trim());
+  const handleSubmitDeleteRequest = async () => {
+    setRequesting(true);
+    const ok = await onRequestDelete(patient, requestReason.trim());
+    setRequesting(false);
+    if (ok) { setRequestStep(0); }
+    else alert('ส่งคำขอไม่สำเร็จ — ลองอีกครั้ง');
   };
 
   const exportCSV = () => {
@@ -2344,19 +2422,23 @@ function PharmSummaryTab({ patient, currentUser, onSoftDelete }) {
       {visits.length === 0 && <p className="text-center text-gray-400 py-10">ยังไม่มีข้อมูล Visit</p>}
 
       {/* ── โซนลบผู้ป่วย (ล่างสุด — ปุ่มเล็ก ชิดขวา) ── */}
-      {onSoftDelete && (
-        <div className="mt-8 pt-6 border-t border-gray-200 flex justify-end">
-          {isAdmin ? (
+      {(onSoftDelete || onRequestDelete) && (
+        <div className="mt-8 pt-6 border-t border-gray-200 flex justify-end items-center gap-3">
+          {isAdmin && onSoftDelete ? (
             <button type="button" onClick={()=>{ setDeleteStep(1); setDeleteReason(''); }}
               className="flex items-center gap-2 px-3 py-1.5 bg-white hover:bg-red-50 text-red-600 rounded-lg text-xs font-semibold border border-red-200 transition-colors">
               <i className="fa-solid fa-trash"></i>ลบผู้ป่วย
             </button>
-          ) : (
-            <button type="button" disabled
-              className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 text-gray-400 rounded-lg text-xs font-semibold border border-gray-200 cursor-not-allowed">
-              <i className="fa-solid fa-lock"></i>ลบผู้ป่วย (Admin)
+          ) : hasPendingRequest ? (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 text-amber-700 rounded-lg text-xs font-semibold border border-amber-200">
+              <i className="fa-solid fa-clock"></i>รออนุมัติการลบจาก Admin — ระบบจะแจ้งผลทางอีเมล
+            </div>
+          ) : onRequestDelete ? (
+            <button type="button" onClick={()=>{ setRequestStep(1); setRequestReason(''); }}
+              className="flex items-center gap-2 px-3 py-1.5 bg-white hover:bg-amber-50 text-amber-700 rounded-lg text-xs font-semibold border border-amber-200 transition-colors">
+              <i className="fa-solid fa-paper-plane"></i>ขอลบผู้ป่วย
             </button>
-          )}
+          ) : null}
         </div>
       )}
 
@@ -2373,9 +2455,12 @@ function PharmSummaryTab({ patient, currentUser, onSoftDelete }) {
             <textarea value={deleteReason} onChange={e=>setDeleteReason(e.target.value)} rows={3}
               placeholder="เช่น ข้อมูลซ้ำ, ย้ายไป รพ. อื่น, ลงผิดราย"
               className="w-full p-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-teal-400"/>
+            {deleteReason.trim().length > 0 && !isValidReason(deleteReason) && (
+              <p className="text-xs text-red-500 mt-1">กรุณาระบุเหตุผลเป็นข้อความ (ไม่ใช่ตัวเลขหรืออักขระพิเศษเท่านั้น)</p>
+            )}
             <div className="flex gap-2 mt-4">
               <button type="button" onClick={()=>setDeleteStep(0)} className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold">ยกเลิก</button>
-              <button type="button" onClick={()=>setDeleteStep(2)} disabled={!deleteReason.trim()}
+              <button type="button" onClick={()=>setDeleteStep(2)} disabled={!isValidReason(deleteReason)}
                 className="flex-1 px-4 py-2 bg-red-500 hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl text-sm font-bold">ถัดไป</button>
             </div>
           </div>
@@ -2405,6 +2490,58 @@ function PharmSummaryTab({ patient, currentUser, onSoftDelete }) {
           </div>
         </div>
       )}
+
+      {/* ── Dialog ขอลบ step 1: ใส่เหตุผล ── */}
+      {requestStep === 1 && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600"><i className="fa-solid fa-paper-plane"></i></div>
+              <h3 className="font-bold text-gray-800">ส่งคำขอลบ "{patient.name}"</h3>
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-3 text-xs text-amber-900">
+              <p><i className="fa-solid fa-circle-info mr-1"></i>คำขอจะถูกส่งให้ Admin พิจารณา — ไม่ได้ลบทันที</p>
+              <p className="mt-1"><i className="fa-solid fa-envelope mr-1"></i>เมื่อ Admin ตอบรับแล้ว ระบบจะแจ้งผลทางอีเมลอัตโนมัติ</p>
+            </div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">เหตุผลในการขอลบ <span className="text-red-500">*</span></label>
+            <textarea value={requestReason} onChange={e=>setRequestReason(e.target.value)} rows={3}
+              placeholder="เช่น ข้อมูลซ้ำ, ย้ายไป รพ. อื่น, ลงผิดราย"
+              className="w-full p-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-amber-400"/>
+            {requestReason.trim().length > 0 && !isValidReason(requestReason) && (
+              <p className="text-xs text-red-500 mt-1">กรุณาระบุเหตุผลเป็นข้อความ (ไม่ใช่ตัวเลขหรืออักขระพิเศษเท่านั้น)</p>
+            )}
+            <div className="flex gap-2 mt-4">
+              <button type="button" onClick={()=>setRequestStep(0)} className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold">ยกเลิก</button>
+              <button type="button" onClick={()=>setRequestStep(2)} disabled={!isValidReason(requestReason)}
+                className="flex-1 px-4 py-2 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl text-sm font-bold">ถัดไป</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Dialog ขอลบ step 2: ยืนยัน ── */}
+      {requestStep === 2 && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600"><i className="fa-solid fa-circle-exclamation"></i></div>
+              <h3 className="font-bold text-gray-800">ยืนยันส่งคำขอลบ?</h3>
+            </div>
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 mb-4 text-xs text-gray-700">
+              <p className="font-bold mb-1">ผู้ป่วย: {patient.name}</p>
+              <p>เหตุผล: {requestReason}</p>
+            </div>
+            <p className="text-xs text-gray-500 mb-4">คำขอจะถูกส่งให้ Admin พิจารณา ระบบจะแจ้งผลทางอีเมลเมื่อมีการตอบรับ</p>
+            <div className="flex gap-2">
+              <button type="button" onClick={handleSubmitDeleteRequest} disabled={requesting}
+                className="flex-1 px-4 py-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-xl text-sm font-bold">
+                {requesting ? <><i className="fa-solid fa-spinner fa-spin mr-1"></i>กำลังส่ง...</> : 'ยืนยันส่งคำขอ'}
+              </button>
+              <button type="button" onClick={()=>setRequestStep(1)} disabled={requesting} className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold">ย้อนกลับ</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2412,7 +2549,7 @@ function PharmSummaryTab({ patient, currentUser, onSoftDelete }) {
 // ─────────────────────────────────────────────────────
 // หน้าถังขยะ — list คนที่ลบแล้ว + Restore / Hard delete
 // ─────────────────────────────────────────────────────
-function TrashList({ currentUser, onRestore, onHardDelete }) {
+function TrashList({ currentUser, onRestore, onHardDelete, pendingDeleteRequests, onApproveDelete, onRejectDelete }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionId, setActionId] = useState(null);     // id ที่กำลังทำงาน (loading)
@@ -2429,6 +2566,30 @@ function TrashList({ currentUser, onRestore, onHardDelete }) {
   };
   useEffect(() => { refresh(); }, []);
 
+  // ── คำขอลบ ──
+  const [reqActionId, setReqActionId] = useState(null);
+  const [rejectTarget, setRejectTarget] = useState(null);
+  const [rejectNote, setRejectNote] = useState('');
+
+  const handleApprove = async (req) => {
+    const name = req.patient?.name || req.patient_id;
+    if (!window.confirm(`อนุมัติลบ "${name}"?\nเหตุผล: ${req.reason}`)) return;
+    setReqActionId(req.id);
+    await onApproveDelete(req.id, req.patient_id, req.requested_by, name);
+    setReqActionId(null);
+    refresh();
+  };
+
+  const handleReject = async () => {
+    if (!rejectTarget) return;
+    const name = rejectTarget.patient?.name || rejectTarget.patient_id;
+    setReqActionId(rejectTarget.id);
+    await onRejectDelete(rejectTarget.id, rejectNote, rejectTarget.requested_by, name);
+    setReqActionId(null);
+    setRejectTarget(null);
+    setRejectNote('');
+  };
+
   // คำนวณวันที่เหลือ (60 - days since deleted_at)
   const daysLeft = (deletedAt) => {
     if (!deletedAt) return 60;
@@ -2436,9 +2597,11 @@ function TrashList({ currentUser, onRestore, onHardDelete }) {
     return Math.max(0, 60 - elapsed);
   };
 
-  const handleRestore = async (id) => {
-    setActionId(id);
-    const ok = await onRestore(id);
+  const isValidReason = t => t.trim().length >= 3 && /[a-zA-Zก-๙]/.test(t.trim());
+
+  const handleRestore = async (p) => {
+    setActionId(p.id);
+    const ok = await onRestore(p.id, p.name, p.requestedBy);
     setActionId(null);
     if (ok) { refresh(); }
     else alert('กู้คืนไม่สำเร็จ');
@@ -2447,7 +2610,7 @@ function TrashList({ currentUser, onRestore, onHardDelete }) {
   const handleConfirmHardDelete = async () => {
     if (!hardDelTarget) return;
     setActionId(hardDelTarget.id);
-    const ok = await onHardDelete(hardDelTarget.id);
+    const ok = await onHardDelete(hardDelTarget.id, hardDelTarget.name, hardDelTarget.requestedBy);
     setActionId(null);
     if (ok) {
       setHardDelTarget(null);
@@ -2460,12 +2623,57 @@ function TrashList({ currentUser, onRestore, onHardDelete }) {
 
   return (
     <div className="space-y-4">
+
+      {/* ── Section คำขอลบ (admin เท่านั้น) ── */}
+      {isAdmin && pendingDeleteRequests && pendingDeleteRequests.length > 0 && (
+        <div className="space-y-3">
+          <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
+            <div className="flex items-start gap-3">
+              <i className="fa-solid fa-paper-plane text-red-600 text-xl mt-0.5"></i>
+              <div>
+                <p className="font-bold text-red-800 text-sm">คำขอลบผู้ป่วย — รออนุมัติ ({pendingDeleteRequests.length} รายการ)</p>
+                <p className="text-xs text-red-700 mt-0.5">ผู้ใช้ขอลบผู้ป่วยออกจากระบบ — กรุณาพิจารณาอนุมัติหรือปฏิเสธ</p>
+              </div>
+            </div>
+          </div>
+          {pendingDeleteRequests.map(req => (
+            <div key={req.id} className="bg-white border border-red-200 rounded-2xl p-4 flex items-start gap-4">
+              <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center text-red-600 flex-shrink-0">
+                <i className="fa-solid fa-user-minus text-sm"></i>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-gray-800 text-sm">
+                  {req.patient?.name || 'ไม่ทราบชื่อ'}
+                  {req.patient?.hn && <span className="text-xs text-gray-400 font-mono ml-2">HN: {req.patient.hn}</span>}
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  ขอลบเมื่อ {new Date(req.requested_at).toLocaleDateString('th-TH',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}
+                </p>
+                <p className="text-xs text-gray-700 mt-1 italic">เหตุผล: {req.reason}</p>
+              </div>
+              <div className="flex gap-2 flex-shrink-0">
+                <button type="button" disabled={reqActionId===req.id} onClick={()=>handleApprove(req)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg text-xs font-semibold border border-red-200 disabled:opacity-50">
+                  {reqActionId===req.id ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-check"></i>}อนุมัติ
+                </button>
+                <button type="button" disabled={reqActionId===req.id} onClick={()=>{ setRejectTarget(req); setRejectNote(''); }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-semibold border border-gray-200 disabled:opacity-50">
+                  <i className="fa-solid fa-xmark"></i>ปฏิเสธ
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Section ถังขยะปกติ ── */}
       <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
         <div className="flex items-start gap-3">
           <i className="fa-solid fa-trash text-amber-600 text-xl mt-0.5"></i>
           <div>
             <p className="font-bold text-amber-800 text-sm">ถังขยะ — ผู้ป่วยที่ถูกลบ</p>
             <p className="text-xs text-amber-700 mt-0.5">เก็บไว้ 60 วัน หลังจากนั้นจะลบถาวรอัตโนมัติ · กู้คืน/ลบถาวร = Admin เท่านั้น</p>
+            {!isAdmin && <p className="text-xs text-amber-800 mt-1.5 font-medium"><i className="fa-solid fa-circle-info mr-1"></i>หากเปลี่ยนใจต้องการกู้คืนข้อมูล กรุณาติดต่อ Admin ภายใน 60 วัน ที่ <a href="mailto:siravitphoapha9928@gmail.com" className="underline font-bold">siravitphoapha9928@gmail.com</a></p>}
           </div>
         </div>
       </div>
@@ -2497,7 +2705,7 @@ function TrashList({ currentUser, onRestore, onHardDelete }) {
                 </div>
                 {isAdmin && (
                   <div className="flex gap-2 flex-shrink-0">
-                    <button type="button" disabled={isBusy} onClick={()=>handleRestore(p.id)}
+                    <button type="button" disabled={isBusy} onClick={()=>handleRestore(p)}
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-lg text-xs font-semibold border border-teal-200 disabled:opacity-50">
                       <i className="fa-solid fa-rotate-left"></i>กู้คืน
                     </button>
@@ -2550,6 +2758,33 @@ function TrashList({ currentUser, onRestore, onHardDelete }) {
           </div>
         </div>
       )}
+
+      {/* ── Dialog ปฏิเสธคำขอลบ ── */}
+      {rejectTarget && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center text-gray-600"><i className="fa-solid fa-xmark"></i></div>
+              <h3 className="font-bold text-gray-800">ปฏิเสธคำขอลบ</h3>
+            </div>
+            <p className="text-xs text-gray-500 mb-3">ผู้ป่วย: <strong>{rejectTarget.patient?.name || rejectTarget.patient_id}</strong> · เหตุผลที่ขอลบ: <em>{rejectTarget.reason}</em></p>
+            <label className="block text-xs font-bold text-gray-700 mb-1">เหตุผลที่ปฏิเสธ <span className="text-red-500">*</span></label>
+            <textarea value={rejectNote} onChange={e=>setRejectNote(e.target.value)} rows={2}
+              placeholder="เช่น ยังอยู่ในระหว่างการรักษา, ข้อมูลถูกต้องแล้ว"
+              className="w-full p-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-gray-400"/>
+            {rejectNote.trim().length > 0 && !isValidReason(rejectNote) && (
+              <p className="text-xs text-red-500 mt-1">กรุณาระบุเหตุผลเป็นข้อความ (ไม่ใช่ตัวเลขหรืออักขระพิเศษเท่านั้น)</p>
+            )}
+            <div className="flex gap-2 mt-4">
+              <button type="button" onClick={handleReject} disabled={!isValidReason(rejectNote)||reqActionId===rejectTarget.id}
+                className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl text-sm font-bold">
+                {reqActionId===rejectTarget.id ? <><i className="fa-solid fa-spinner fa-spin mr-1"></i>กำลังส่ง...</> : 'ยืนยันปฏิเสธ'}
+              </button>
+              <button type="button" onClick={()=>setRejectTarget(null)} disabled={reqActionId===rejectTarget.id} className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold">ยกเลิก</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2577,6 +2812,8 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
   const [rejectReason, setRejectReason] = useState('');
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState('list');  // 'list' = แถวกะทัดรัด, 'card' = การ์ดละเอียด
+  const [hardDelTarget, setHardDelTarget] = useState(null);
+  const [confirmText, setConfirmText] = useState('');
 
   const load = async () => {
     setLoading(true);
@@ -2597,6 +2834,24 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
     setBusy(false);
     if (res.ok) { alert('อนุมัติเรียบร้อยค่ะ — ส่งเมลแจ้ง user แล้ว'); load(); }
     else { const e = await res.json(); alert('Error: ' + e.error); }
+  };
+
+  const handleHardDeleteUser = async () => {
+    if (!hardDelTarget) return;
+    setBusy(true);
+    const res = await fetch('/api/admin/hard-delete-user', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: hardDelTarget.id }),
+    });
+    setBusy(false);
+    if (res.ok) {
+      alert(`ลบ ${hardDelTarget.first_name||''} ${hardDelTarget.last_name||''} ถาวรเรียบร้อย — เมลใช้สมัครใหม่ได้`);
+      setHardDelTarget(null); setConfirmText('');
+      load();
+    } else {
+      const e = await res.json();
+      alert('Error: ' + e.error);
+    }
   };
 
   const submitReject = async () => {
@@ -2759,6 +3014,12 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
                         </button>
                       </>
                     )}
+                    {p.status === 'rejected' && (
+                      <button type="button" onClick={()=>{ setHardDelTarget(p); setConfirmText(''); }} disabled={busy}
+                        className="px-2.5 py-1 rounded-lg font-bold text-white text-xs bg-gray-600 hover:bg-red-600 disabled:opacity-50" title="ลบถาวร">
+                        <i className="fa-solid fa-fire"></i>
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -2797,6 +3058,14 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
                       </button>
                     </div>
                   )}
+                  {p.status === 'rejected' && (
+                    <div className="flex gap-2 flex-shrink-0">
+                      <button type="button" onClick={()=>{ setHardDelTarget(p); setConfirmText(''); }} disabled={busy}
+                        className="px-4 py-2 rounded-xl font-bold text-white text-xs bg-gray-600 hover:bg-red-600 disabled:opacity-50">
+                        <i className="fa-solid fa-fire mr-1"></i>ลบถาวร
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 text-xs pt-3 border-t border-gray-100">
                   <Field label="โรงพยาบาล" value={p.hospital_name} />
@@ -2814,6 +3083,40 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Hard delete user modal — ลบถาวร rejected user */}
+      {hardDelTarget && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <h3 className="text-lg font-bold text-red-700 mb-2">
+              <i className="fa-solid fa-fire mr-2"></i>ลบถาวร "{hardDelTarget.first_name} {hardDelTarget.last_name}"
+            </h3>
+            <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4 text-xs text-red-900">
+              <p className="font-bold mb-1"><i className="fa-solid fa-triangle-exclamation mr-1"></i>คำเตือน</p>
+              <p>• ระบบจะลบทั้งโปรไฟล์ + บัญชี auth ออกจากระบบ</p>
+              <p>• อีเมล <strong>{hardDelTarget.email}</strong> จะใช้สมัครใหม่ได้</p>
+              <p>• กู้คืนไม่ได้</p>
+            </div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">
+              พิมพ์ Username เพื่อยืนยัน: <span className="font-mono text-red-600">{hardDelTarget.username}</span>
+            </label>
+            <input type="text" value={confirmText} onChange={e=>setConfirmText(e.target.value)}
+              placeholder="พิมพ์ username ที่นี่"
+              className="w-full p-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-red-400 mb-4"/>
+            <div className="flex gap-2">
+              <button type="button" onClick={handleHardDeleteUser}
+                disabled={confirmText !== hardDelTarget.username || busy}
+                className="flex-1 px-4 py-2 bg-red-500 hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl text-sm font-bold">
+                {busy ? <><i className="fa-solid fa-spinner fa-spin mr-1"></i>กำลังลบ...</> : 'ลบถาวร'}
+              </button>
+              <button type="button" onClick={()=>{ setHardDelTarget(null); setConfirmText(''); }} disabled={busy}
+                className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold">
+                ยกเลิก
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

@@ -36,55 +36,91 @@ export async function POST(req: NextRequest) {
     }
 
     const admin = createAdminClient()
+    const fullLicense = (PREFIXES[profession] || '') + (licenseNumber || '')
 
-    // 1) Check username ซ้ำ
-    const { data: existing } = await admin
+    // 1) เช็คว่า email นี้เคยมีไหม — ถ้าเคย reject สามารถสมัครใหม่ได้ (reset เป็น pending)
+    const { data: existingByEmail } = await admin
       .from('profiles')
-      .select('id')
-      .eq('username', username)
+      .select('id, status')
+      .eq('email', email)
       .maybeSingle()
 
-    if (existing) {
+    const isReregister = existingByEmail?.status === 'rejected'
+
+    if (existingByEmail && !isReregister) {
+      return NextResponse.json({ error: 'อีเมลนี้มีคนสมัครแล้ว' }, { status: 400 })
+    }
+
+    // 2) Check username ซ้ำ — ยกเว้น profile ของตัวเอง (กรณี re-register)
+    let usernameQuery = admin.from('profiles').select('id').eq('username', username)
+    if (isReregister) usernameQuery = usernameQuery.neq('id', existingByEmail!.id)
+    const { data: usernameConflict } = await usernameQuery.maybeSingle()
+    if (usernameConflict) {
       return NextResponse.json({ error: 'Username นี้มีคนใช้แล้ว' }, { status: 400 })
     }
 
-    // 2) สร้าง auth user
-    const { data: authData, error: authErr } = await admin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true, // ไม่ต้อง confirm email (admin จะ approve เอง)
-    })
+    let userId: string
 
-    if (authErr || !authData.user) {
-      const isDup = authErr?.message?.toLowerCase().includes('already')
-      return NextResponse.json({
-        error: isDup ? 'อีเมลนี้มีคนสมัครแล้ว' : (authErr?.message || 'สมัครไม่สำเร็จ')
-      }, { status: 400 })
-    }
+    if (isReregister) {
+      // ─── Re-registration: update password + reset profile to pending ───
+      userId = existingByEmail!.id
 
-    const userId = authData.user.id
+      const { error: pwErr } = await admin.auth.admin.updateUserById(userId, { password })
+      if (pwErr) return NextResponse.json({ error: 'อัปเดตรหัสผ่านไม่สำเร็จ: ' + pwErr.message }, { status: 500 })
 
-    // 3) Insert profile (status = pending default)
-    const fullLicense = (PREFIXES[profession] || '') + (licenseNumber || '')
-    const { error: profErr } = await admin.from('profiles').insert({
-      id:                userId,
-      username,
-      email,
-      first_name:        firstName,
-      last_name:         lastName,
-      profession,
-      license_number:    fullLicense,
-      phone:             phone || null,
-      hospital_name:     hospitalName,
-      hospital_type:     hospitalType,
-      department:        department,
-      department_other:  departmentOther || null,
-    })
+      const { error: updErr } = await admin.from('profiles').update({
+        username,
+        first_name:       firstName,
+        last_name:        lastName,
+        profession,
+        license_number:   fullLicense,
+        phone:            phone || null,
+        hospital_name:    hospitalName,
+        hospital_type:    hospitalType,
+        department,
+        department_other: departmentOther || null,
+        status:           'pending',
+        rejected_reason:  null,
+      }).eq('id', userId)
 
-    if (profErr) {
-      // Rollback: ลบ auth user ที่เพิ่งสร้าง
-      await admin.auth.admin.deleteUser(userId)
-      return NextResponse.json({ error: 'บันทึกโปรไฟล์ไม่สำเร็จ: ' + profErr.message }, { status: 500 })
+      if (updErr) return NextResponse.json({ error: 'อัปเดตโปรไฟล์ไม่สำเร็จ: ' + updErr.message }, { status: 500 })
+    } else {
+      // ─── New registration: create auth + insert profile ───
+      const { data: authData, error: authErr } = await admin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true, // ไม่ต้อง confirm email (admin จะ approve เอง)
+      })
+
+      if (authErr || !authData.user) {
+        const isDup = authErr?.message?.toLowerCase().includes('already')
+        return NextResponse.json({
+          error: isDup ? 'อีเมลนี้มีคนสมัครแล้ว' : (authErr?.message || 'สมัครไม่สำเร็จ')
+        }, { status: 400 })
+      }
+
+      userId = authData.user.id
+
+      const { error: profErr } = await admin.from('profiles').insert({
+        id:                userId,
+        username,
+        email,
+        first_name:        firstName,
+        last_name:         lastName,
+        profession,
+        license_number:    fullLicense,
+        phone:             phone || null,
+        hospital_name:     hospitalName,
+        hospital_type:     hospitalType,
+        department:        department,
+        department_other:  departmentOther || null,
+      })
+
+      if (profErr) {
+        // Rollback: ลบ auth user ที่เพิ่งสร้าง
+        await admin.auth.admin.deleteUser(userId)
+        return NextResponse.json({ error: 'บันทึกโปรไฟล์ไม่สำเร็จ: ' + profErr.message }, { status: 500 })
+      }
     }
 
     // 4) ส่งเมล

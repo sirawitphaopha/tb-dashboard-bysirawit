@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     const userEmail = authData?.user?.email
 
     if (userEmail && target) {
-      const mail = userRejectedEmail(target.first_name || 'ผู้ใช้', reason)
+      const mail = userRejectedEmail(target.first_name || 'ผู้ใช้', reason, req.nextUrl.origin)
       try {
         await getResend().emails.send({
           from: EMAIL_FROM,

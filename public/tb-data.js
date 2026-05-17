@@ -17,10 +17,12 @@ window.OUTCOME_TYPES = [
 ];
 
 window.DRUG_RANGES = {
-  R:{ name:'Rifampicin (R)',   strength:300, min:8,  max:12, absMax:600  },
-  H:{ name:'Isoniazid (H)',    strength:100, min:4,  max:6,  absMax:300  },
-  Z:{ name:'Pyrazinamide (Z)', strength:500, min:20, max:30, absMax:2000 },
-  E:{ name:'Ethambutol (E)',   strength:400, min:15, max:20, absMax:1600 },
+  R:  { name:'Rifampicin (R)',        strength:300, min:8,   max:12, absMax:600  },
+  H:  { name:'Isoniazid (H)',         strength:100, min:4,   max:6,  absMax:300  },
+  Z:  { name:'Pyrazinamide (Z)',      strength:500, min:20,  max:30, absMax:2000 },
+  E:  { name:'Ethambutol (E)',        strength:400, min:15,  max:20, absMax:1600 },
+  Lfx:{ name:'Levofloxacin (Lfx)',   strength:500, min:7.5, max:10, absMax:1000 },
+  Am: { name:'Amikacin (Am)',         strength:500, min:15,  max:20, absMax:1500, unit:'vial' },
 };
 
 window.DEFAULT_COMORBIDITIES = [
@@ -77,7 +79,7 @@ window.ADR_LIST = [
 ];
 
 // ========== DOSE CALCULATION ==========
-window.calcDoses = function(weight, regimen, manualTabs) {
+window.calcDoses = function(weight, regimen, manualTabs, customStrengths) {
   const w = parseFloat(weight);
   if (!w || w < 5) return [];
   const r = regimen || '';
@@ -93,11 +95,12 @@ window.calcDoses = function(weight, regimen, manualTabs) {
   else             auto = {R:3,H:4,Z:5,E:4};
   return keys.map(function(key) {
     var d = DRUG_RANGES[key];
-    var t = (manualTabs && manualTabs[key] != null) ? parseInt(manualTabs[key]) : (auto[key]||1);
-    var dose = t * d.strength;
+    var str = (customStrengths && customStrengths[key] != null) ? customStrengths[key] : d.strength;
+    var t = (manualTabs && manualTabs[key] != null) ? parseFloat(manualTabs[key]) : (auto[key]||1);
+    var dose = t * str;
     var mgkg = +(dose/w).toFixed(1);
     var st = (mgkg > d.max || dose > d.absMax) ? 'high' : (mgkg < d.min) ? 'low' : 'ok';
-    return { key, name:d.name, strength:d.strength, tabs:t, dose, mgkg, min:d.min, max:d.max, absMax:d.absMax, status:st };
+    return { key, name:d.name, strength:str, tabs:t, dose, mgkg, min:d.min, max:d.max, absMax:d.absMax, status:st };
   });
 };
 
@@ -657,6 +660,7 @@ window.dbToPatient = r => ({
   nextAppt:r.next_appt, daysUntil:r.days_until, startDate:r.start_date,
   labs:r.labs||[], sputum:r.sputum||[], adr:r.adr||{}, visits:r.visits||[],
   dot:r.dot||{}, customDoses:r.custom_doses||null,
+  drugStrengths:r.drug_strengths||null, extraTbDrugs:r.extra_tb_drugs||[],
   outcome:r.outcome||null, archived:r.archived||false,
 });
 
@@ -671,6 +675,7 @@ window.patientToDb = p => ({
   next_appt:p.nextAppt, days_until:p.daysUntil, start_date:p.startDate,
   labs:p.labs||[], sputum:p.sputum||[], adr:p.adr||{}, visits:p.visits||[],
   dot:p.dot||{}, custom_doses:p.customDoses||null,
+  drug_strengths:p.drugStrengths||null, extra_tb_drugs:p.extraTbDrugs||[],
   outcome:p.outcome||null, archived:p.archived||false,
   updated_at: new Date().toISOString(),
 });
@@ -686,7 +691,16 @@ window.loadPatients = async () => {
 window.loadTrashedPatients = async () => {
   const { data, error } = await window._sb.from('tb_patients').select('*').not('deleted_at','is',null).order('deleted_at',{ascending:false});
   if (error) { console.error('Supabase load trash error:', error); return []; }
-  return (data||[]).map(r => ({ ...window.dbToPatient(r), deletedAt: r.deleted_at, deletedBy: r.deleted_by, deleteReason: r.delete_reason }));
+  const patients = (data||[]).map(r => ({ ...window.dbToPatient(r), deletedAt: r.deleted_at, deletedBy: r.deleted_by, deleteReason: r.delete_reason, requestedBy: null }));
+  // โหลด requestedBy จาก delete_requests สำหรับส่งเมลแจ้ง user เมื่อกู้คืน/ลบถาวร
+  const ids = patients.map(p => p.id);
+  if (ids.length > 0) {
+    const { data: reqs } = await window._sb.from('tb_delete_requests').select('patient_id, requested_by').in('patient_id', ids).in('status', ['approved','pending']);
+    const reqMap = {};
+    (reqs||[]).forEach(r => { reqMap[r.patient_id] = r.requested_by; });
+    patients.forEach(p => { p.requestedBy = reqMap[p.id] || null; });
+  }
+  return patients;
 };
 
 window.savePatient = async p => {
@@ -721,7 +735,49 @@ window.restorePatient = async id => {
 
 // hard delete — ลบถาวรจาก DB (trigger จะ log อัตโนมัติ)
 window.hardDeletePatient = async id => {
+  // ดึง requestedBy ก่อนลบ (เพื่อส่งเมลแจ้ง user)
+  const { data: req } = await window._sb.from('tb_delete_requests').select('requested_by').eq('patient_id', id).maybeSingle();
+  // ลบ delete_requests ก่อน (FK constraint)
+  await window._sb.from('tb_delete_requests').delete().eq('patient_id', id);
+  // ลบผู้ป่วย
   const { error } = await window._sb.from('tb_patients').delete().eq('id', id);
-  if (error) { console.error('Hard delete error:', error); return false; }
+  if (error) { console.error('Hard delete error:', error); return { ok: false, requestedBy: null }; }
+  return { ok: true, requestedBy: req?.requested_by || null };
+};
+
+// ── Delete Request (คำขอลบจาก user ทั่วไป) ──────────────────────────────────
+
+window.submitDeleteRequest = async (patientId, requestedBy, reason) => {
+  const { error } = await window._sb.from('tb_delete_requests').insert({
+    patient_id: patientId,
+    requested_by: requestedBy,
+    reason: reason,
+    status: 'pending',
+  });
+  if (error) { console.error('Submit delete request error:', error); return false; }
   return true;
+};
+
+window.loadPendingDeleteRequests = async () => {
+  const { data, error } = await window._sb.from('tb_delete_requests')
+    .select('*, patient:tb_patients(hn, name), requester:profiles!requested_by(first_name, last_name, profession)')
+    .eq('status','pending').order('requested_at',{ascending:false});
+  if (error) { console.error('Load delete requests error:', error); return []; }
+  return data || [];
+};
+
+window.approveDeleteRequest = async (requestId, patientId, reviewedBy, reason) => {
+  const ok = await window.softDeletePatient(patientId, reviewedBy, reason);
+  if (!ok) return false;
+  await window._sb.from('tb_delete_requests').update({
+    status: 'approved', reviewed_by: reviewedBy, reviewed_at: new Date().toISOString(),
+  }).eq('id', requestId);
+  return true;
+};
+
+window.rejectDeleteRequest = async (requestId, reviewedBy, note) => {
+  const { error } = await window._sb.from('tb_delete_requests').update({
+    status: 'rejected', reviewed_by: reviewedBy, reviewed_at: new Date().toISOString(), review_note: note || null,
+  }).eq('id', requestId);
+  return !error;
 };

@@ -1302,6 +1302,7 @@ function AdminSettings({ settings, setSettings, setNav }) {
   const adminTabs = [
     { id:'comorbidity', label:'โรคประจำตัว', icon:'fa-heart-pulse' },
     { id:'drugs', label:'ยาโรคร่วม', icon:'fa-capsules' },
+    { id:'tb-drugs', label:'ยาวัณโรค', icon:'fa-prescription-bottle-medical' },
     { id:'lab', label:'ค่า Lab', icon:'fa-flask' },
     { id:'regimen', label:'สูตรยา', icon:'fa-pills' },
     { id:'restart', label:'เหตุผลเริ่มยาใหม่', icon:'fa-rotate-right' },
@@ -1526,6 +1527,52 @@ function AdminSettings({ settings, setSettings, setNav }) {
       )}
 
       {/* Consult / DRP types */}
+      {activeTab==='tb-drugs'&&(
+        <div className="bg-white p-6 rounded-2xl border border-gray-200 tb-fade">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="w-10 h-10 bg-teal-100 text-teal-600 rounded-xl flex items-center justify-center"><i className="fa-solid fa-prescription-bottle-medical"></i></div>
+            <div>
+              <h3 className="font-bold text-gray-800">ยาวัณโรคในระบบ</h3>
+              <p className="text-xs text-gray-400">รายการยา TB ที่ระบบรู้จัก พร้อมความแรงและช่วงขนาดยา</p>
+            </div>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 text-xs text-gray-500 uppercase">
+                <th className="p-3 text-left rounded-l-xl">ตัวยา</th>
+                <th className="p-3 text-left">ชื่อ</th>
+                <th className="p-3 text-left">ความแรงที่มี</th>
+                <th className="p-3 text-left">ช่วง mg/kg</th>
+                <th className="p-3 text-left rounded-r-xl">โดสสูงสุด</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {Object.entries(DRUG_RANGES).map(([key, d]) => {
+                const strengths = (window.HOSP_STRENGTHS||{})[key] || [{label:`${key}${d.strength}`, value:d.strength}];
+                return (
+                  <tr key={key}>
+                    <td className="p-3 pl-4 font-black text-teal-700 text-base">{key}</td>
+                    <td className="p-3 text-gray-700 font-medium">{d.name}</td>
+                    <td className="p-3">
+                      <div className="flex flex-wrap gap-1.5">
+                        {strengths.map(s => (
+                          <span key={String(s.value)} className="bg-teal-50 border border-teal-200 text-teal-700 px-2.5 py-1 rounded-lg text-xs font-bold">
+                            {s.label}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="p-3 text-gray-600 font-mono text-xs">{d.min}–{d.max} mg/kg</td>
+                    <td className="p-3 text-gray-600 font-mono text-xs">{d.absMax} mg</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <p className="mt-4 text-xs text-gray-400"><i className="fa-solid fa-circle-info mr-1"></i>อนาคต: จะเพิ่มยา MDR-TB เช่น Bedaquiline, Linezolid, Clofazimine ที่นี่</p>
+        </div>
+      )}
+
       {activeTab==='consult'&&(
         <div className="grid grid-cols-2 gap-5 tb-fade">
           <div className="bg-white p-5 rounded-2xl border border-amber-200">
@@ -1685,6 +1732,7 @@ function App() {
   const [currentUser, setCurrentUser] = useState(null);
   // จำนวน user ที่รออนุมัติ (สำหรับ badge ใน sidebar)
   const [pendingUserCount, setPendingUserCount] = useState(0);
+  const [pendingDeleteRequests, setPendingDeleteRequests] = useState([]);
   useEffect(() => {
     if (currentUser?.role !== 'admin') return;
     (async () => {
@@ -1693,6 +1741,8 @@ function App() {
           .select('id', { count: 'exact', head: true })
           .eq('status', 'pending');
         setPendingUserCount(count || 0);
+        const reqs = await window.loadPendingDeleteRequests();
+        setPendingDeleteRequests(reqs);
       } catch (e) { console.error('Load pending count failed:', e); }
     })();
   }, [currentUser]);
@@ -1734,16 +1784,27 @@ function App() {
       });
   }, []);
 
-  // alerts = clinical alerts จากผู้ป่วย + admin alerts (pending users)
-  const adminAlerts = (currentUser?.role === 'admin' && pendingUserCount > 0) ? [{
-    id: 'admin-pending-users',
-    type: 'warning',
-    patient: null,
-    patientId: null,
-    navTarget: 'admin-users',
-    msg: `มี ${pendingUserCount} ผู้ใช้ใหม่รออนุมัติ — คลิกเพื่อจัดการ`,
-    time: 'ใหม่',
-  }] : [];
+  // alerts = clinical alerts จากผู้ป่วย + admin alerts (pending users + delete requests)
+  const adminAlerts = [
+    ...(currentUser?.role === 'admin' && pendingUserCount > 0 ? [{
+      id: 'admin-pending-users',
+      type: 'warning',
+      patient: null,
+      patientId: null,
+      navTarget: 'admin-users',
+      msg: `มี ${pendingUserCount} ผู้ใช้ใหม่รออนุมัติ — คลิกเพื่อจัดการ`,
+      time: 'ใหม่',
+    }] : []),
+    ...(currentUser?.role === 'admin' && pendingDeleteRequests.length > 0 ? [{
+      id: 'admin-pending-deletes',
+      type: 'warning',
+      patient: null,
+      patientId: null,
+      navTarget: 'trash',
+      msg: `มี ${pendingDeleteRequests.length} คำขอลบผู้ป่วยรออนุมัติ — คลิกเพื่อจัดการ`,
+      time: 'ใหม่',
+    }] : []),
+  ];
   const alerts = [...adminAlerts, ...generateAlerts(patients)];
   const unreadCount = alerts.filter(a => !readAlerts.has(a.id)).length;
   const markRead = id => setReadAlerts(s => new Set([...s, id]));
@@ -1763,6 +1824,66 @@ function App() {
     setNav('archive-list');
   };
 
+  // ขอลบผู้ป่วย (user ทั่วไป — ส่งให้ admin อนุมัติ)
+  const requestDeletePatient = async (patient, reason) => {
+    if (!currentUser?.id) return false;
+    const ok = await window.submitDeleteRequest(patient.id, currentUser.id, reason);
+    if (ok) {
+      // Optimistic update — UI เร็วขึ้นทันที ไม่ต้องรอ reload
+      setPendingDeleteRequests(prev => [...prev, {
+        id: 'temp-' + Date.now(), patient_id: patient.id, reason, status: 'pending',
+        patient: { hn: patient.hn, name: patient.name }, requested_by: currentUser.id,
+      }]);
+      // Fire-and-forget: ส่งเมล + reload จริง background
+      fetch('/api/patient/delete-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ patientId: patient.id, patientName: patient.name, patientHn: patient.hn, reason, requestedBy: currentUser.id }),
+      }).catch(() => {});
+      window.loadPendingDeleteRequests().then(reqs => setPendingDeleteRequests(reqs));
+    }
+    return ok;
+  };
+
+  // อนุมัติคำขอลบ (admin เท่านั้น)
+  const approveDeleteRequest = async (requestId, patientId, requestedBy, patientName) => {
+    if (!currentUser?.id) return false;
+    const ok = await window.approveDeleteRequest(requestId, patientId, currentUser.id, '');
+    if (ok) {
+      setPatients(ps => ps.filter(p => p.id !== patientId));
+      const reqs = await window.loadPendingDeleteRequests();
+      setPendingDeleteRequests(reqs);
+      // ส่งเมลแจ้ง user ที่ขอลบ
+      if (requestedBy) {
+        fetch('/api/patient/delete-notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ requestedBy, patientName, action: 'approved' }),
+        }).catch(() => {});
+      }
+    }
+    return ok;
+  };
+
+  // ปฏิเสธคำขอลบ (admin เท่านั้น)
+  const rejectDeleteRequest = async (requestId, note, requestedBy, patientName) => {
+    if (!currentUser?.id) return false;
+    const ok = await window.rejectDeleteRequest(requestId, currentUser.id, note);
+    if (ok) {
+      const reqs = await window.loadPendingDeleteRequests();
+      setPendingDeleteRequests(reqs);
+      // ส่งเมลแจ้ง user ที่ขอลบ
+      if (requestedBy) {
+        fetch('/api/patient/delete-notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ requestedBy, patientName, action: 'rejected', note }),
+        }).catch(() => {});
+      }
+    }
+    return ok;
+  };
+
   // ลบผู้ป่วย (soft delete — admin เท่านั้น)
   const softDeletePatient = async (patientId, reason) => {
     if (!currentUser?.id) return false;
@@ -1774,19 +1895,36 @@ function App() {
   };
 
   // กู้คืนจากถังขยะ (admin เท่านั้น)
-  const restorePatient = async (patientId) => {
+  const restorePatient = async (patientId, patientName, requestedBy) => {
     const ok = await window.restorePatient(patientId);
     if (!ok) return false;
-    // โหลดผู้ป่วยใหม่หลัง restore (เพื่อให้คนนั้นกลับมาในหน้า list ปกติ)
     const data = await loadPatients();
     setPatients([...INITIAL_PATIENTS, ...data]);
+    // แจ้ง user ที่ขอลบว่ากู้คืนแล้ว
+    if (requestedBy && patientName) {
+      fetch('/api/patient/delete-notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestedBy, patientName, action: 'restored' }),
+      }).catch(() => {});
+    }
     return true;
   };
 
   // ลบถาวร (admin เท่านั้น) — กู้คืนไม่ได้
-  const hardDeletePatient = async (patientId) => {
-    const ok = await window.hardDeletePatient(patientId);
-    return ok;
+  const hardDeletePatient = async (patientId, patientName, requestedBy) => {
+    const result = await window.hardDeletePatient(patientId);
+    if (!result.ok) return false;
+    // แจ้ง user ที่ขอลบว่าลบถาวรแล้ว
+    const notifyBy = requestedBy || result.requestedBy;
+    if (notifyBy && patientName) {
+      fetch('/api/patient/delete-notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestedBy: notifyBy, patientName, action: 'hard-deleted' }),
+      }).catch(() => {});
+    }
+    return true;
   };
 
   const handleLogoClick = () => {
@@ -1815,7 +1953,7 @@ function App() {
     { id:'knowledge',     icon:'fa-book-open-reader', label:'คลังความรู้วัณโรค' },
     { id:'settings',      icon:'fa-gear',             label:'ตั้งค่าระบบ', divider:true },
     ...(currentUser?.role === 'admin' ? [{ id:'admin-users', icon:'fa-user-shield', label:'จัดการผู้ใช้', badge: pendingUserCount }] : []),
-    { id:'trash',         icon:'fa-trash',            label:'ถังขยะ' },
+    { id:'trash', icon:'fa-trash', label:'ถังขยะ', badge: currentUser?.role==='admin' && pendingDeleteRequests.length > 0 ? pendingDeleteRequests.length : undefined },
   ];
   const titles = { dashboard:'Dashboard', 'patient-list':'ทะเบียนผู้ป่วย Active', 'archive-list':'ทะเบียนจบการรักษา', 'all-patients':'ทะเบียนผู้ป่วยทั้งหมด', 'add-patient':'ลงทะเบียนผู้ป่วยใหม่', 'weekly-prep':'เตรียมเคสรายสัปดาห์', reports:'รายงาน และ สถิติ', knowledge:'คลังความรู้วัณโรค', settings:'ตั้งค่าระบบ', 'admin-users':'จัดการผู้ใช้', trash:'ถังขยะ' };
   const pageIcons = { dashboard:'fa-chart-pie', 'patient-list':'fa-users', 'archive-list':'fa-box-archive', 'all-patients':'fa-users', 'add-patient':'fa-user-plus', 'weekly-prep':'fa-calendar-check', reports:'fa-file-contract', knowledge:'fa-book-open-reader', settings:'fa-gear', 'admin-users':'fa-user-shield', trash:'fa-trash' };
@@ -1824,7 +1962,7 @@ function App() {
   if (clinical) {
     return (
       <div className="flex h-screen bg-white overflow-hidden">
-        <ClinicalModal patient={clinical} onClose={() => setClinical(null)} onUpdate={updatePatient} settings={settings} onArchive={archivePatient} currentUser={currentUser} onSoftDelete={softDeletePatient}/>
+        <ClinicalModal patient={clinical} onClose={() => setClinical(null)} onUpdate={updatePatient} settings={settings} onArchive={archivePatient} currentUser={currentUser} onSoftDelete={softDeletePatient} onRequestDelete={requestDeletePatient} pendingDeleteRequests={pendingDeleteRequests}/>
       </div>
     );
   }
@@ -1918,7 +2056,7 @@ function App() {
             <div>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:0,whiteSpace:'nowrap'}}>พัฒนาโดย เภสัชกร สิรวิชญ์ เผ่าผา</p>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:'1px 0 0 0',whiteSpace:'nowrap'}}>โรงพยาบาลปรางค์กู่</p>
-              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.7.4 ·<span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
+              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.7.5 ·<span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
             </div>
           ) : (
             <div style={{display:'flex',justifyContent:'center'}}>
@@ -2071,7 +2209,7 @@ function App() {
           {!dbLoading && nav==='knowledge'     && <KnowledgeBase/>}
           {!dbLoading && nav==='settings'      && <AdminSettings settings={settings} setSettings={setSettings} setNav={setNav}/>}
           {!dbLoading && nav==='admin-users'   && <AdminUsersTab currentUser={currentUser} onPendingChange={setPendingUserCount}/>}
-          {!dbLoading && nav==='trash'         && <TrashList currentUser={currentUser} onRestore={restorePatient} onHardDelete={hardDeletePatient}/>}
+          {!dbLoading && nav==='trash'         && <TrashList currentUser={currentUser} onRestore={restorePatient} onHardDelete={hardDeletePatient} pendingDeleteRequests={pendingDeleteRequests} onApproveDelete={approveDeleteRequest} onRejectDelete={rejectDeleteRequest}/>}
         </div>
       </main>
 

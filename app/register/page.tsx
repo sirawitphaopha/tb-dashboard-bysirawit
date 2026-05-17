@@ -161,7 +161,7 @@ export default function RegisterPage() {
           style={{ background: '#fef3c7', border: '1px solid #fde68a' }}>
           <i className="fa-solid fa-triangle-exclamation flex-shrink-0 mt-0.5" style={{ color: '#d97706' }}></i>
           <div className="text-xs" style={{ color: '#92400e', lineHeight: 1.7 }}>
-            <strong>ไม่เจออีเมล?</strong> กรุณาตรวจสอบที่ <strong>กล่องสแปม (Spam / Junk)</strong> หรือโฟลเดอร์ "โปรโมชั่น" — บางครั้ง Gmail/Hotmail อาจคัดกรองไปเก็บไว้ที่นั่น
+            <strong>หากไม่ได้รับอีเมล</strong> กรุณาตรวจสอบกล่องจดหมายขยะ (Spam / Junk Mail) เนื่องจากระบบอาจคัดกรองอีเมลอัตโนมัติ
           </div>
         </div>
 

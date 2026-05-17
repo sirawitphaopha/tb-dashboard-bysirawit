@@ -141,8 +141,9 @@ export function userApprovedEmail(firstName: string, baseUrl: string) {
 // ═════════════════════════════════════════════════════════
 // 4) User Rejected — ปฏิเสธ
 // ═════════════════════════════════════════════════════════
-export function userRejectedEmail(firstName: string, reason: string) {
+export function userRejectedEmail(firstName: string, reason: string, baseUrl?: string) {
   const subject = 'แจ้งผลคำขอสมัครสมาชิก — ไม่ได้รับการอนุมัติ'
+  const registerUrl = baseUrl ? `${baseUrl}/register` : '/register'
   const body = `
     <h2 style="margin:0 0 16px;color:${BRAND_TEAL_DARK};font-size:18px;">เรียน คุณ${firstName}</h2>
     <p style="margin:0 0 16px;font-size:14px;color:#4b5563;line-height:1.7;">
@@ -154,9 +155,151 @@ export function userRejectedEmail(firstName: string, reason: string) {
       <p style="margin:0;font-size:14px;color:#7f1d1d;line-height:1.6;">${reason || '(ไม่ระบุเหตุผล)'}</p>
     </div>
 
-    <p style="margin:0 0 8px;font-size:14px;color:#4b5563;line-height:1.7;">
-      หากท่านมีข้อสงสัย กรุณาติดต่อผู้ดูแลระบบโดยตรง
+    <div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:10px;padding:16px;margin:20px 0;">
+      <p style="margin:0 0 6px;font-size:13px;color:${BRAND_TEAL_DARK};font-weight:700;">📝 สมัครใหม่ได้</p>
+      <p style="margin:0;font-size:13px;color:${BRAND_TEAL};line-height:1.6;">
+        หากต้องการแก้ไขข้อมูลและส่งคำขอใหม่ ท่านสามารถ <strong>สมัครด้วยอีเมลเดิม</strong> ได้ทันทีโดยไม่ต้องติดต่อผู้ดูแลระบบ
+      </p>
+    </div>
+
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr><td align="center" style="padding:8px 0 16px;">
+        <a href="${registerUrl}" style="display:inline-block;padding:12px 28px;background:${BRAND_TEAL};color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:13px;">
+          สมัครใหม่
+        </a>
+      </td></tr>
+    </table>
+
+    <p style="margin:0 0 8px;font-size:13px;color:#6b7280;line-height:1.7;">
+      หากมีข้อสงสัย กรุณาติดต่อผู้ดูแลระบบ
     </p>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB CARE &amp; JOURNEY</p>
+  `
+  return { subject, html: wrap(subject, body) }
+}
+
+// ═════════════════════════════════════════════════════════
+// 5) Admin Delete Request — มีคนขอลบผู้ป่วย
+// ═════════════════════════════════════════════════════════
+export function adminDeleteRequestEmail(
+  patientName: string, patientHn: string,
+  reason: string, requesterName: string, requesterProfession: string, baseUrl: string
+) {
+  const trashUrl = `${baseUrl}/`
+  const subject = `🗑️ คำขอลบผู้ป่วย: ${patientName} (HN: ${patientHn})`
+  const body = `
+    <h2 style="margin:0 0 16px;color:#991b1b;font-size:18px;">คำขอลบข้อมูลผู้ป่วย</h2>
+    <p style="margin:0 0 20px;font-size:14px;color:#4b5563;">มีผู้ใช้ส่งคำขอลบข้อมูลผู้ป่วยออกจากระบบ กรุณาตรวจสอบและพิจารณา</p>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:16px;margin-bottom:20px;">
+      <tr><td style="padding:6px 0;font-size:12px;color:#6b7280;width:130px;">ชื่อผู้ป่วย</td>
+          <td style="padding:6px 0;font-size:14px;font-weight:700;color:#1f2937;">${patientName}</td></tr>
+      <tr><td style="padding:6px 0;font-size:12px;color:#6b7280;">HN</td>
+          <td style="padding:6px 0;font-size:14px;font-weight:700;color:#1f2937;font-family:monospace;">${patientHn || '—'}</td></tr>
+      <tr><td style="padding:6px 0;font-size:12px;color:#6b7280;">ผู้ขอลบ</td>
+          <td style="padding:6px 0;font-size:14px;font-weight:600;color:#1f2937;">${requesterName}</td></tr>
+      <tr><td style="padding:6px 0;font-size:12px;color:#6b7280;">วิชาชีพ</td>
+          <td style="padding:6px 0;font-size:14px;font-weight:600;color:#1f2937;">${requesterProfession || '—'}</td></tr>
+      <tr><td style="padding:6px 0;font-size:12px;color:#6b7280;">เหตุผล</td>
+          <td style="padding:6px 0;font-size:14px;color:#7f1d1d;line-height:1.6;">${reason}</td></tr>
+    </table>
+
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr><td align="center" style="padding:8px 0;">
+        <a href="${trashUrl}" style="display:inline-block;padding:14px 32px;background:#dc2626;color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px;">
+          🗑️ ไปที่ถังขยะ — อนุมัติ/ปฏิเสธ
+        </a>
+      </td></tr>
+    </table>
+
+    <p style="margin:16px 0 0;font-size:12px;color:#9ca3af;text-align:center;">
+      คลิกปุ่มข้างบนเพื่อไปพิจารณาคำขอนี้ในระบบ
+    </p>
+  `
+  return { subject, html: wrap(subject, body) }
+}
+
+// ═════════════════════════════════════════════════════════
+// 6) User Delete Approved — แจ้ง user ว่าลบแล้ว
+// ═════════════════════════════════════════════════════════
+export function deleteRequestApprovedEmail(firstName: string, patientName: string) {
+  const subject = `✅ คำขอลบผู้ป่วยได้รับการอนุมัติ: ${patientName}`
+  const body = `
+    <h2 style="margin:0 0 16px;color:${BRAND_TEAL_DARK};font-size:18px;">เรียน คุณ${firstName}</h2>
+    <p style="margin:0 0 16px;font-size:14px;color:#4b5563;line-height:1.7;">
+      ผู้ดูแลระบบได้อนุมัติคำขอลบข้อมูลผู้ป่วยของท่านเรียบร้อยแล้ว
+    </p>
+
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px;margin:20px 0;">
+      <p style="margin:0 0 6px;font-size:12px;color:#166534;font-weight:700;">ผู้ป่วยที่ถูกลบ</p>
+      <p style="margin:0;font-size:16px;font-weight:700;color:#15803d;">${patientName}</p>
+      <p style="margin:6px 0 0;font-size:12px;color:#166534;">ข้อมูลถูกย้ายไปถังขยะ — Admin สามารถกู้คืนได้ภายใน 60 วัน</p>
+    </div>
+
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB CARE &amp; JOURNEY</p>
+  `
+  return { subject, html: wrap(subject, body) }
+}
+
+// ═════════════════════════════════════════════════════════
+// 7) User Delete Rejected — แจ้ง user ว่าปฏิเสธ
+// ═════════════════════════════════════════════════════════
+export function deleteRequestRejectedEmail(firstName: string, patientName: string, note?: string) {
+  const subject = `ℹ️ คำขอลบผู้ป่วยไม่ได้รับการอนุมัติ: ${patientName}`
+  const body = `
+    <h2 style="margin:0 0 16px;color:${BRAND_TEAL_DARK};font-size:18px;">เรียน คุณ${firstName}</h2>
+    <p style="margin:0 0 16px;font-size:14px;color:#4b5563;line-height:1.7;">
+      ขอเรียนแจ้งให้ทราบว่า คำขอลบข้อมูลผู้ป่วย <strong>${patientName}</strong> ไม่ได้รับการอนุมัติในครั้งนี้
+    </p>
+
+    ${note ? `
+    <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:10px;padding:16px;margin:20px 0;">
+      <p style="margin:0 0 6px;font-size:12px;color:#92400e;font-weight:700;">หมายเหตุจาก Admin</p>
+      <p style="margin:0;font-size:14px;color:#78350f;line-height:1.6;">${note}</p>
+    </div>` : ''}
+
+    <p style="margin:0 0 8px;font-size:14px;color:#4b5563;">หากมีข้อสงสัย กรุณาติดต่อผู้ดูแลระบบโดยตรง</p>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB CARE &amp; JOURNEY</p>
+  `
+  return { subject, html: wrap(subject, body) }
+}
+
+// ═════════════════════════════════════════════════════════
+// 8) User Delete Restored — admin กู้คืนผู้ป่วยที่ user ขอลบ
+// ═════════════════════════════════════════════════════════
+export function deleteRequestRestoredEmail(firstName: string, patientName: string) {
+  const subject = `ℹ️ ผู้ป่วยถูกกู้คืนจากถังขยะ: ${patientName}`
+  const body = `
+    <h2 style="margin:0 0 16px;color:${BRAND_TEAL_DARK};font-size:18px;">เรียน คุณ${firstName}</h2>
+    <p style="margin:0 0 16px;font-size:14px;color:#4b5563;line-height:1.7;">
+      ขอเรียนแจ้งให้ทราบว่า ผู้ดูแลระบบได้ทำการ<strong>กู้คืน</strong>ข้อมูลผู้ป่วยที่ท่านเคยส่งคำขอลบไว้
+    </p>
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:16px;margin:20px 0;">
+      <p style="margin:0 0 6px;font-size:12px;color:#1e40af;font-weight:700;">ผู้ป่วยที่ถูกกู้คืน</p>
+      <p style="margin:0;font-size:16px;font-weight:700;color:#1d4ed8;">${patientName}</p>
+      <p style="margin:6px 0 0;font-size:12px;color:#1e40af;">ข้อมูลผู้ป่วยกลับไปอยู่ในรายการผู้ป่วย Active ตามเดิม</p>
+    </div>
+    <p style="margin:0 0 8px;font-size:14px;color:#4b5563;">หากมีข้อสงสัย กรุณาติดต่อผู้ดูแลระบบโดยตรง</p>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB CARE &amp; JOURNEY</p>
+  `
+  return { subject, html: wrap(subject, body) }
+}
+
+// ═════════════════════════════════════════════════════════
+// 9) User Delete Hard Deleted — admin ลบถาวร
+// ═════════════════════════════════════════════════════════
+export function deleteRequestHardDeletedEmail(firstName: string, patientName: string) {
+  const subject = `✅ ข้อมูลผู้ป่วยถูกลบถาวรแล้ว: ${patientName}`
+  const body = `
+    <h2 style="margin:0 0 16px;color:${BRAND_TEAL_DARK};font-size:18px;">เรียน คุณ${firstName}</h2>
+    <p style="margin:0 0 16px;font-size:14px;color:#4b5563;line-height:1.7;">
+      ขอเรียนแจ้งให้ทราบว่า ผู้ดูแลระบบได้ทำการ<strong>ลบถาวร</strong>ข้อมูลผู้ป่วยออกจากระบบแล้ว
+    </p>
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:16px;margin:20px 0;">
+      <p style="margin:0 0 6px;font-size:12px;color:#991b1b;font-weight:700;">ผู้ป่วยที่ถูกลบถาวร</p>
+      <p style="margin:0;font-size:16px;font-weight:700;color:#dc2626;">${patientName}</p>
+      <p style="margin:6px 0 0;font-size:12px;color:#991b1b;">ข้อมูลถูกลบออกจากระบบถาวร — ไม่สามารถกู้คืนได้</p>
+    </div>
     <p style="margin:0;font-size:13px;color:#6b7280;">TB CARE &amp; JOURNEY</p>
   `
   return { subject, html: wrap(subject, body) }
