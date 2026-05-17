@@ -983,7 +983,7 @@ function TimelineTab({ patient, onUpdate, settings, locked }) {
       </div>
 
       {/* Confirm delete modal */}
-      {confirmDelete && <ConfirmModal message="ต้องการลบ Visit นี้ใช่ไหม?" onConfirm={()=>deleteVisit(confirmDelete)} onCancel={()=>setConfirmDelete(null)}/>}
+      {confirmDelete && <ConfirmModal message="ยืนยันการลบ Visit นี้" onConfirm={()=>deleteVisit(confirmDelete)} onCancel={()=>setConfirmDelete(null)}/>}
       <div ref={formRef}>{showForm && !locked && <VisitForm key={editId||'new'} initial={editInitialForm} onSave={saveVisit} onCancel={() => { setShowForm(false); setEditId(null); }} patient={{...patient,_labGroups:(settings?.labGroups)||LAB_GROUPS}}/>}</div>
 
       {/* Timeline */}
@@ -2453,7 +2453,7 @@ function PharmSummaryTab({ patient, currentUser, onSoftDelete, onRequestDelete, 
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center text-red-600"><i className="fa-solid fa-triangle-exclamation"></i></div>
-              <h3 className="font-bold text-gray-800">ยืนยันลบ "{patient.name}"?</h3>
+              <h3 className="font-bold text-gray-800">ยืนยันการลบ "{patient.name}"</h3>
             </div>
             <p className="text-xs text-gray-500 mb-3">ข้อมูลทั้งหมด (Visit, Lab, ADR, DOT) จะถูกย้ายไปถังขยะ</p>
             <label className="block text-xs font-bold text-gray-700 mb-1">เหตุผลในการลบ <span className="text-red-500">*</span></label>
@@ -2530,7 +2530,7 @@ function PharmSummaryTab({ patient, currentUser, onSoftDelete, onRequestDelete, 
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600"><i className="fa-solid fa-circle-exclamation"></i></div>
-              <h3 className="font-bold text-gray-800">ยืนยันส่งคำขอลบ?</h3>
+              <h3 className="font-bold text-gray-800">ยืนยันส่งคำขอลบ</h3>
             </div>
             <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 mb-4 text-xs text-gray-700">
               <p className="font-bold mb-1">ผู้ป่วย: {patient.name}</p>
@@ -2819,6 +2819,7 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
   const [viewMode, setViewMode] = useState('list');  // 'list' = แถวกะทัดรัด, 'card' = การ์ดละเอียด
   const [hardDelTarget, setHardDelTarget] = useState(null);
   const [confirmText, setConfirmText] = useState('');
+  const [deactivateTarget, setDeactivateTarget] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -2860,26 +2861,36 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
   };
 
   const handleResetRejectionLimit = async (p) => {
-    if (!window.confirm(`ปลดล็อกให้ ${p.first_name||''} ${p.last_name||''} สมัครใหม่ได้ทันทีใช่ไหมคะ?`)) return;
     setBusy(true);
     const res = await fetch('/api/admin/reset-rejection-limit', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: p.id }),
     });
     setBusy(false);
-    if (res.ok) { alert('ปลดล็อกเรียบร้อยค่ะ — user สมัครใหม่ได้แล้ว'); load(); }
-    else { const e = await res.json(); alert('Error: ' + e.error); }
+    if (!res.ok) { const e = await res.json(); alert('Error: ' + e.error); }
+    else load();
   };
 
-  const handleDeactivateUser = async (p) => {
-    if (!window.confirm(`ปิดบัญชี ${p.first_name||''} ${p.last_name||''} ?\nจะเปลี่ยนสถานะเป็น "ปฏิเสธ" — กู้คืนได้โดยอนุมัติใหม่`)) return;
+  const handleRestoreUser = async (p) => {
     setBusy(true);
-    const res = await fetch('/api/admin/deactivate-user', {
+    const res = await fetch('/api/admin/restore-user', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: p.id }),
     });
     setBusy(false);
-    if (res.ok) { alert('ปิดบัญชีเรียบร้อยค่ะ — user ยังสามารถอนุมัติใหม่ได้ภายหลัง'); load(); }
+    if (!res.ok) { const e = await res.json(); alert('Error: ' + e.error); }
+    else load();
+  };
+
+  const doDeactivateUser = async () => {
+    if (!deactivateTarget) return;
+    setBusy(true);
+    const res = await fetch('/api/admin/deactivate-user', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: deactivateTarget.id }),
+    });
+    setBusy(false);
+    if (res.ok) { setDeactivateTarget(null); load(); }
     else { const e = await res.json(); alert('Error: ' + e.error); }
   };
 
@@ -3044,7 +3055,7 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
                       </>
                     )}
                     {p.status === 'approved' && p.role !== 'admin' && (
-                      <button type="button" onClick={()=>handleDeactivateUser(p)} disabled={busy}
+                      <button type="button" onClick={()=>setDeactivateTarget(p)} disabled={busy}
                         className="px-2.5 py-1 rounded-lg font-bold text-white text-xs bg-orange-500 hover:bg-orange-600 disabled:opacity-50" title="ปิดบัญชี">
                         <i className="fa-solid fa-user-slash"></i>
                       </button>
@@ -3052,9 +3063,16 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
                     {p.status === 'rejected' && (() => {
                       const ws = p.rejection_week_start ? new Date(p.rejection_week_start) : null;
                       const isBlocked = ws && (new Date() - ws) < 7*24*60*60*1000 && (p.rejection_week_count||0) >= 3;
+                      const isDeactivated = p.rejected_reason === 'ปิดบัญชีโดย Admin';
                       return (
                         <>
-                          {isBlocked && (
+                          {isDeactivated && (
+                            <button type="button" onClick={()=>handleRestoreUser(p)} disabled={busy}
+                              className="px-2.5 py-1 rounded-lg font-bold text-white text-xs bg-teal-600 hover:bg-teal-700 disabled:opacity-50" title="กู้คืนบัญชี">
+                              <i className="fa-solid fa-rotate-left"></i>
+                            </button>
+                          )}
+                          {!isDeactivated && isBlocked && (
                             <button type="button" onClick={()=>handleResetRejectionLimit(p)} disabled={busy}
                               className="px-2.5 py-1 rounded-lg font-bold text-white text-xs bg-amber-500 hover:bg-amber-600 disabled:opacity-50" title="ปลดล็อก — ให้สมัครใหม่ได้">
                               <i className="fa-solid fa-lock-open"></i>
@@ -3107,7 +3125,7 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
                   )}
                   {p.status === 'approved' && p.role !== 'admin' && (
                     <div className="flex gap-2 flex-shrink-0">
-                      <button type="button" onClick={()=>handleDeactivateUser(p)} disabled={busy}
+                      <button type="button" onClick={()=>setDeactivateTarget(p)} disabled={busy}
                         className="px-4 py-2 rounded-xl font-bold text-white text-xs bg-orange-500 hover:bg-orange-600 disabled:opacity-50">
                         <i className="fa-solid fa-user-slash mr-1"></i>ปิดบัญชี
                       </button>
@@ -3116,9 +3134,16 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
                   {p.status === 'rejected' && (() => {
                     const ws = p.rejection_week_start ? new Date(p.rejection_week_start) : null;
                     const isBlocked = ws && (new Date() - ws) < 7*24*60*60*1000 && (p.rejection_week_count||0) >= 3;
+                    const isDeactivated = p.rejected_reason === 'ปิดบัญชีโดย Admin';
                     return (
                       <div className="flex gap-2 flex-shrink-0">
-                        {isBlocked && (
+                        {isDeactivated && (
+                          <button type="button" onClick={()=>handleRestoreUser(p)} disabled={busy}
+                            className="px-4 py-2 rounded-xl font-bold text-white text-xs bg-teal-600 hover:bg-teal-700 disabled:opacity-50">
+                            <i className="fa-solid fa-rotate-left mr-1"></i>กู้คืนบัญชี
+                          </button>
+                        )}
+                        {!isDeactivated && isBlocked && (
                           <button type="button" onClick={()=>handleResetRejectionLimit(p)} disabled={busy}
                             className="px-4 py-2 rounded-xl font-bold text-white text-xs bg-amber-500 hover:bg-amber-600 disabled:opacity-50">
                             <i className="fa-solid fa-lock-open mr-1"></i>ปลดล็อก
@@ -3177,6 +3202,33 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
                 {busy ? <><i className="fa-solid fa-spinner fa-spin mr-1"></i>กำลังลบ...</> : 'ลบถาวร'}
               </button>
               <button type="button" onClick={()=>{ setHardDelTarget(null); setConfirmText(''); }} disabled={busy}
+                className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold">
+                ยกเลิก
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Deactivate user modal */}
+      {deactivateTarget && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <h3 className="text-lg font-bold text-orange-600 mb-2">
+              <i className="fa-solid fa-user-slash mr-2"></i>ปิดบัญชี "{deactivateTarget.first_name} {deactivateTarget.last_name}"
+            </h3>
+            <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 mb-5 text-xs text-orange-900">
+              <p className="font-bold mb-1"><i className="fa-solid fa-circle-info mr-1"></i>รายละเอียด</p>
+              <p>• สถานะจะเปลี่ยนเป็น "ปฏิเสธ" — user เข้าระบบไม่ได้ทันที</p>
+              <p>• กู้คืนได้ โดยกดอนุมัติใหม่ภายหลัง</p>
+              <p>• ข้อมูลผู้ป่วยที่เพิ่มไว้ยังคงอยู่ในระบบ</p>
+            </div>
+            <div className="flex gap-2">
+              <button type="button" onClick={doDeactivateUser} disabled={busy}
+                className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white rounded-xl text-sm font-bold">
+                {busy ? <><i className="fa-solid fa-spinner fa-spin mr-1"></i>กำลังดำเนินการ...</> : 'ยืนยัน ปิดบัญชี'}
+              </button>
+              <button type="button" onClick={()=>setDeactivateTarget(null)} disabled={busy}
                 className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold">
                 ยกเลิก
               </button>

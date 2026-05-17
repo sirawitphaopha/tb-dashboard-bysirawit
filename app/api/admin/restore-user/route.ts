@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { createAdminClient } from '@/lib/supabase-admin'
-import { getResend, EMAIL_FROM, ADMIN_EMAILS } from '@/lib/resend'
-import { userDeactivatedEmail } from '@/lib/email-templates'
+import { getResend, EMAIL_FROM } from '@/lib/resend'
+import { userRestoredEmail } from '@/lib/email-templates'
 
 export async function POST(req: NextRequest) {
   try {
@@ -33,41 +33,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'admin only' }, { status: 403 })
     }
 
-    // ปิดบัญชีได้เฉพาะ approved เท่านั้น — กันแก้ admin โดยไม่ตั้งใจ
     const { data: target } = await admin
       .from('profiles')
-      .select('status, role, email, first_name')
+      .select('email, first_name, rejected_reason')
       .eq('id', userId)
       .single()
     if (!target) return NextResponse.json({ error: 'user not found' }, { status: 404 })
-    if (target.status !== 'approved') {
-      return NextResponse.json({ error: 'ปิดบัญชีได้เฉพาะ user ที่สถานะ approved เท่านั้น' }, { status: 400 })
-    }
-    if (target.role === 'admin') {
-      return NextResponse.json({ error: 'ไม่สามารถปิดบัญชี Admin ได้' }, { status: 400 })
-    }
 
-    const now = new Date()
     const { error } = await admin
       .from('profiles')
       .update({
-        status: 'rejected',
-        rejected_reason: 'ปิดบัญชีโดย Admin',
-        deactivated_at: now.toISOString(),
+        status: 'approved',
+        rejected_reason: null,
+        deactivated_at: null,
       })
       .eq('id', userId)
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-    // ส่งเมลแจ้ง user
+    // ส่งเมลแจ้ง user ว่าบัญชีกู้คืนแล้ว
     if (target.email) {
-      const deletionDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
-        .toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })
-      const mail = userDeactivatedEmail(
-        target.first_name || 'ผู้ใช้',
-        ADMIN_EMAILS[0],
-        deletionDate
-      )
+      const mail = userRestoredEmail(target.first_name || 'ผู้ใช้', req.nextUrl.origin)
       try {
         await getResend().emails.send({
           from: EMAIL_FROM,
@@ -75,7 +61,7 @@ export async function POST(req: NextRequest) {
           subject: mail.subject,
           html: mail.html,
         })
-      } catch (e) { console.error('deactivate email failed:', e) }
+      } catch (e) { console.error('restore email failed:', e) }
     }
 
     return NextResponse.json({ success: true })

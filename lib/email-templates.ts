@@ -286,6 +286,59 @@ export function deleteRequestRestoredEmail(firstName: string, patientName: strin
 }
 
 // ═════════════════════════════════════════════════════════
+// 11) User Account Deactivated — admin ปิดบัญชีชั่วคราว (30 วัน)
+// ═════════════════════════════════════════════════════════
+export function userDeactivatedEmail(firstName: string, adminEmail: string, deletionDate: string) {
+  const subject = 'แจ้งการปิดบัญชีชั่วคราว — TB CARE & JOURNEY'
+  const body = `
+    <h2 style="margin:0 0 16px;color:${BRAND_TEAL_DARK};font-size:18px;">เรียน คุณ${firstName}</h2>
+    <p style="margin:0 0 16px;font-size:14px;color:#4b5563;line-height:1.7;">
+      ขอเรียนแจ้งให้ทราบว่า ผู้ดูแลระบบได้ทำการ<strong>ปิดบัญชีชั่วคราว</strong>ของท่าน ท่านจะไม่สามารถเข้าสู่ระบบได้ในขณะนี้
+    </p>
+    <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:16px;margin:20px 0;">
+      <p style="margin:0 0 6px;font-size:12px;color:#9a3412;font-weight:700;">⏳ กำหนดลบบัญชีอัตโนมัติ</p>
+      <p style="margin:0;font-size:14px;color:#7c2d12;line-height:1.6;">
+        หากไม่มีการกู้คืน บัญชีของท่านจะถูกลบออกจากระบบถาวรในวันที่ <strong>${deletionDate}</strong>
+      </p>
+    </div>
+    <div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:10px;padding:16px;margin:20px 0;">
+      <p style="margin:0 0 6px;font-size:13px;color:${BRAND_TEAL_DARK};font-weight:700;">📧 หากต้องการกู้คืนบัญชี</p>
+      <p style="margin:0;font-size:13px;color:${BRAND_TEAL};line-height:1.6;">
+        กรุณาติดต่อผู้ดูแลระบบโดยตรงที่<br/>
+        <strong>${adminEmail}</strong>
+      </p>
+    </div>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB CARE &amp; JOURNEY</p>
+  `
+  return { subject, html: wrap(subject, body) }
+}
+
+// ═════════════════════════════════════════════════════════
+// 12) User Account Restored — admin กู้คืนบัญชี
+// ═════════════════════════════════════════════════════════
+export function userRestoredEmail(firstName: string, baseUrl: string) {
+  const subject = 'บัญชีของท่านได้รับการกู้คืนแล้ว — TB CARE & JOURNEY'
+  const body = `
+    <h2 style="margin:0 0 16px;color:${BRAND_TEAL_DARK};font-size:18px;">เรียน คุณ${firstName}</h2>
+    <p style="margin:0 0 16px;font-size:14px;color:#4b5563;line-height:1.7;">
+      ผู้ดูแลระบบได้ทำการ<strong>กู้คืนบัญชี</strong>ของท่านเรียบร้อยแล้ว ท่านสามารถเข้าใช้งานระบบได้ทันที
+    </p>
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px;margin:20px 0;">
+      <p style="margin:0;font-size:14px;color:#166534;line-height:1.6;">✅ บัญชีของท่านกลับมาใช้งานได้ตามปกติแล้วค่ะ</p>
+    </div>
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr><td align="center" style="padding:8px 0 20px;">
+        <a href="${baseUrl}/login" style="display:inline-block;padding:14px 36px;background:${BRAND_TEAL};color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px;">
+          เข้าสู่ระบบ
+        </a>
+      </td></tr>
+    </table>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB CARE &amp; JOURNEY</p>
+  `
+  return { subject, html: wrap(subject, body) }
+}
+
+// ═════════════════════════════════════════════════════════
 // 10) User Account Deleted — admin ลบบัญชีผู้ใช้ถาวร (กรณีปฏิเสธแล้วลบทิ้ง)
 // ═════════════════════════════════════════════════════════
 export function userAccountDeletedEmail(firstName: string) {

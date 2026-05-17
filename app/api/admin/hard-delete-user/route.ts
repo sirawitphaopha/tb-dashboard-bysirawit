@@ -48,7 +48,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'ลบถาวรได้เฉพาะ user ที่สถานะ rejected เท่านั้น' }, { status: 400 })
     }
 
-    // ลบทั้ง profile + auth user (FK cascade ถ้าตั้งไว้ — ไม่งั้นต้องลบ profiles ก่อน)
+    // ลบ tb_delete_requests ที่ user นี้เคยขอก่อน (FK constraint)
+    await admin.from('tb_delete_requests').delete().eq('requested_by', userId)
+
+    // ลบทั้ง profile + auth user
     const { error: profErr } = await admin.from('profiles').delete().eq('id', userId)
     if (profErr) return NextResponse.json({ error: 'ลบ profile ไม่สำเร็จ: ' + profErr.message }, { status: 500 })
 
