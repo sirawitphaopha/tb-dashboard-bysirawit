@@ -766,6 +766,14 @@ window.loadPendingDeleteRequests = async () => {
   return data || [];
 };
 
+window.loadMyPendingDeleteRequests = async (userId) => {
+  const { data } = await window._sb.from('tb_delete_requests')
+    .select('id, patient_id, status, requested_by')
+    .eq('requested_by', userId)
+    .in('status', ['pending', 'approved']);
+  return data || [];
+};
+
 window.approveDeleteRequest = async (requestId, patientId, reviewedBy, reason) => {
   const ok = await window.softDeletePatient(patientId, reviewedBy, reason);
   if (!ok) return false;

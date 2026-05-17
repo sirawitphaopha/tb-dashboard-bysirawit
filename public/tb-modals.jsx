@@ -71,7 +71,7 @@ function DoseCalculator({weight,regimen,manualMode,manualDoses,onToggle,onManual
   );
 }
 
-function DOTCalendar({patient,onUpdate}){
+function DOTCalendar({patient,onUpdate,locked}){
   const today=new Date();const yr=today.getFullYear();const mo=today.getMonth();
   const dim=new Date(yr,mo+1,0).getDate();const fd=new Date(yr,mo,1).getDay();const td=today.getDate();
   const gk=d=>`${yr}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
@@ -79,7 +79,7 @@ function DOTCalendar({patient,onUpdate}){
   const mks=Object.keys(patient.dot).filter(k=>k.startsWith(`${yr}-${String(mo+1).padStart(2,'0')}`));
   const taken=mks.filter(k=>patient.dot[k]).length;
   const pct=mks.length>0?Math.round((taken/mks.length)*100):0;
-  const toggle=day=>{if(day>td)return;const k=gk(day);onUpdate({...patient,dot:{...patient.dot,[k]:!patient.dot[k]}});};
+  const toggle=day=>{if(day>td||locked)return;const k=gk(day);onUpdate({...patient,dot:{...patient.dot,[k]:!patient.dot[k]}});};
   return(
     <div className="bg-white border border-gray-200 rounded-2xl p-4">
       <div className="flex justify-between items-center mb-3"><h4 className="font-bold text-gray-800 text-sm"><i className="fa-solid fa-calendar-check mr-2 text-teal-600"></i>DOT Calendar</h4><span className={'text-sm font-bold '+(pct>=90?'text-green-600':pct>=70?'text-amber-600':'text-red-600')}>เดือนนี้: {pct}%</span></div>
@@ -209,7 +209,7 @@ function DrugInteractionPanel({patient}){
   return<div className="space-y-3">{ix.map((item,i)=><div key={i} className={'p-4 rounded-xl border '+co[item.s]}><p className="font-bold text-sm mb-1"><i className={'fa-solid '+(item.s==='high'?'fa-triangle-exclamation':'fa-circle-exclamation')+' mr-2'}></i>{item.drug}</p><p className="text-xs text-gray-600 mb-1">{item.effect}</p><p className="text-xs font-semibold text-gray-700">💊 {item.rec}</p></div>)}</div>;
 }
 
-function RegimenHistoryTab({patient,onUpdate,settings}){
+function RegimenHistoryTab({patient,onUpdate,settings,locked}){
   const regimenList=(settings?.regimens)||REGIMENS;
   const reasonList=(settings?.restartReasons)||DEFAULT_RESTART_REASONS;
   const [showForm,setShowForm]=useState(false);
@@ -224,7 +224,7 @@ function RegimenHistoryTab({patient,onUpdate,settings}){
   };
   return(
     <div className="space-y-5">
-      <div className="flex justify-between items-center"><h3 className="font-bold text-gray-800 text-sm"><i className="fa-solid fa-clock-rotate-left mr-2 text-teal-600"></i>ประวัติสูตรยา</h3><button type="button" onClick={()=>setShowForm(!showForm)} className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-colors"><i className="fa-solid fa-plus mr-1"></i>เปลี่ยนสูตร</button></div>
+      <div className="flex justify-between items-center"><h3 className="font-bold text-gray-800 text-sm"><i className="fa-solid fa-clock-rotate-left mr-2 text-teal-600"></i>ประวัติสูตรยา</h3><button type="button" onClick={()=>{if(!locked)setShowForm(!showForm);}} disabled={locked} className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors ${locked?'bg-gray-200 text-gray-400 cursor-not-allowed':'bg-teal-600 hover:bg-teal-700 text-white'}`}><i className="fa-solid fa-plus mr-1"></i>เปลี่ยนสูตร</button></div>
       <div className="relative"><div className="absolute left-5 top-0 bottom-0 w-0.5 bg-gray-200"></div>
         <div className="space-y-3">{(patient.regimenHistory||[]).map((e,i)=>(
           <div key={i} className="flex gap-4">
@@ -261,7 +261,7 @@ function RegimenHistoryTab({patient,onUpdate,settings}){
   );
 }
 
-function LabTab({patient,onUpdate,settings}){
+function LabTab({patient,onUpdate,settings,locked}){
   const effectiveLAB_GROUPS = (settings?.labGroups) || LAB_GROUPS || [];
   const [showAdd,setShowAdd]=useState(false);
   const [tp,setTp]=useState('');const [date,setDate]=useState('');
@@ -314,7 +314,7 @@ function LabTab({patient,onUpdate,settings}){
 
       <div className="flex justify-between items-center">
         <h3 className="font-bold text-gray-800 text-sm"><i className="fa-solid fa-flask mr-2 text-teal-600"></i>ผล Lab</h3>
-        <button type="button" onClick={()=>setShowAdd(!showAdd)} className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-colors"><i className="fa-solid fa-plus mr-1"></i>เพิ่มผล Lab</button>
+        <button type="button" onClick={()=>{if(!locked)setShowAdd(!showAdd);}} disabled={locked} className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors ${locked?'bg-gray-200 text-gray-400 cursor-not-allowed':'bg-teal-600 hover:bg-teal-700 text-white'}`}><i className="fa-solid fa-plus mr-1"></i>เพิ่มผล Lab</button>
       </div>
 
       {showAdd&&(
@@ -388,7 +388,7 @@ function LabTab({patient,onUpdate,settings}){
 }
 
 
-function ADRTab({patient,onUpdate}){
+function ADRTab({patient,onUpdate,locked}){
   const safeAdr=migrateAdr(patient.adr);
 
   // Build ADR events from visits + adr tab, grouped by date
@@ -416,6 +416,7 @@ function ADRTab({patient,onUpdate}){
   });
 
   const setAdr=(key,field,val)=>{
+    if(locked)return;
     const updated={...safeAdr,[key]:{...safeAdr[key],[field]:val}};
     onUpdate({...patient,adr:updated});
   };
@@ -1240,7 +1241,7 @@ const SPECIMEN_LAB_FIELDS = {
   ],
 };
 
-function DiagnosisTab({patient, onUpdate}) {
+function DiagnosisTab({patient, onUpdate, locked}) {
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState(EMPTY_DX());
   const [cols, setCols] = useState(DEFAULT_COLS);
@@ -1442,7 +1443,7 @@ function DiagnosisTab({patient, onUpdate}) {
       {/* Header row */}
       <div className="flex justify-between items-center">
         <h3 className="font-bold text-gray-800 text-sm"><i className="fa-solid fa-microscope mr-2 text-teal-600"></i>ผลการวินิจฉัย (Diagnosis)</h3>
-        <button type="button" onClick={openAdd} className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-colors"><i className="fa-solid fa-plus mr-1"></i>เพิ่มผล</button>
+        <button type="button" onClick={()=>{if(!locked)openAdd();}} disabled={locked} className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors ${locked?'bg-gray-200 text-gray-400 cursor-not-allowed':'bg-teal-600 hover:bg-teal-700 text-white'}`}><i className="fa-solid fa-plus mr-1"></i>เพิ่มผล</button>
       </div>
 
       {/* Add/Edit form */}
@@ -1851,7 +1852,7 @@ function DiagnosisTab({patient, onUpdate}) {
 }
 
 
-function MedsTab({patient,onUpdate,settings}){
+function MedsTab({patient,onUpdate,settings,locked}){
   const [editDoses,setEditDoses]=useState(false);
   const [customDoses,setCustomDoses]=useState(patient.customDoses||{});
   const [customStrengths,setCustomStrengths]=useState(patient.drugStrengths||{});
@@ -1948,7 +1949,7 @@ function MedsTab({patient,onUpdate,settings}){
                 <button type="button" onClick={saveDoses} className="text-xs px-2.5 py-1 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors font-bold">บันทึก</button>
               </div>
             ):(
-              <button type="button" onClick={()=>{setCustomDoses(patient.customDoses||{});setEditDoses(true);}} className="text-xs px-2.5 py-1 border border-gray-200 text-teal-600 rounded-lg hover:bg-teal-50 transition-colors font-semibold"><i className="fa-solid fa-pen mr-1"></i>แก้ไขโดส</button>
+              <button type="button" onClick={()=>{if(!locked){setCustomDoses(patient.customDoses||{});setEditDoses(true);}}} disabled={locked} className={`text-xs px-2.5 py-1 rounded-lg transition-colors font-semibold ${locked?'border border-gray-200 text-gray-300 cursor-not-allowed':'border border-gray-200 text-teal-600 hover:bg-teal-50'}`}><i className="fa-solid fa-pen mr-1"></i>แก้ไขโดส</button>
             )}
           </div>
         </div>
@@ -2026,7 +2027,7 @@ function MedsTab({patient,onUpdate,settings}){
                 <select value={newExtraKey} onChange={e=>setNewExtraKey(e.target.value)} className="p-2 border border-gray-200 rounded-lg text-sm bg-white outline-none">
                   {['Lfx','Am'].map(k=><option key={k} value={k}>{DRUG_RANGES[k]?.name||k}</option>)}
                 </select>
-                <button type="button" onClick={addExtraDrug} className="px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm font-bold"><i className="fa-solid fa-plus mr-1"></i>เพิ่มยาเสริม</button>
+                <button type="button" onClick={()=>{if(!locked)addExtraDrug();}} disabled={locked} className={`px-3 py-2 rounded-lg text-sm font-bold ${locked?'bg-gray-200 text-gray-400 cursor-not-allowed':'bg-teal-600 hover:bg-teal-700 text-white'}`}><i className="fa-solid fa-plus mr-1"></i>เพิ่มยาเสริม</button>
               </div>
             )}
           </div>
@@ -2206,12 +2207,12 @@ function ClinicalModal({patient,onClose,onUpdate,settings,onArchive,currentUser,
         {hasPendingRequest&&<div style={{background:'#fef3c7',borderBottom:'1px solid #fcd34d',padding:'8px 20px',display:'flex',alignItems:'center',gap:'8px',flexShrink:0}}><i className="fa-solid fa-clock" style={{color:'#d97706',fontSize:'12px'}}></i><span style={{fontSize:'12px',color:'#92400e',fontWeight:600}}>ผู้ป่วยรายนี้มีคำขอลบรออนุมัติ — ไม่สามารถบันทึกข้อมูลเพิ่มเติมได้จนกว่า Admin จะตัดสินใจ</span></div>}
         <div className="flex-1 overflow-y-auto p-6 bg-slate-50/30">
           {tab==='timeline'&&<TimelineTab patient={patient} onUpdate={safeUpdate} settings={settings} locked={hasPendingRequest}/>}
-          {tab==='meds'&&<MedsTab patient={patient} onUpdate={safeUpdate} settings={settings}/>}
-          {tab==='regimen-history'&&<RegimenHistoryTab patient={patient} onUpdate={safeUpdate} settings={settings}/>}
-          {tab==='labs'&&<LabTab patient={patient} onUpdate={safeUpdate}/>}
-          {tab==='sputum'&&<DiagnosisTab patient={patient} onUpdate={safeUpdate}/>}
-          {tab==='dot'&&<div className="max-w-lg"><DOTCalendar patient={patient} onUpdate={safeUpdate}/></div>}
-          {tab==='adr'&&<ADRTab patient={patient} onUpdate={safeUpdate}/>}
+          {tab==='meds'&&<MedsTab patient={patient} onUpdate={safeUpdate} settings={settings} locked={hasPendingRequest}/>}
+          {tab==='regimen-history'&&<RegimenHistoryTab patient={patient} onUpdate={safeUpdate} settings={settings} locked={hasPendingRequest}/>}
+          {tab==='labs'&&<LabTab patient={patient} onUpdate={safeUpdate} settings={settings} locked={hasPendingRequest}/>}
+          {tab==='sputum'&&<DiagnosisTab patient={patient} onUpdate={safeUpdate} locked={hasPendingRequest}/>}
+          {tab==='dot'&&<div className="max-w-lg"><DOTCalendar patient={patient} onUpdate={safeUpdate} locked={hasPendingRequest}/></div>}
+          {tab==='adr'&&<ADRTab patient={patient} onUpdate={safeUpdate} locked={hasPendingRequest}/>}
 
           {tab==='summary'&&<PharmSummaryTab patient={patient} currentUser={currentUser} onSoftDelete={onSoftDelete} onRequestDelete={onRequestDelete} pendingDeleteRequests={pendingDeleteRequests}/>}
         </div>

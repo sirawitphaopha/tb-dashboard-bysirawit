@@ -1734,17 +1734,23 @@ function App() {
   const [pendingUserCount, setPendingUserCount] = useState(0);
   const [pendingDeleteRequests, setPendingDeleteRequests] = useState([]);
   useEffect(() => {
-    if (currentUser?.role !== 'admin') return;
-    (async () => {
-      try {
-        const { count } = await window._sb.from('profiles')
-          .select('id', { count: 'exact', head: true })
-          .eq('status', 'pending');
-        setPendingUserCount(count || 0);
-        const reqs = await window.loadPendingDeleteRequests();
-        setPendingDeleteRequests(reqs);
-      } catch (e) { console.error('Load pending count failed:', e); }
-    })();
+    if (!currentUser?.id) return;
+    if (currentUser.role === 'admin') {
+      (async () => {
+        try {
+          const { count } = await window._sb.from('profiles')
+            .select('id', { count: 'exact', head: true })
+            .eq('status', 'pending');
+          setPendingUserCount(count || 0);
+          const reqs = await window.loadPendingDeleteRequests();
+          setPendingDeleteRequests(reqs);
+        } catch (e) { console.error('Load pending count failed:', e); }
+      })();
+    } else {
+      window.loadMyPendingDeleteRequests(currentUser.id)
+        .then(reqs => setPendingDeleteRequests(reqs))
+        .catch(() => {});
+    }
   }, [currentUser]);
   useEffect(() => {
     fetch('/api/profile/me')
@@ -2056,7 +2062,7 @@ function App() {
             <div>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:0,whiteSpace:'nowrap'}}>พัฒนาโดย เภสัชกร สิรวิชญ์ เผ่าผา</p>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:'1px 0 0 0',whiteSpace:'nowrap'}}>โรงพยาบาลปรางค์กู่</p>
-              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.7.5 ·<span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
+              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.7.5.2 ·<span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
             </div>
           ) : (
             <div style={{display:'flex',justifyContent:'center'}}>
