@@ -6,7 +6,7 @@ import { deleteRequestApprovedEmail, deleteRequestRejectedEmail, deleteRequestRe
 
 export async function POST(req: NextRequest) {
   try {
-    const { requestedBy, patientName, action, note } = await req.json()
+    const { requestedBy, patientName, action, note, patientId } = await req.json()
     if (!requestedBy || !patientName || !action) {
       return NextResponse.json({ error: 'missing required fields' }, { status: 400 })
     }
@@ -50,6 +50,21 @@ export async function POST(req: NextRequest) {
         })
       } catch (e) { console.error('delete-notify email failed:', e) }
     }
+
+    // แทรก in-app notification
+    const notifType = action === 'approved' ? 'delete_approved'
+      : action === 'rejected'    ? 'delete_rejected'
+      : action === 'restored'    ? 'delete_restored'
+      : 'delete_hard_deleted'
+    try {
+      await admin.from('tb_notifications').insert({
+        user_id:      requestedBy,
+        type:         notifType,
+        patient_name: patientName,
+        patient_id:   (action === 'rejected' || action === 'restored') ? (patientId || null) : null,
+        note:         note || null,
+      })
+    } catch (e) { console.error('insert notification failed:', e) }
 
     return NextResponse.json({ success: true })
   } catch (e: any) {

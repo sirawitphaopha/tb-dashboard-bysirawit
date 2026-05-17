@@ -1710,6 +1710,7 @@ function App() {
   const [dbLoading, setDbLoading] = useState(true);
   const [clinical, setClinical] = useState(null);
   const [showNotifs, setShowNotifs] = useState(false);
+  const notifRef = useRef(null);
   const [showFullNotifs, setShowFullNotifs] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [readAlerts, setReadAlerts] = useState(new Set());
@@ -1734,6 +1735,7 @@ function App() {
   const [pendingUserCount, setPendingUserCount] = useState(0);
   const [pendingDeleteRequests, setPendingDeleteRequests] = useState([]);
   const [cancelledDeleteCount, setCancelledDeleteCount] = useState(0);
+  const [userDbNotifs, setUserDbNotifs] = useState([]);
   useEffect(() => {
     if (!currentUser?.id) return;
     if (currentUser.role === 'admin') {
@@ -1752,6 +1754,9 @@ function App() {
     } else {
       window.loadMyPendingDeleteRequests(currentUser.id)
         .then(reqs => setPendingDeleteRequests(reqs))
+        .catch(() => {});
+      window.loadUserNotifications()
+        .then(notifs => setUserDbNotifs(notifs))
         .catch(() => {});
     }
   }, [currentUser]);
@@ -1772,6 +1777,17 @@ function App() {
       })
       .catch(()=>{});
   }, []);
+
+  useEffect(() => {
+    if (!showNotifs) return;
+    const handler = (e) => {
+      if (notifRef.current && !notifRef.current.contains(e.target)) setShowNotifs(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showNotifs]);
+
+  useEffect(() => { setShowNotifs(false); }, [nav]);
 
   const showDirtyToast = () => {
     if (dirtyToastTimer.current) clearTimeout(dirtyToastTimer.current);
@@ -1823,10 +1839,30 @@ function App() {
       time: 'ล่าสุด',
     }] : []),
   ];
-  const alerts = [...adminAlerts, ...generateAlerts(patients)];
+  const userNotifAlerts = userDbNotifs.map(n => ({
+    id: 'user-notif-' + n.id,
+    dbNotifId: n.id,
+    type: n.type === 'delete_rejected' ? 'warning' : 'info',
+    patient: n.patient_name || null,
+    patientId: (n.type === 'delete_rejected' || n.type === 'delete_restored') ? n.patient_id : null,
+    navTarget: null,
+    msg: n.type === 'delete_approved'     ? `Admin อนุมัติลบ "${n.patient_name}" แล้ว`
+       : n.type === 'delete_rejected'     ? `Admin ไม่อนุมัติลบ "${n.patient_name}"${n.note ? ` — ${n.note}` : ''}`
+       : n.type === 'delete_restored'     ? `Admin กู้คืน "${n.patient_name}" จากถังขยะแล้ว`
+       : `"${n.patient_name}" ถูกลบถาวรแล้ว`,
+    time: new Date(n.created_at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }),
+  }));
+  const alerts = [...adminAlerts, ...userNotifAlerts, ...generateAlerts(patients)];
   const unreadCount = alerts.filter(a => !readAlerts.has(a.id)).length;
-  const markRead = id => setReadAlerts(s => new Set([...s, id]));
-  const markAllRead = () => setReadAlerts(new Set(alerts.map(a => a.id)));
+  const markRead = id => {
+    setReadAlerts(s => new Set([...s, id]));
+    const notif = userDbNotifs.find(n => 'user-notif-' + n.id === id);
+    if (notif) window.markUserNotificationRead(notif.id).catch(() => {});
+  };
+  const markAllRead = () => {
+    setReadAlerts(new Set(alerts.map(a => a.id)));
+    userDbNotifs.forEach(n => window.markUserNotificationRead(n.id).catch(() => {}));
+  };
   const openFromNotif = p => { setClinical(p); };
 
   const addPatient = async p => { await savePatient(p); setPatients(ps => [...ps, p]); };
@@ -1892,7 +1928,7 @@ function App() {
         fetch('/api/patient/delete-notify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ requestedBy, patientName, action: 'approved' }),
+          body: JSON.stringify({ requestedBy, patientName, action: 'approved', patientId }),
         }).catch(() => {});
       }
     }
@@ -1900,7 +1936,7 @@ function App() {
   };
 
   // ปฏิเสธคำขอลบ (admin เท่านั้น)
-  const rejectDeleteRequest = async (requestId, note, requestedBy, patientName) => {
+  const rejectDeleteRequest = async (requestId, note, requestedBy, patientName, patientId) => {
     if (!currentUser?.id) return false;
     const ok = await window.rejectDeleteRequest(requestId, currentUser.id, note);
     if (ok) {
@@ -1911,7 +1947,7 @@ function App() {
         fetch('/api/patient/delete-notify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ requestedBy, patientName, action: 'rejected', note }),
+          body: JSON.stringify({ requestedBy, patientName, action: 'rejected', note, patientId }),
         }).catch(() => {});
       }
     }
@@ -1939,7 +1975,7 @@ function App() {
       fetch('/api/patient/delete-notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requestedBy, patientName, action: 'restored' }),
+        body: JSON.stringify({ requestedBy, patientName, action: 'restored', patientId }),
       }).catch(() => {});
     }
     return true;
@@ -2090,7 +2126,7 @@ function App() {
             <div>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:0,whiteSpace:'nowrap'}}>พัฒนาโดย เภสัชกร สิรวิชญ์ เผ่าผา</p>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:'1px 0 0 0',whiteSpace:'nowrap'}}>โรงพยาบาลปรางค์กู่</p>
-              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.7.6.2 ·<span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
+              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.7.7 ·<span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
             </div>
           ) : (
             <div style={{display:'flex',justifyContent:'center'}}>
@@ -2216,18 +2252,20 @@ function App() {
             </div>
 
             {/* Bell notification */}
-            <button onClick={()=>setShowNotifs(!showNotifs)} className="relative p-2 text-gray-400 hover:text-teal-600 transition-colors">
-              <i className="fa-regular fa-bell text-xl"></i>
-              {unreadCount > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold px-1 border-2 border-white animate-pulse">{unreadCount}</span>}
-            </button>
-            {showNotifs && <NotificationPanel
-              alerts={alerts} patients={patients} readAlerts={readAlerts}
-              onRead={markRead} onReadAll={markAllRead}
-              onOpen={p=>{openFromNotif(p);setShowNotifs(false);}}
-              onNavTarget={target=>{ setNav(target); setShowNotifs(false); }}
-              onClose={()=>setShowNotifs(false)}
-              onExpand={()=>{setShowNotifs(false);setShowFullNotifs(true);}}
-            />}
+            <div ref={notifRef} className="relative">
+              <button onClick={()=>setShowNotifs(!showNotifs)} className="relative p-2 text-gray-400 hover:text-teal-600 transition-colors">
+                <i className="fa-regular fa-bell text-xl"></i>
+                {unreadCount > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold px-1 border-2 border-white animate-pulse">{unreadCount}</span>}
+              </button>
+              {showNotifs && <NotificationPanel
+                alerts={alerts} patients={patients} readAlerts={readAlerts}
+                onRead={markRead} onReadAll={markAllRead}
+                onOpen={p=>{openFromNotif(p);setShowNotifs(false);}}
+                onNavTarget={target=>{ setNav(target); setShowNotifs(false); }}
+                onClose={()=>setShowNotifs(false)}
+                onExpand={()=>{setShowNotifs(false);setShowFullNotifs(true);}}
+              />}
+            </div>
           </div>
         </header>
 
@@ -2243,7 +2281,7 @@ function App() {
           {!dbLoading && nav==='knowledge'     && <KnowledgeBase/>}
           {!dbLoading && nav==='settings'      && <AdminSettings settings={settings} setSettings={setSettings} setNav={setNav}/>}
           {!dbLoading && nav==='admin-users'   && <AdminUsersTab currentUser={currentUser} onPendingChange={setPendingUserCount}/>}
-          {!dbLoading && nav==='trash'         && <TrashList currentUser={currentUser} onRestore={restorePatient} onHardDelete={hardDeletePatient} pendingDeleteRequests={pendingDeleteRequests} onApproveDelete={approveDeleteRequest} onRejectDelete={rejectDeleteRequest}/>}
+          {!dbLoading && nav==='trash'         && <TrashList currentUser={currentUser} onRestore={restorePatient} onHardDelete={hardDeletePatient} pendingDeleteRequests={pendingDeleteRequests} onApproveDelete={approveDeleteRequest} onRejectDelete={rejectDeleteRequest} onAcknowledgeCancelled={async () => { await window.acknowledgeCancelledRequests(); setCancelledDeleteCount(0); }}/>}
           {!dbLoading && nav==='audit-log'     && <AuditLogTab/>}
         </div>
       </main>

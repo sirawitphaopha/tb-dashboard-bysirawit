@@ -2602,7 +2602,7 @@ function PharmSummaryTab({ patient, currentUser, onSoftDelete, onRequestDelete, 
 // ─────────────────────────────────────────────────────
 // หน้าถังขยะ — list คนที่ลบแล้ว + Restore / Hard delete
 // ─────────────────────────────────────────────────────
-function TrashList({ currentUser, onRestore, onHardDelete, pendingDeleteRequests, onApproveDelete, onRejectDelete }) {
+function TrashList({ currentUser, onRestore, onHardDelete, pendingDeleteRequests, onApproveDelete, onRejectDelete, onAcknowledgeCancelled }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionId, setActionId] = useState(null);     // id ที่กำลังทำงาน (loading)
@@ -2621,8 +2621,11 @@ function TrashList({ currentUser, onRestore, onHardDelete, pendingDeleteRequests
 
   // ── คำขอลบ + cancelled ──
   const [reqActionId, setReqActionId] = useState(null);
+  const [approveTarget, setApproveTarget] = useState(null);
   const [rejectTarget, setRejectTarget] = useState(null);
   const [rejectNote, setRejectNote] = useState('');
+  const [restoreTarget, setRestoreTarget] = useState(null);
+  const [restoreError, setRestoreError] = useState('');
   const [cancelledRequests, setCancelledRequests] = useState([]);
 
   useEffect(() => {
@@ -2637,12 +2640,13 @@ function TrashList({ currentUser, onRestore, onHardDelete, pendingDeleteRequests
     })();
   }, []);
 
-  const handleApprove = async (req) => {
-    const name = req.patient?.name || req.patient_id;
-    if (!window.confirm(`อนุมัติลบ "${name}"?\nเหตุผล: ${req.reason}`)) return;
-    setReqActionId(req.id);
-    await onApproveDelete(req.id, req.patient_id, req.requested_by, name);
+  const handleApprove = async () => {
+    if (!approveTarget) return;
+    const name = approveTarget.patient?.name || approveTarget.patient_id;
+    setReqActionId(approveTarget.id);
+    await onApproveDelete(approveTarget.id, approveTarget.patient_id, approveTarget.requested_by, name);
     setReqActionId(null);
+    setApproveTarget(null);
     refresh();
   };
 
@@ -2650,7 +2654,7 @@ function TrashList({ currentUser, onRestore, onHardDelete, pendingDeleteRequests
     if (!rejectTarget) return;
     const name = rejectTarget.patient?.name || rejectTarget.patient_id;
     setReqActionId(rejectTarget.id);
-    await onRejectDelete(rejectTarget.id, rejectNote, rejectTarget.requested_by, name);
+    await onRejectDelete(rejectTarget.id, rejectNote, rejectTarget.requested_by, name, rejectTarget.patient_id);
     setReqActionId(null);
     setRejectTarget(null);
     setRejectNote('');
@@ -2665,12 +2669,14 @@ function TrashList({ currentUser, onRestore, onHardDelete, pendingDeleteRequests
 
   const isValidReason = t => t.trim().length >= 3 && /[a-zA-Zก-๙]/.test(t.trim());
 
-  const handleRestore = async (p) => {
-    setActionId(p.id);
-    const ok = await onRestore(p.id, p.name, p.requestedBy);
+  const handleRestore = async () => {
+    if (!restoreTarget) return;
+    setActionId(restoreTarget.id);
+    setRestoreError('');
+    const ok = await onRestore(restoreTarget.id, restoreTarget.name, restoreTarget.requestedBy);
     setActionId(null);
-    if (ok) { refresh(); }
-    else alert('กู้คืนไม่สำเร็จ');
+    if (ok) { setRestoreTarget(null); refresh(); }
+    else setRestoreError('กู้คืนไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
   };
 
   const handleConfirmHardDelete = async () => {
@@ -2718,7 +2724,7 @@ function TrashList({ currentUser, onRestore, onHardDelete, pendingDeleteRequests
                 <p className="text-xs text-gray-700 mt-1 italic">เหตุผล: {req.reason}</p>
               </div>
               <div className="flex gap-2 flex-shrink-0">
-                <button type="button" disabled={reqActionId===req.id} onClick={()=>handleApprove(req)}
+                <button type="button" disabled={reqActionId===req.id} onClick={()=>setApproveTarget(req)}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg text-xs font-semibold border border-red-200 disabled:opacity-50">
                   {reqActionId===req.id ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-check"></i>}อนุมัติ
                 </button>
@@ -2735,9 +2741,19 @@ function TrashList({ currentUser, onRestore, onHardDelete, pendingDeleteRequests
       {/* ── Section คำขอที่ยกเลิกแล้ว (admin เท่านั้น) ── */}
       {isAdmin && cancelledRequests.length > 0 && (
         <div className="space-y-2">
-          <div className="flex items-center gap-2 px-1">
-            <i className="fa-solid fa-ban text-gray-400 text-sm"></i>
-            <p className="text-xs font-bold text-gray-400">คำขอที่ถูกยกเลิกโดยผู้ใช้ ({cancelledRequests.length} รายการ)</p>
+          <div className="flex items-center justify-between px-1">
+            <div className="flex items-center gap-2">
+              <i className="fa-solid fa-ban text-gray-400 text-sm"></i>
+              <p className="text-xs font-bold text-gray-400">คำขอที่ถูกยกเลิกโดยผู้ใช้ ({cancelledRequests.length} รายการ)</p>
+            </div>
+            {onAcknowledgeCancelled && (
+              <button
+                onClick={onAcknowledgeCancelled}
+                className="text-xs font-bold text-green-700 bg-green-100 hover:bg-green-200 px-3 py-1 rounded-lg transition-colors"
+              >
+                รับทราบทั้งหมด
+              </button>
+            )}
           </div>
           {cancelledRequests.map(req => {
             const requesterName = req.requester
@@ -2803,7 +2819,7 @@ function TrashList({ currentUser, onRestore, onHardDelete, pendingDeleteRequests
                 </div>
                 {isAdmin && (
                   <div className="flex gap-2 flex-shrink-0">
-                    <button type="button" disabled={isBusy} onClick={()=>handleRestore(p)}
+                    <button type="button" disabled={isBusy} onClick={()=>{ setRestoreTarget(p); setRestoreError(''); }}
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-lg text-xs font-semibold border border-teal-200 disabled:opacity-50">
                       <i className="fa-solid fa-rotate-left"></i>กู้คืน
                     </button>
@@ -2849,6 +2865,74 @@ function TrashList({ currentUser, onRestore, onHardDelete, pendingDeleteRequests
                 {actionId===hardDelTarget.id ? <><i className="fa-solid fa-spinner fa-spin mr-1"></i>กำลังลบ...</> : 'ลบถาวร'}
               </button>
               <button type="button" onClick={()=>setHardDelTarget(null)} disabled={actionId===hardDelTarget.id}
+                className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold">
+                ยกเลิก
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Dialog กู้คืนผู้ป่วย ── */}
+      {restoreTarget && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-teal-100 flex items-center justify-center text-teal-600 flex-shrink-0">
+                <i className="fa-solid fa-rotate-left text-lg"></i>
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-800">ยืนยันกู้คืนผู้ป่วย</h3>
+                <p className="text-xs text-gray-400">ผู้ป่วยจะกลับมาอยู่ในระบบตามปกติ</p>
+              </div>
+            </div>
+            <div className="bg-gray-50 rounded-xl p-3 mb-4 space-y-1">
+              <p className="text-sm font-bold text-gray-800">{restoreTarget.name}</p>
+              {restoreTarget.hn && <p className="text-xs text-gray-400 font-mono">HN: {restoreTarget.hn}</p>}
+            </div>
+            {restoreError && <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2 mb-3"><i className="fa-solid fa-triangle-exclamation mr-1"></i>{restoreError}</p>}
+            <div className="flex gap-2">
+              <button type="button" onClick={handleRestore} disabled={actionId===restoreTarget.id}
+                className="flex-1 px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:bg-teal-300 disabled:cursor-not-allowed text-white rounded-xl text-sm font-bold transition-colors">
+                {actionId===restoreTarget.id ? <><i className="fa-solid fa-spinner fa-spin mr-1"></i>กำลังกู้คืน...</> : 'ยืนยันกู้คืน'}
+              </button>
+              <button type="button" onClick={()=>setRestoreTarget(null)} disabled={actionId===restoreTarget.id}
+                className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold">
+                ยกเลิก
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Dialog อนุมัติลบ ── */}
+      {approveTarget && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center text-red-600 flex-shrink-0">
+                <i className="fa-solid fa-trash text-lg"></i>
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-800">ยืนยันอนุมัติลบผู้ป่วย</h3>
+                <p className="text-xs text-gray-400">การดำเนินการนี้ไม่สามารถย้อนกลับได้</p>
+              </div>
+            </div>
+            <div className="bg-gray-50 rounded-xl p-3 mb-4 space-y-1">
+              <p className="text-sm font-bold text-gray-800">{approveTarget.patient?.name || approveTarget.patient_id}</p>
+              {approveTarget.patient?.hn && <p className="text-xs text-gray-400 font-mono">HN: {approveTarget.patient.hn}</p>}
+              <p className="text-xs text-gray-500 mt-1">เหตุผลที่ขอลบ: <span className="italic">{approveTarget.reason}</span></p>
+            </div>
+            <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2 mb-4">
+              <i className="fa-solid fa-triangle-exclamation mr-1"></i>
+              ผู้ป่วยจะถูกย้ายเข้าถังขยะ และลบถาวรอัตโนมัติหลัง 60 วัน
+            </p>
+            <div className="flex gap-2">
+              <button type="button" onClick={handleApprove} disabled={reqActionId===approveTarget.id}
+                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-300 disabled:cursor-not-allowed text-white rounded-xl text-sm font-bold transition-colors">
+                {reqActionId===approveTarget.id ? <><i className="fa-solid fa-spinner fa-spin mr-1"></i>กำลังดำเนินการ...</> : 'ยืนยันอนุมัติลบ'}
+              </button>
+              <button type="button" onClick={()=>setApproveTarget(null)} disabled={reqActionId===approveTarget.id}
                 className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold">
                 ยกเลิก
               </button>

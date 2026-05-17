@@ -779,8 +779,19 @@ window.loadCancelledDeleteCount = async () => {
   const { count } = await window._sb.from('tb_delete_requests')
     .select('id', { count: 'exact', head: true })
     .eq('status', 'cancelled')
+    .is('acknowledged_at', null)
     .gte('requested_at', since);
   return count || 0;
+};
+
+window.acknowledgeCancelledRequests = async () => {
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const { error } = await window._sb.from('tb_delete_requests')
+    .update({ acknowledged_at: new Date().toISOString() })
+    .eq('status', 'cancelled')
+    .is('acknowledged_at', null)
+    .gte('requested_at', since);
+  return !error;
 };
 
 window.cancelDeleteRequest = async (patientId, userId) => {
@@ -807,4 +818,20 @@ window.rejectDeleteRequest = async (requestId, reviewedBy, note) => {
     status: 'rejected', reviewed_by: reviewedBy, reviewed_at: new Date().toISOString(), review_note: note || null,
   }).eq('id', requestId);
   return !error;
+};
+
+window.loadUserNotifications = async () => {
+  const { data } = await window._sb
+    .from('tb_notifications')
+    .select('*')
+    .eq('is_read', false)
+    .order('created_at', { ascending: false });
+  return data || [];
+};
+
+window.markUserNotificationRead = async (id) => {
+  await window._sb
+    .from('tb_notifications')
+    .update({ is_read: true })
+    .eq('id', id);
 };
