@@ -37,10 +37,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'admin only' }, { status: 403 })
     }
 
-    // query ก่อนเพื่อเอา rejection week data ปัจจุบัน
+    // query ก่อนเพื่อเอา rejection week data ปัจจุบัน + snapshot ตอน reject
     const { data: current } = await admin
       .from('profiles')
-      .select('first_name, last_name, rejection_week_start, rejection_week_count')
+      .select('first_name, last_name, username, email, rejection_week_start, rejection_week_count')
       .eq('id', userId)
       .single()
 
@@ -69,6 +69,10 @@ export async function POST(req: NextRequest) {
         user_id: userId,
         rejected_by: user.id,
         rejected_reason: reason,
+        username_at_reject:   current?.username   || null,
+        first_name_at_reject: current?.first_name || null,
+        last_name_at_reject:  current?.last_name  || null,
+        email_at_reject:      current?.email      || null,
       })
     if (logErr) console.error('reject log insert failed:', logErr)
 

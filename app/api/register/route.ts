@@ -77,12 +77,20 @@ export async function POST(req: NextRequest) {
     }
 
     // 2.5) Check license_number ซ้ำ — กันคนเดิมเปลี่ยนเมลหนี rate limit
-    // ยกเว้น profile ของตัวเอง (กรณี re-register) และยกเว้นเลขใบประกอบว่าง
-    if (fullLicense && fullLicense.trim()) {
-      let licenseQuery = admin.from('profiles').select('id, email, status').eq('license_number', fullLicense)
-      if (isReregister) licenseQuery = licenseQuery.neq('id', existingByEmail!.id)
-      const { data: licenseConflict } = await licenseQuery.maybeSingle()
-      if (licenseConflict) {
+    // เทียบเฉพาะตัวเลข (digits only) — ไม่สนใจ prefix ว./ท./ภ./ป.
+    // เพราะ admin/user เก่าอาจเก็บ license_number ในรูปแบบต่างกัน (เช่น "12345" vs "ภ.12345")
+    const licenseDigits = (licenseNumber || '').replace(/\D/g, '').trim()
+    if (licenseDigits) {
+      const { data: allLicenses } = await admin
+        .from('profiles')
+        .select('id, license_number, email, status')
+        .not('license_number', 'is', null)
+      const conflict = (allLicenses || []).find(p => {
+        if (isReregister && p.id === existingByEmail!.id) return false  // ข้ามตัวเอง
+        const pDigits = (p.license_number || '').replace(/\D/g, '')
+        return pDigits && pDigits === licenseDigits
+      })
+      if (conflict) {
         return NextResponse.json({
           error: 'เลขใบประกอบวิชาชีพนี้มีคนใช้สมัครแล้ว — หากเป็นเจ้าของจริง กรุณาสมัครด้วยอีเมลเดิม หรือติดต่อผู้ดูแลระบบ',
         }, { status: 400 })

@@ -843,13 +843,14 @@ window.markUserNotificationRead = async (id) => {
 window.loadUserRejectLog = async () => {
   const { data: logs, error } = await window._sb
     .from('tb_user_reject_log')
-    .select('id, user_id, rejected_by, rejected_reason, rejected_at')
+    .select('id, user_id, rejected_by, rejected_reason, rejected_at, username_at_reject, first_name_at_reject, last_name_at_reject, email_at_reject')
     .order('rejected_at', { ascending: false });
   if (error || !logs) return [];
 
   const ids = Array.from(new Set(logs.flatMap(l => [l.user_id, l.rejected_by]).filter(Boolean)));
   if (!ids.length) return logs;
 
+  // ดึง profile ปัจจุบัน — ใช้สำหรับคนปฏิเสธ (admin) และ fallback ถ้า snapshot ว่าง
   const { data: profs } = await window._sb
     .from('profiles')
     .select('id, first_name, last_name, username, email')
@@ -858,7 +859,14 @@ window.loadUserRejectLog = async () => {
 
   return logs.map(l => ({
     ...l,
-    user: byId[l.user_id] || null,
+    // ใช้ snapshot ก่อน ถ้าไม่มีค่อย fallback ไป profile ปัจจุบัน (สำหรับ record เก่า)
+    user: {
+      first_name: l.first_name_at_reject || byId[l.user_id]?.first_name || '',
+      last_name:  l.last_name_at_reject  || byId[l.user_id]?.last_name  || '',
+      username:   l.username_at_reject   || byId[l.user_id]?.username   || '',
+      email:      l.email_at_reject      || byId[l.user_id]?.email      || '',
+      isSnapshot: !!l.username_at_reject,
+    },
     rejecter: byId[l.rejected_by] || null,
   }));
 };
