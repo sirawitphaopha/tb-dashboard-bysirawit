@@ -394,34 +394,48 @@ export default function RegisterPage() {
               </select>
             </div>
 
-            {profession && (
-              <div className="mt-3">
-                <label style={lbl}>
-                  License Number
-                  {prefix && (
-                    <span className="ml-1.5 font-normal text-xs" style={{ color: '#0d9488' }}>
-                      (prefix: {prefix})
-                    </span>
+            {profession && (() => {
+              const licenseDup = !!error && error.includes('เลขใบประกอบ')
+              return (
+                <div className="mt-3">
+                  <label style={lbl}>
+                    License Number
+                    {prefix && (
+                      <span className="ml-1.5 font-normal text-xs" style={{ color: '#0d9488' }}>
+                        (prefix: {prefix})
+                      </span>
+                    )}
+                  </label>
+                  <div className="flex items-center gap-2">
+                    {prefix && (
+                      <span className="text-sm font-bold shrink-0 px-3 py-2.5 rounded-xl"
+                        style={{
+                          background: licenseDup ? '#fef2f2' : '#f0fdf4',
+                          color: licenseDup ? '#dc2626' : '#0d9488',
+                          border: `1px solid ${licenseDup ? '#fecaca' : '#d1fae5'}`,
+                        }}>
+                        {prefix}
+                      </span>
+                    )}
+                    <input
+                      type="text"
+                      value={licenseNum}
+                      onChange={e => { setLicenseNum(e.target.value.replace(/\D/g, '')); if (licenseDup) setError('') }}
+                      placeholder={prefix ? '00000' : 'กรอกเลขใบประกอบ (ถ้ามี)'}
+                      style={{ ...inp, borderColor: licenseDup ? '#ef4444' : '#e5e7eb' }}
+                      onFocus={e => { e.target.style.border = `1.5px solid ${licenseDup ? '#ef4444' : '#0d9488'}`; e.target.style.background = '#fff' }}
+                      onBlur={e => { e.target.style.border = `1px solid ${licenseDup ? '#ef4444' : '#e5e7eb'}`; e.target.style.background = '#f9fafb' }}
+                    />
+                  </div>
+                  {licenseDup && (
+                    <p style={{ fontSize: '11px', color: '#ef4444', marginTop: '5px' }}>
+                      <i className="fa-solid fa-circle-exclamation" style={{ marginRight: '4px' }}></i>
+                      เลขนี้มีคนใช้แล้ว — กรุณาแก้ไขหรือใช้อีเมลเดิมที่เคยสมัคร
+                    </p>
                   )}
-                </label>
-                <div className="flex items-center gap-2">
-                  {prefix && (
-                    <span className="text-sm font-bold shrink-0 px-3 py-2.5 rounded-xl"
-                      style={{ background: '#f0fdf4', color: '#0d9488', border: '1px solid #d1fae5' }}>
-                      {prefix}
-                    </span>
-                  )}
-                  <input
-                    type="text"
-                    value={licenseNum}
-                    onChange={e => setLicenseNum(e.target.value.replace(/\D/g, ''))}
-                    placeholder={prefix ? '00000' : 'กรอกเลขใบประกอบ (ถ้ามี)'}
-                    style={inp}
-                    onFocus={focus} onBlur={blur}
-                  />
                 </div>
-              </div>
-            )}
+              )
+            })()}
 
             <div className="mt-3">
               <label style={lbl}>Phone Number</label>
