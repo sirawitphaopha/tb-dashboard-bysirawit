@@ -2985,6 +2985,141 @@ const STATUS_STYLE = {
   rejected: { bg:'#fee2e2', fg:'#991b1b', label:'❌ ปฏิเสธ' },
 };
 
+function ToastModal({ toast, onClose }) {
+  if (!toast) return null;
+  const palette = {
+    success: { bg:'#ecfdf5', bd:'#10b981', fg:'#065f46', icon:'fa-circle-check', btn:'#0d9488', btnHover:'#0f766e' },
+    error:   { bg:'#fef2f2', bd:'#ef4444', fg:'#991b1b', icon:'fa-circle-xmark', btn:'#dc2626', btnHover:'#b91c1c' },
+    info:    { bg:'#eff6ff', bd:'#3b82f6', fg:'#1e3a8a', icon:'fa-circle-info',  btn:'#2563eb', btnHover:'#1d4ed8' },
+  };
+  const c = palette[toast.kind] || palette.info;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background:'rgba(15,23,42,0.45)' }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden tb-fade">
+        <div className="px-6 py-5" style={{ background: c.bg, borderLeft: `5px solid ${c.bd}` }}>
+          <div className="flex items-start gap-3">
+            <i className={'fa-solid '+c.icon+' text-2xl mt-0.5'} style={{ color: c.bd }}></i>
+            <div className="flex-1">
+              {toast.title && <h3 className="font-bold text-base mb-1" style={{ color: c.fg }}>{toast.title}</h3>}
+              <p className="text-sm whitespace-pre-line" style={{ color: c.fg }}>{toast.message}</p>
+            </div>
+          </div>
+        </div>
+        <div className="px-6 py-3 bg-white flex justify-end">
+          <button type="button" onClick={onClose}
+            className="px-5 py-2 rounded-xl text-white text-sm font-bold transition-colors"
+            style={{ background: c.btn }}
+            onMouseEnter={e=>e.currentTarget.style.background=c.btnHover}
+            onMouseLeave={e=>e.currentTarget.style.background=c.btn}>
+            ตกลง
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RejectHistoryTable({ logs, loading, expandedId, onToggle }) {
+  const fmt = (iso) => {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    const date = d.toLocaleDateString('th-TH', { year:'numeric', month:'2-digit', day:'2-digit' });
+    const time = d.toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit' });
+    return { date, time };
+  };
+  const nameOf = (p) => p ? `${p.first_name||''} ${p.last_name||''}`.trim() || p.username || p.email || '—' : '—';
+  const shortReason = (s) => {
+    if (!s) return '—';
+    return s.length > 40 ? s.slice(0,40) + '…' : s;
+  };
+
+  if (loading) {
+    return (
+      <div className="text-center py-16 text-gray-400">
+        <i className="fa-solid fa-spinner fa-spin text-3xl mb-2 block text-purple-500"></i>
+        <p className="text-sm">กำลังโหลดประวัติ...</p>
+      </div>
+    );
+  }
+  if (!logs.length) {
+    return (
+      <div className="bg-white rounded-2xl p-16 text-center border border-gray-100">
+        <i className="fa-solid fa-clock-rotate-left text-5xl text-gray-300 mb-3 block"></i>
+        <p className="text-sm text-gray-400">ยังไม่มีประวัติการปฏิเสธ</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+      <div className="grid grid-cols-12 gap-3 px-4 py-2 bg-gradient-to-r from-purple-50 to-violet-50 border-b border-gray-100 text-xs font-bold text-purple-900">
+        <div className="col-span-4">ผู้ใช้</div>
+        <div className="col-span-4">เหตุผล (ย่อ)</div>
+        <div className="col-span-2">วันที่</div>
+        <div className="col-span-2">คนปฏิเสธ</div>
+      </div>
+      <div className="divide-y divide-gray-100">
+        {logs.map(l => {
+          const { date, time } = fmt(l.rejected_at);
+          const isOpen = expandedId === l.id;
+          return (
+            <div key={l.id}>
+              <button type="button" onClick={()=>onToggle(l.id)}
+                className="w-full grid grid-cols-12 gap-3 px-4 py-3 items-center hover:bg-purple-50/40 transition-colors text-sm text-left">
+                <div className="col-span-4 flex items-center gap-2 min-w-0">
+                  <i className={'fa-solid text-xs text-purple-500 '+(isOpen?'fa-chevron-down':'fa-chevron-right')}></i>
+                  <div className="min-w-0">
+                    <p className="font-bold text-purple-900 truncate">{nameOf(l.user)}</p>
+                    <p className="text-xs text-gray-400 truncate">{l.user?.email || '—'}</p>
+                  </div>
+                </div>
+                <div className="col-span-4 text-xs text-gray-600 truncate">{shortReason(l.rejected_reason)}</div>
+                <div className="col-span-2 text-xs text-gray-600">
+                  <p>{date}</p>
+                  <p className="text-gray-400">{time}</p>
+                </div>
+                <div className="col-span-2 text-xs text-gray-600 truncate">{nameOf(l.rejecter)}</div>
+              </button>
+              {isOpen && (
+                <div className="px-4 pb-4 pt-1 bg-purple-50/30">
+                  <div className="bg-white rounded-xl border border-purple-100 p-4 space-y-3 text-sm">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <p className="text-xs text-gray-400 mb-0.5">📧 อีเมล</p>
+                        <p className="font-medium text-gray-700">{l.user?.email || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400 mb-0.5">👤 Username</p>
+                        <p className="font-medium text-gray-700">{l.user?.username ? '@'+l.user.username : '—'}</p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400 mb-0.5">📝 เหตุผลเต็ม</p>
+                      <p className="font-medium text-gray-800 whitespace-pre-wrap bg-amber-50 border-l-4 border-amber-300 p-3 rounded">
+                        {l.rejected_reason || '—'}
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <p className="text-xs text-gray-400 mb-0.5">👨‍💼 ปฏิเสธโดย</p>
+                        <p className="font-medium text-gray-700">{nameOf(l.rejecter)}{l.rejecter?.email ? ' ('+l.rejecter.email+')' : ''}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400 mb-0.5">🕐 เวลา</p>
+                        <p className="font-medium text-gray-700">{date} {time}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function AdminUsersTab({ currentUser, onPendingChange }) {
   const [profiles, setProfiles] = useState([]);
   const [filter, setFilter] = useState('pending');
@@ -2997,6 +3132,10 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
   const [hardDelTarget, setHardDelTarget] = useState(null);
   const [confirmText, setConfirmText] = useState('');
   const [deactivateTarget, setDeactivateTarget] = useState(null);
+  const [rejectLogs, setRejectLogs] = useState([]);
+  const [logLoading, setLogLoading] = useState(false);
+  const [expandedLogId, setExpandedLogId] = useState(null);
+  const [toast, setToast] = useState(null);  // {kind:'success'|'error'|'info', title?, message}
 
   const load = async () => {
     setLoading(true);
@@ -3008,6 +3147,16 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
   };
   useEffect(() => { load(); }, []);
 
+  const loadRejectLog = async () => {
+    setLogLoading(true);
+    const data = await window.loadUserRejectLog();
+    setRejectLogs(data || []);
+    setLogLoading(false);
+  };
+  useEffect(() => {
+    if (filter === 'reject-history') loadRejectLog();
+  }, [filter]);
+
   const handleApprove = async (userId) => {
     setBusy(true);
     const res = await fetch('/api/admin/approve', {
@@ -3015,8 +3164,8 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
       body: JSON.stringify({ userId }),
     });
     setBusy(false);
-    if (res.ok) { alert('อนุมัติเรียบร้อยค่ะ — ส่งเมลแจ้ง user แล้ว'); load(); }
-    else { const e = await res.json(); alert('Error: ' + e.error); }
+    if (res.ok) { setToast({ kind:'success', title:'อนุมัติเรียบร้อย', message:'ส่งเมลแจ้งผู้ใช้แล้วค่ะ ✉️' }); load(); }
+    else { const e = await res.json(); setToast({ kind:'error', title:'เกิดข้อผิดพลาด', message: e.error }); }
   };
 
   const handleHardDeleteUser = async () => {
@@ -3028,12 +3177,13 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
     });
     setBusy(false);
     if (res.ok) {
-      alert(`ลบ ${hardDelTarget.first_name||''} ${hardDelTarget.last_name||''} ถาวรเรียบร้อย — เมลใช้สมัครใหม่ได้`);
+      const name = `${hardDelTarget.first_name||''} ${hardDelTarget.last_name||''}`.trim();
+      setToast({ kind:'success', title:'ลบบัญชีถาวรเรียบร้อย', message:`${name}\nอีเมลนี้สามารถใช้สมัครใหม่ได้แล้ว` });
       setHardDelTarget(null); setConfirmText('');
       load();
     } else {
       const e = await res.json();
-      alert('Error: ' + e.error);
+      setToast({ kind:'error', title:'เกิดข้อผิดพลาด', message: e.error });
     }
   };
 
@@ -3044,7 +3194,7 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
       body: JSON.stringify({ userId: p.id }),
     });
     setBusy(false);
-    if (!res.ok) { const e = await res.json(); alert('Error: ' + e.error); }
+    if (!res.ok) { const e = await res.json(); setToast({ kind:'error', title:'เกิดข้อผิดพลาด', message: e.error }); }
     else load();
   };
 
@@ -3055,7 +3205,7 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
       body: JSON.stringify({ userId: p.id }),
     });
     setBusy(false);
-    if (!res.ok) { const e = await res.json(); alert('Error: ' + e.error); }
+    if (!res.ok) { const e = await res.json(); setToast({ kind:'error', title:'เกิดข้อผิดพลาด', message: e.error }); }
     else load();
   };
 
@@ -3068,19 +3218,22 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
     });
     setBusy(false);
     if (res.ok) { setDeactivateTarget(null); load(); }
-    else { const e = await res.json(); alert('Error: ' + e.error); }
+    else { const e = await res.json(); setToast({ kind:'error', title:'เกิดข้อผิดพลาด', message: e.error }); }
   };
 
   const submitReject = async () => {
-    if (!rejectReason.trim()) return alert('กรุณาระบุเหตุผล');
+    if (!rejectReason.trim()) return setToast({ kind:'info', title:'ขาดข้อมูล', message:'กรุณาระบุเหตุผลในการปฏิเสธ' });
     setBusy(true);
     const res = await fetch('/api/admin/reject', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: rejectingId, reason: rejectReason }),
     });
     setBusy(false);
-    if (res.ok) { alert('ปฏิเสธเรียบร้อย — ส่งเมลแจ้ง user แล้ว'); setRejectingId(null); setRejectReason(''); load(); }
-    else { const e = await res.json(); alert('Error: ' + e.error); }
+    if (res.ok) {
+      setToast({ kind:'success', title:'ปฏิเสธเรียบร้อย', message:'ส่งเมลแจ้งผู้ใช้แล้วค่ะ ✉️' });
+      setRejectingId(null); setRejectReason(''); load();
+    }
+    else { const e = await res.json(); setToast({ kind:'error', title:'เกิดข้อผิดพลาด', message: e.error }); }
   };
 
   if (currentUser?.role !== 'admin') {
@@ -3122,12 +3275,13 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
 
       {/* Filter cards — compact, hover-state, ข้อความตรงกลาง
            Roadmap: ในอนาคตเพิ่ม view mode (list/grid/timeline) ดูที่ pending master ข้อ 30 */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
         {[
           { key:'pending',  label:'รออนุมัติ',  count:counts.pending,  color:'#f59e0b', bg:'#fef3c7', hover:'#fde68a', icon:'fa-clock' },
           { key:'approved', label:'อนุมัติแล้ว', count:counts.approved, color:'#0d9488', bg:'#ccfbf1', hover:'#99f6e4', icon:'fa-check-circle' },
           { key:'rejected', label:'ปฏิเสธ',     count:counts.rejected, color:'#ef4444', bg:'#fee2e2', hover:'#fecaca', icon:'fa-circle-xmark' },
           { key:'all',      label:'ทั้งหมด',     count:profiles.length, color:'#0f766e', bg:'#f0fdfa', hover:'#ccfbf1', icon:'fa-layer-group' },
+          { key:'reject-history', label:'ประวัติการปฏิเสธ', count:rejectLogs.length, color:'#7c3aed', bg:'#ede9fe', hover:'#ddd6fe', icon:'fa-clock-rotate-left' },
         ].map(c => {
           const active = filter === c.key;
           return (
@@ -3154,6 +3308,7 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
       </div>
 
       {/* Search + view mode toggle */}
+      {filter !== 'reject-history' && (
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[220px]">
           <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
@@ -3175,9 +3330,17 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
         </div>
         <span className="text-xs text-gray-500 whitespace-nowrap">{filtered.length} คน</span>
       </div>
+      )}
 
-      {/* List */}
-      {loading ? (
+      {/* Reject History Tab — ตารางผสม กดแถวเพื่อขยายดูรายละเอียด */}
+      {filter === 'reject-history' ? (
+        <RejectHistoryTable
+          logs={rejectLogs}
+          loading={logLoading}
+          expandedId={expandedLogId}
+          onToggle={(id) => setExpandedLogId(prev => prev === id ? null : id)}
+        />
+      ) : loading ? (
         <div className="text-center py-16 text-gray-400">
           <i className="fa-solid fa-spinner fa-spin text-3xl mb-2 block text-teal-500"></i>
           <p className="text-sm">กำลังโหลด...</p>
@@ -3413,6 +3576,9 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
           </div>
         </div>
       )}
+
+      {/* Custom Toast (แทน alert() ของเบราว์เซอร์) */}
+      <ToastModal toast={toast} onClose={()=>setToast(null)} />
 
       {/* Reject Modal */}
       {rejectingId && (

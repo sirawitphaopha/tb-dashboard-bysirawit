@@ -118,6 +118,10 @@ export default function RegisterPage() {
     if (password !== confirm)  { setError('รหัสผ่านไม่ตรงกัน'); return }
     if (!profession || !hospitalType || !department) { setError('กรุณากรอกข้อมูลให้ครบทุกช่อง'); return }
     if (department === 'อื่นๆ' && !departmentOther.trim()) { setError('กรุณาระบุชื่อแผนก'); return }
+    const phoneDigits = phone.replace(/\D/g, '')
+    if (phoneDigits && (phoneDigits.length !== 10 || !phoneDigits.startsWith('0'))) {
+      setError('เบอร์โทรต้องมี 10 หลัก ขึ้นต้นด้วย 0'); return
+    }
 
     setLoading(true)
     try {
@@ -208,17 +212,21 @@ export default function RegisterPage() {
               <div>
                 <label style={lbl}>Username</label>
                 <input type="text" name="username" autoComplete="username"
-                  value={username} onChange={e => setUsername(e.target.value)}
+                  value={username} onChange={e => setUsername(e.target.value.replace(/\s/g, ''))}
+                  onKeyDown={e => { if (e.key === ' ') e.preventDefault() }}
                   placeholder="username" style={inp} onFocus={focus} onBlur={blur} required />
               </div>
               <div>
                 <label style={lbl}>Email</label>
                 <input type="email" name="email" autoComplete="email"
-                  value={email} onChange={e => setEmail(e.target.value)}
+                  value={email} onChange={e => setEmail(e.target.value.replace(/\s/g, ''))}
+                  onKeyDown={e => { if (e.key === ' ') e.preventDefault() }}
                   placeholder="email@example.com" style={inp} onFocus={focus} onBlur={blur} required />
                 <p style={{ fontSize: '11px', color: '#d97706', marginTop: '5px', lineHeight: 1.5 }}>
                   <i className="fa-solid fa-triangle-exclamation" style={{ marginRight: '4px' }}></i>
-                  กรุณาตรวจสอบให้ถูกต้อง — ระบบจะแจ้งผลอนุมัติทางอีเมลนี้เท่านั้น
+                  กรุณาตรวจสอบให้ถูกต้อง
+                  <br />
+                  <span style={{ marginLeft: '17px' }}>ระบบจะแจ้งผลอนุมัติทางอีเมลนี้เท่านั้น</span>
                 </p>
               </div>
             </div>
@@ -229,7 +237,8 @@ export default function RegisterPage() {
                 <input
                   type={showPassword ? 'text' : 'password'}
                   name="new-password" autoComplete="new-password"
-                  value={password} onChange={e => setPassword(e.target.value)}
+                  value={password} onChange={e => setPassword(e.target.value.replace(/\s/g, ''))}
+                  onKeyDown={e => { if (e.key === ' ') e.preventDefault() }}
                   placeholder="กรอกรหัสผ่าน"
                   style={{ ...inp, paddingRight: '44px' }}
                   onFocus={focus} onBlur={blur} required
@@ -272,7 +281,8 @@ export default function RegisterPage() {
                 <input
                   type={showConfirm ? 'text' : 'password'}
                   name="confirm-password" autoComplete="new-password"
-                  value={confirm} onChange={e => setConfirm(e.target.value)}
+                  value={confirm} onChange={e => setConfirm(e.target.value.replace(/\s/g, ''))}
+                  onKeyDown={e => { if (e.key === ' ') e.preventDefault() }}
                   placeholder="กรอกรหัสผ่านอีกครั้ง"
                   style={{ ...inp, paddingRight: '44px', borderColor: confirm && confirm !== password ? '#ef4444' : '#e5e7eb' }}
                   onFocus={e => { e.target.style.border = `1.5px solid ${confirm && confirm !== password ? '#ef4444' : '#0d9488'}`; e.target.style.background = '#fff' }}
@@ -350,13 +360,29 @@ export default function RegisterPage() {
 
             <div className="mt-3">
               <label style={lbl}>Phone Number</label>
-              <input
-                type="text"
-                value={phone}
-                onChange={e => setPhone(formatPhone(e.target.value))}
-                placeholder="0xx-xxx-xxxx"
-                style={inp} onFocus={focus} onBlur={blur}
-              />
+              {(() => {
+                const digits = phone.replace(/\D/g, '')
+                const invalid = digits.length > 0 && (digits.length !== 10 || !digits.startsWith('0'))
+                return (
+                  <>
+                    <input
+                      type="text"
+                      value={phone}
+                      onChange={e => setPhone(formatPhone(e.target.value))}
+                      placeholder="0xx-xxx-xxxx"
+                      style={{ ...inp, borderColor: invalid ? '#ef4444' : '#e5e7eb' }}
+                      onFocus={e => { e.target.style.border = `1.5px solid ${invalid ? '#ef4444' : '#0d9488'}`; e.target.style.background = '#fff' }}
+                      onBlur={e => { e.target.style.border = `1px solid ${invalid ? '#ef4444' : '#e5e7eb'}`; e.target.style.background = '#f9fafb' }}
+                    />
+                    {invalid && (
+                      <p style={{ fontSize: '11px', color: '#ef4444', marginTop: '5px' }}>
+                        <i className="fa-solid fa-circle-exclamation" style={{ marginRight: '4px' }}></i>
+                        เบอร์โทรต้องมี 10 หลัก ขึ้นต้นด้วย 0 (เช่น 081-234-5678)
+                      </p>
+                    )}
+                  </>
+                )
+              })()}
             </div>
           </section>
 

@@ -839,3 +839,26 @@ window.markUserNotificationRead = async (id) => {
     .update({ is_read: true })
     .eq('id', id);
 };
+
+window.loadUserRejectLog = async () => {
+  const { data: logs, error } = await window._sb
+    .from('tb_user_reject_log')
+    .select('id, user_id, rejected_by, rejected_reason, rejected_at')
+    .order('rejected_at', { ascending: false });
+  if (error || !logs) return [];
+
+  const ids = Array.from(new Set(logs.flatMap(l => [l.user_id, l.rejected_by]).filter(Boolean)));
+  if (!ids.length) return logs;
+
+  const { data: profs } = await window._sb
+    .from('profiles')
+    .select('id, first_name, last_name, username, email')
+    .in('id', ids);
+  const byId = Object.fromEntries((profs || []).map(p => [p.id, p]));
+
+  return logs.map(l => ({
+    ...l,
+    user: byId[l.user_id] || null,
+    rejecter: byId[l.rejected_by] || null,
+  }));
+};

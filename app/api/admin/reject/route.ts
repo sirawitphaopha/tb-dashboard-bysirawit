@@ -63,6 +63,15 @@ export async function POST(req: NextRequest) {
 
     if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 })
 
+    const { error: logErr } = await admin
+      .from('tb_user_reject_log')
+      .insert({
+        user_id: userId,
+        rejected_by: user.id,
+        rejected_reason: reason,
+      })
+    if (logErr) console.error('reject log insert failed:', logErr)
+
     const target = current
 
     const { data: authData } = await admin.auth.admin.getUserById(userId)

@@ -76,6 +76,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Username นี้มีคนใช้แล้ว' }, { status: 400 })
     }
 
+    // 2.5) Check license_number ซ้ำ — กันคนเดิมเปลี่ยนเมลหนี rate limit
+    // ยกเว้น profile ของตัวเอง (กรณี re-register) และยกเว้นเลขใบประกอบว่าง
+    if (fullLicense && fullLicense.trim()) {
+      let licenseQuery = admin.from('profiles').select('id, email, status').eq('license_number', fullLicense)
+      if (isReregister) licenseQuery = licenseQuery.neq('id', existingByEmail!.id)
+      const { data: licenseConflict } = await licenseQuery.maybeSingle()
+      if (licenseConflict) {
+        return NextResponse.json({
+          error: 'เลขใบประกอบวิชาชีพนี้มีคนใช้สมัครแล้ว — หากเป็นเจ้าของจริง กรุณาสมัครด้วยอีเมลเดิม หรือติดต่อผู้ดูแลระบบ',
+        }, { status: 400 })
+      }
+    }
+
     let userId: string
 
     if (isReregister) {
