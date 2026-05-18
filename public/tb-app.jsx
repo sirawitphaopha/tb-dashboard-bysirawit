@@ -73,6 +73,7 @@ function Dashboard({ patients, archivePatients, onDashFilter, onGoArchiveDelayed
       data: { labels, datasets:[{ label:'ผู้ป่วยใหม่', data, backgroundColor:'#0d9488', borderRadius:8, hoverBackgroundColor:'#99f6e4', borderSkipped:false }] },
       options: {
         responsive:true, maintainAspectRatio:false,
+        animation: false,  // ปิดอนิเมชั่นตอนโหลด (แท่งโตขึ้น) — ยังเก็บ hover สีเปลี่ยนไว้
         plugins:{ legend:{display:false}, tooltip:{ backgroundColor:'#f0fdfa', titleColor:'#0f766e', bodyColor:'#134e4a', borderColor:'#99f6e4', borderWidth:1, padding:12, cornerRadius:12, titleFont:{weight:'bold'} } },
         scales:{ y:{ grid:{color:'rgba(0,0,0,0.03)'},border:{display:false},beginAtZero:true,ticks:{font:{size:11},color:'#9ca3af'} }, x:{ grid:{display:false},border:{display:false},ticks:{font:{size:11},color:'#9ca3af'} } },
         onHover:(e,el)=>{ e.native.target.style.cursor = el.length ? 'pointer' : 'default'; },
@@ -99,6 +100,7 @@ function Dashboard({ patients, archivePatients, onDashFilter, onGoArchiveDelayed
       data: { labels:['Intensive','Continuation','MDR-TB'], datasets:[{ data:[intensive||1,cont,mdr], backgroundColor:['#f59e0b','#0d9488','#ef4444'], borderWidth:3, borderColor:'#fff', hoverOffset:8 }] },
       options: {
         responsive:true, maintainAspectRatio:false, cutout:'60%',
+        animation: false,  // ปิดอนิเมชั่นตอนโหลด (โดนัทค่อยๆเต็ม) — ยังเก็บ hover ขยายชิ้นไว้
         plugins:{ legend:{position:'bottom',labels:{font:{size:11},boxWidth:10,padding:12,color:'#6b7280'}}, tooltip:{ backgroundColor:'#f0fdfa', titleColor:'#0f766e', bodyColor:'#134e4a', borderColor:'#99f6e4', borderWidth:1, padding:12, cornerRadius:12, titleFont:{weight:'bold'} } },
         onHover:(e,el)=>{ e.native.target.style.cursor = el.length ? 'pointer' : 'default'; },
         onClick:(e,el)=>{ if(el.length) onDashFilter(pieFilters[el[0].index]); }
@@ -2086,7 +2088,7 @@ function App() {
     { id:'reports',       icon:'fa-file-contract',    label:'รายงาน & สถิติ' },
     { id:'knowledge',     icon:'fa-book-open-reader', label:'คลังความรู้วัณโรค' },
     { id:'settings',      icon:'fa-gear',             label:'ตั้งค่าระบบ', divider:true },
-    ...(currentUser?.role === 'admin' ? [{ id:'admin-users', icon:'fa-user-shield', label:'จัดการผู้ใช้', badge: pendingUserCount }] : []),
+    ...(currentUser?.role === 'admin' ? [{ id:'admin-users', icon:'fa-user-shield', label:'จัดการผู้ใช้', badge: pendingUserCount > 0 ? pendingUserCount : undefined }] : []),
     { id:'trash', icon:'fa-trash', label:'ถังขยะ', badge: currentUser?.role==='admin' && pendingDeleteRequests.length > 0 ? pendingDeleteRequests.length : undefined, greenBadge: currentUser?.role==='admin' && pendingDeleteRequests.length === 0 && cancelledDeleteCount > 0 },
     ...(currentUser?.role === 'admin' ? [{ id:'audit-log', icon:'fa-clock-rotate-left', label:'ประวัติลบถาวร' }] : []),
   ];
@@ -2190,7 +2192,7 @@ function App() {
             <div>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:0,whiteSpace:'nowrap'}}>พัฒนาโดย เภสัชกร สิรวิชญ์ เผ่าผา</p>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:'1px 0 0 0',whiteSpace:'nowrap'}}>โรงพยาบาลปรางค์กู่</p>
-              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.7.8.3 ·<span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
+              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.7.8.4 ·<span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
             </div>
           ) : (
             <div style={{display:'flex',justifyContent:'center'}}>
@@ -2252,7 +2254,7 @@ function App() {
             <div className="relative">
               <button
                 onClick={()=>setShowSearchModal(v=>!v)}
-                className="relative p-2 text-gray-400 hover:text-teal-600 transition-colors"
+                className="relative p-2 text-teal-700 hover:text-teal-900 transition-colors"
                 title="ค้นหาทุกอย่าง"
               >
                 <i className="fa-solid fa-magnifying-glass text-lg"></i>
@@ -2315,9 +2317,17 @@ function App() {
               )}
             </div>
 
+            {/* Refresh all data — รีโหลดทั้งเว็บ */}
+            <button
+              onClick={()=>window.location.reload()}
+              title="รีเฟรชข้อมูลทั้งเว็บ"
+              className="p-2 text-teal-700 hover:text-teal-900 hover:rotate-180 transition-all duration-500">
+              <i className="fa-solid fa-arrows-rotate text-xl"></i>
+            </button>
+
             {/* Bell notification */}
             <div ref={notifRef} className="relative">
-              <button onClick={()=>setShowNotifs(!showNotifs)} className="relative p-2 text-gray-400 hover:text-teal-600 transition-colors">
+              <button onClick={()=>setShowNotifs(!showNotifs)} className="relative p-2 text-teal-700 hover:text-teal-900 transition-colors">
                 <i className="fa-regular fa-bell text-xl"></i>
                 {unreadCount > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold px-1 border-2 border-white animate-pulse">{unreadCount}</span>}
               </button>

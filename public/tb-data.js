@@ -853,7 +853,7 @@ window.loadUserRejectLog = async () => {
   // ดึง profile ปัจจุบัน — ใช้สำหรับคนปฏิเสธ (admin) และ fallback ถ้า snapshot ว่าง
   const { data: profs } = await window._sb
     .from('profiles')
-    .select('id, first_name, last_name, username, email')
+    .select('id, first_name, last_name, username, email, role')
     .in('id', ids);
   const byId = Object.fromEntries((profs || []).map(p => [p.id, p]));
 

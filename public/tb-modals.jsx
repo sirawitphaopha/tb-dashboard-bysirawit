@@ -3021,17 +3021,36 @@ function ToastModal({ toast, onClose }) {
 
 function RejectHistoryTable({ logs, loading, expandedId, onToggle }) {
   const fmt = (iso) => {
-    if (!iso) return '—';
+    if (!iso) return { date:'—', time:'—' };
     const d = new Date(iso);
     const date = d.toLocaleDateString('th-TH', { year:'numeric', month:'2-digit', day:'2-digit' });
     const time = d.toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit' });
     return { date, time };
   };
   const nameOf = (p) => p ? `${p.first_name||''} ${p.last_name||''}`.trim() || p.username || p.email || '—' : '—';
-  const shortReason = (s) => {
-    if (!s) return '—';
-    return s.length > 40 ? s.slice(0,40) + '…' : s;
+  const rejecterLabel = (p) => {
+    if (!p) return '—';
+    const name = nameOf(p);
+    return p.role === 'admin' ? `${name} (admin)` : name;
   };
+
+  // จัดกลุ่ม logs ตาม user_id — 1 อีเมล = 1 แถวหลัก
+  const grouped = (() => {
+    const map = new Map();
+    for (const l of logs) {
+      const key = l.user_id;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(l);
+    }
+    return Array.from(map.entries()).map(([userId, attempts]) => ({
+      userId,
+      // logs เรียงจากใหม่ → เก่าอยู่แล้ว
+      attempts,
+      latest: attempts[0],
+      count: attempts.length,
+      email: attempts[0]?.user?.email || '—',
+    }));
+  })();
 
   if (loading) {
     return (
@@ -3041,7 +3060,7 @@ function RejectHistoryTable({ logs, loading, expandedId, onToggle }) {
       </div>
     );
   }
-  if (!logs.length) {
+  if (!grouped.length) {
     return (
       <div className="bg-white rounded-2xl p-16 text-center border border-gray-100">
         <i className="fa-solid fa-clock-rotate-left text-5xl text-gray-300 mb-3 block"></i>
@@ -3053,61 +3072,81 @@ function RejectHistoryTable({ logs, loading, expandedId, onToggle }) {
   return (
     <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
       <div className="grid grid-cols-12 gap-3 px-4 py-2 bg-gradient-to-r from-purple-50 to-violet-50 border-b border-gray-100 text-xs font-bold text-purple-900">
-        <div className="col-span-4">ผู้ใช้</div>
-        <div className="col-span-4">เหตุผล (ย่อ)</div>
-        <div className="col-span-2">วันที่</div>
-        <div className="col-span-2">คนปฏิเสธ</div>
+        <div className="col-span-5">อีเมล</div>
+        <div className="col-span-2 text-center">จำนวนครั้ง</div>
+        <div className="col-span-3">ครั้งล่าสุด</div>
+        <div className="col-span-2">คนปฏิเสธล่าสุด</div>
       </div>
       <div className="divide-y divide-gray-100">
-        {logs.map(l => {
-          const { date, time } = fmt(l.rejected_at);
-          const isOpen = expandedId === l.id;
+        {grouped.map(g => {
+          const { date, time } = fmt(g.latest?.rejected_at);
+          const isOpen = expandedId === g.userId;
           return (
-            <div key={l.id}>
-              <button type="button" onClick={()=>onToggle(l.id)}
+            <div key={g.userId}>
+              <button type="button" onClick={()=>onToggle(g.userId)}
                 className="w-full grid grid-cols-12 gap-3 px-4 py-3 items-center hover:bg-purple-50/40 transition-colors text-sm text-left">
-                <div className="col-span-4 flex items-center gap-2 min-w-0">
+                <div className="col-span-5 flex items-center gap-2 min-w-0">
                   <i className={'fa-solid text-xs text-purple-500 '+(isOpen?'fa-chevron-down':'fa-chevron-right')}></i>
-                  <div className="min-w-0">
-                    <p className="font-bold text-purple-900 truncate">{nameOf(l.user)}</p>
-                    <p className="text-xs text-gray-400 truncate">{l.user?.email || '—'}</p>
-                  </div>
+                  <i className="fa-solid fa-envelope text-purple-400 text-xs"></i>
+                  <p className="font-bold text-purple-900 truncate">{g.email}</p>
                 </div>
-                <div className="col-span-4 text-xs text-gray-600 truncate">{shortReason(l.rejected_reason)}</div>
-                <div className="col-span-2 text-xs text-gray-600">
+                <div className="col-span-2 text-center">
+                  <span className="inline-flex items-center justify-center min-w-[28px] h-6 px-2 rounded-full text-xs font-bold bg-purple-100 text-purple-700">
+                    {g.count} {g.count > 1 ? 'ครั้ง' : 'ครั้ง'}
+                  </span>
+                </div>
+                <div className="col-span-3 text-xs text-gray-600">
                   <p>{date}</p>
                   <p className="text-gray-400">{time}</p>
                 </div>
-                <div className="col-span-2 text-xs text-gray-600 truncate">{nameOf(l.rejecter)}</div>
+                <div className="col-span-2 text-xs text-gray-700 truncate">{rejecterLabel(g.latest?.rejecter)}</div>
               </button>
               {isOpen && (
                 <div className="px-4 pb-4 pt-1 bg-purple-50/30">
-                  <div className="bg-white rounded-xl border border-purple-100 p-4 space-y-3 text-sm">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div>
-                        <p className="text-xs text-gray-400 mb-0.5">📧 อีเมล</p>
-                        <p className="font-medium text-gray-700">{l.user?.email || '—'}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-400 mb-0.5">👤 Username</p>
-                        <p className="font-medium text-gray-700">{l.user?.username ? '@'+l.user.username : '—'}</p>
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400 mb-0.5">📝 เหตุผลเต็ม</p>
-                      <p className="font-medium text-gray-800 whitespace-pre-wrap bg-amber-50 border-l-4 border-amber-300 p-3 rounded">
-                        {l.rejected_reason || '—'}
-                      </p>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div>
-                        <p className="text-xs text-gray-400 mb-0.5">👨‍💼 ปฏิเสธโดย</p>
-                        <p className="font-medium text-gray-700">{nameOf(l.rejecter)}{l.rejecter?.email ? ' ('+l.rejecter.email+')' : ''}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-400 mb-0.5">🕐 เวลา</p>
-                        <p className="font-medium text-gray-700">{date} {time}</p>
-                      </div>
+                  <div className="bg-white rounded-xl border border-purple-100 p-4 space-y-3">
+                    <p className="text-xs font-bold text-purple-700 uppercase tracking-wider mb-2">
+                      <i className="fa-solid fa-clock-rotate-left mr-1"></i>
+                      ประวัติทั้งหมด {g.count} ครั้ง (ใหม่สุดอยู่บน)
+                    </p>
+                    <div className="space-y-3">
+                      {g.attempts.map((a, idx) => {
+                        const t = fmt(a.rejected_at);
+                        const attemptNo = g.count - idx;  // ครั้งล่าสุด = เลขสูงสุด
+                        return (
+                          <div key={a.id} className="border-l-4 border-purple-300 pl-3 py-2 bg-purple-50/40 rounded-r-lg">
+                            <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-bold bg-purple-200 text-purple-900">
+                                <i className="fa-solid fa-hashtag text-[10px]"></i>
+                                ครั้งที่ {attemptNo}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                <i className="fa-solid fa-clock mr-1"></i>
+                                {t.date} {t.time}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm mb-2">
+                              <div>
+                                <p className="text-[11px] text-gray-400">👤 ชื่อ-นามสกุล (ตอนนั้น)</p>
+                                <p className="font-medium text-gray-800">{nameOf(a.user)}</p>
+                              </div>
+                              <div>
+                                <p className="text-[11px] text-gray-400">🆔 Username (ตอนนั้น)</p>
+                                <p className="font-medium text-gray-800">{a.user?.username ? '@'+a.user.username : '—'}</p>
+                              </div>
+                            </div>
+                            <div className="mb-2">
+                              <p className="text-[11px] text-gray-400 mb-0.5">📝 เหตุผล</p>
+                              <p className="text-sm text-gray-800 whitespace-pre-wrap bg-amber-50 border-l-4 border-amber-300 p-2 rounded">
+                                {a.rejected_reason || '—'}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-[11px] text-gray-400">👨‍💼 ปฏิเสธโดย</p>
+                              <p className="text-sm font-medium text-gray-700">{rejecterLabel(a.rejecter)}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -3147,14 +3186,17 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
   };
   useEffect(() => { load(); }, []);
 
-  const loadRejectLog = async () => {
-    setLogLoading(true);
+  const loadRejectLog = async (showSpinner = true) => {
+    if (showSpinner) setLogLoading(true);
     const data = await window.loadUserRejectLog();
     setRejectLogs(data || []);
-    setLogLoading(false);
+    if (showSpinner) setLogLoading(false);
   };
+  // โหลดทันทีตั้งแต่เปิดหน้า (เพื่อให้ badge แสดงเลขถูก) — ไม่แสดง spinner เพราะ user ยังไม่เห็นแท็บนั้น
+  useEffect(() => { loadRejectLog(false); }, []);
+  // รีเฟรชอีกครั้งเมื่อ user สลับมาที่แท็บนี้
   useEffect(() => {
-    if (filter === 'reject-history') loadRejectLog();
+    if (filter === 'reject-history') loadRejectLog(true);
   }, [filter]);
 
   const handleApprove = async (userId) => {
