@@ -62,6 +62,73 @@ function formatPhone(val: string) {
   return `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`
 }
 
+// ─────────────────────────────────────────────────────
+// Validate เบอร์โทร (เข้มสุด: มือถือ 06/08/09 + เบอร์บ้าน 02)
+// + บล็อกเลขซ้ำทั้งหมด / เลขเรียงต่อกัน
+// คืนค่า { ok, msg } — ok=true ผ่าน, false=ไม่ผ่าน พร้อมเหตุผลเฉพาะ
+// ─────────────────────────────────────────────────────
+function validatePhone(phone: string): { ok: boolean; msg: string } {
+  const d = phone.replace(/\D/g, '')
+  if (d.length === 0) return { ok: true, msg: '' }  // optional — ปล่อยว่างได้
+  if (d.length !== 10) return { ok: false, msg: 'เบอร์โทรต้องมี 10 หลัก (เช่น 081-234-5678)' }
+
+  // ต้องขึ้นต้นด้วย 02 (เบอร์บ้าน กทม.) หรือ 06/08/09 (มือถือ)
+  const prefix2 = d.slice(0, 2)
+  const validPrefixes = ['02', '06', '08', '09']
+  if (!validPrefixes.includes(prefix2)) {
+    // แยก error เฉพาะเคส — บอกผู้ใช้ให้เข้าใจว่าทำไมถูกปฏิเสธ
+    const provincialLandline: Record<string, string> = {
+      '03': 'ภาคกลาง/ตะวันออก',
+      '04': 'ภาคอีสาน',
+      '05': 'ภาคเหนือ',
+      '07': 'ภาคใต้',
+    }
+    if (provincialLandline[prefix2]) {
+      return {
+        ok: false,
+        msg: `เบอร์ ${prefix2} เป็นเบอร์บ้านต่างจังหวัด (${provincialLandline[prefix2]}) — ระบบไม่รองรับ กรุณาใช้เบอร์มือถือ (06/08/09) หรือเบอร์บ้านกรุงเทพ (02)`,
+      }
+    }
+    if (prefix2 === '00' || prefix2.startsWith('1')) {
+      return { ok: false, msg: 'เบอร์ที่กรอกไม่ถูกต้อง กรุณากรอกเบอร์มือถือ (06/08/09) หรือเบอร์บ้าน กทม. (02)' }
+    }
+    if (prefix2 === '01') {
+      return { ok: false, msg: 'รหัส 01 เป็นเบอร์บริการพิเศษ (ไม่ใช่เบอร์ส่วนตัว) — กรุณาใช้เบอร์มือถือ (06/08/09)' }
+    }
+    return { ok: false, msg: 'เบอร์ต้องขึ้นต้นด้วย 02 (กทม.), 06, 08 หรือ 09 (มือถือ)' }
+  }
+
+  // บล็อกเลขซ้ำกันทั้งหมด — เช่น 0000000000, 0888888888
+  if (/^(\d)\1{9}$/.test(d)) {
+    return { ok: false, msg: 'เบอร์ที่กรอกเป็นเลขซ้ำกันทั้งหมด กรุณากรอกเบอร์จริง' }
+  }
+
+  // บล็อก 8 หลักหลังเป็นเลขซ้ำ — เช่น 0811111111, 0900000000, 0288888888
+  const last8 = d.slice(2)
+  if (/^(\d)\1{7}$/.test(last8)) {
+    return { ok: false, msg: 'เบอร์ที่กรอกมีรูปแบบผิดปกติ กรุณากรอกเบอร์จริง' }
+  }
+
+  // บล็อกเลขเรียงต่อกัน (ขึ้น/ลง) ทั้ง 10 หลัก — เช่น 0123456789, 0987654321
+  const isAscending = (s: string) => {
+    for (let i = 1; i < s.length; i++) {
+      if (parseInt(s[i]) !== (parseInt(s[i - 1]) + 1) % 10) return false
+    }
+    return true
+  }
+  const isDescending = (s: string) => {
+    for (let i = 1; i < s.length; i++) {
+      if (parseInt(s[i]) !== (parseInt(s[i - 1]) - 1 + 10) % 10) return false
+    }
+    return true
+  }
+  if (isAscending(d) || isDescending(d) || isAscending(last8) || isDescending(last8)) {
+    return { ok: false, msg: 'เบอร์ที่กรอกเป็นเลขเรียงต่อกัน กรุณากรอกเบอร์จริง' }
+  }
+
+  return { ok: true, msg: '' }
+}
+
 const inp: React.CSSProperties = {
   width: '100%', padding: '10px 14px', border: '1px solid #e5e7eb',
   borderRadius: '10px', background: '#f9fafb', fontSize: '14px',
@@ -118,10 +185,8 @@ export default function RegisterPage() {
     if (password !== confirm)  { setError('รหัสผ่านไม่ตรงกัน'); return }
     if (!profession || !hospitalType || !department) { setError('กรุณากรอกข้อมูลให้ครบทุกช่อง'); return }
     if (department === 'อื่นๆ' && !departmentOther.trim()) { setError('กรุณาระบุชื่อแผนก'); return }
-    const phoneDigits = phone.replace(/\D/g, '')
-    if (phoneDigits && (phoneDigits.length !== 10 || !phoneDigits.startsWith('0'))) {
-      setError('เบอร์โทรต้องมี 10 หลัก ขึ้นต้นด้วย 0'); return
-    }
+    const phoneCheck = validatePhone(phone)
+    if (!phoneCheck.ok) { setError(phoneCheck.msg); return }
 
     setLoading(true)
     try {
@@ -361,8 +426,8 @@ export default function RegisterPage() {
             <div className="mt-3">
               <label style={lbl}>Phone Number</label>
               {(() => {
-                const digits = phone.replace(/\D/g, '')
-                const invalid = digits.length > 0 && (digits.length !== 10 || !digits.startsWith('0'))
+                const v = validatePhone(phone)
+                const showError = phone.replace(/\D/g, '').length > 0 && !v.ok
                 return (
                   <>
                     <input
@@ -370,14 +435,14 @@ export default function RegisterPage() {
                       value={phone}
                       onChange={e => setPhone(formatPhone(e.target.value))}
                       placeholder="0xx-xxx-xxxx"
-                      style={{ ...inp, borderColor: invalid ? '#ef4444' : '#e5e7eb' }}
-                      onFocus={e => { e.target.style.border = `1.5px solid ${invalid ? '#ef4444' : '#0d9488'}`; e.target.style.background = '#fff' }}
-                      onBlur={e => { e.target.style.border = `1px solid ${invalid ? '#ef4444' : '#e5e7eb'}`; e.target.style.background = '#f9fafb' }}
+                      style={{ ...inp, borderColor: showError ? '#ef4444' : '#e5e7eb' }}
+                      onFocus={e => { e.target.style.border = `1.5px solid ${showError ? '#ef4444' : '#0d9488'}`; e.target.style.background = '#fff' }}
+                      onBlur={e => { e.target.style.border = `1px solid ${showError ? '#ef4444' : '#e5e7eb'}`; e.target.style.background = '#f9fafb' }}
                     />
-                    {invalid && (
+                    {showError && (
                       <p style={{ fontSize: '11px', color: '#ef4444', marginTop: '5px' }}>
                         <i className="fa-solid fa-circle-exclamation" style={{ marginRight: '4px' }}></i>
-                        เบอร์โทรต้องมี 10 หลัก ขึ้นต้นด้วย 0 (เช่น 081-234-5678)
+                        {v.msg}
                       </p>
                     )}
                   </>
