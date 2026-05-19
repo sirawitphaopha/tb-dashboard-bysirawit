@@ -713,11 +713,28 @@ window.removePatient = async id => {
   if (error) console.error('Supabase delete error:', error);
 };
 
+// ── User name snapshot helper ─────────────────────────────────────────
+// ดึง "ชื่อ + นามสกุล" จาก profiles เพื่อ snapshot เก็บลงตาราง
+// (ใช้ตอน insert/update เพื่อให้ชื่อยังอยู่แม้ user ถูกลบในอนาคต)
+window._fetchUserDisplayName = async (userId) => {
+  if (!userId) return null;
+  const { data } = await window._sb
+    .from('profiles')
+    .select('first_name, last_name')
+    .eq('id', userId)
+    .maybeSingle();
+  if (!data) return null;
+  const name = `${data.first_name || ''} ${data.last_name || ''}`.trim();
+  return name || null;
+};
+
 // soft delete — ย้ายเข้าถังขยะ 60 วัน
 window.softDeletePatient = async (id, deletedBy, reason) => {
+  const deleterName = await window._fetchUserDisplayName(deletedBy);
   const { error } = await window._sb.from('tb_patients').update({
     deleted_at: new Date().toISOString(),
     deleted_by: deletedBy,
+    deleter_name_at_delete: deleterName,
     delete_reason: reason,
   }).eq('id', id);
   if (error) { console.error('Soft delete error:', error); return false; }
@@ -727,7 +744,7 @@ window.softDeletePatient = async (id, deletedBy, reason) => {
 // restore — เอากลับมาจากถังขยะ
 window.restorePatient = async id => {
   const { error } = await window._sb.from('tb_patients').update({
-    deleted_at: null, deleted_by: null, delete_reason: null,
+    deleted_at: null, deleted_by: null, deleter_name_at_delete: null, delete_reason: null,
   }).eq('id', id);
   if (error) { console.error('Restore error:', error); return false; }
   await window._sb.from('tb_delete_requests')
@@ -752,9 +769,11 @@ window.hardDeletePatient = async id => {
 // ── Delete Request (คำขอลบจาก user ทั่วไป) ──────────────────────────────────
 
 window.submitDeleteRequest = async (patientId, requestedBy, reason) => {
+  const requesterName = await window._fetchUserDisplayName(requestedBy);
   const { error } = await window._sb.from('tb_delete_requests').insert({
     patient_id: patientId,
     requested_by: requestedBy,
+    requester_name_at_request: requesterName,
     reason: reason,
     status: 'pending',
   });
@@ -811,15 +830,24 @@ window.cancelDeleteRequest = async (patientId, userId) => {
 window.approveDeleteRequest = async (requestId, patientId, reviewedBy, reason) => {
   const ok = await window.softDeletePatient(patientId, reviewedBy, reason);
   if (!ok) return false;
+  const reviewerName = await window._fetchUserDisplayName(reviewedBy);
   await window._sb.from('tb_delete_requests').update({
-    status: 'approved', reviewed_by: reviewedBy, reviewed_at: new Date().toISOString(),
+    status: 'approved',
+    reviewed_by: reviewedBy,
+    reviewer_name_at_review: reviewerName,
+    reviewed_at: new Date().toISOString(),
   }).eq('id', requestId);
   return true;
 };
 
 window.rejectDeleteRequest = async (requestId, reviewedBy, note) => {
+  const reviewerName = await window._fetchUserDisplayName(reviewedBy);
   const { error } = await window._sb.from('tb_delete_requests').update({
-    status: 'rejected', reviewed_by: reviewedBy, reviewed_at: new Date().toISOString(), review_note: note || null,
+    status: 'rejected',
+    reviewed_by: reviewedBy,
+    reviewer_name_at_review: reviewerName,
+    reviewed_at: new Date().toISOString(),
+    review_note: note || null,
   }).eq('id', requestId);
   return !error;
 };

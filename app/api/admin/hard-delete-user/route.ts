@@ -48,8 +48,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'ลบถาวรได้เฉพาะ user ที่สถานะ rejected เท่านั้น' }, { status: 400 })
     }
 
-    // ลบ tb_delete_requests ที่ user นี้เคยขอก่อน (FK constraint)
-    await admin.from('tb_delete_requests').delete().eq('requested_by', userId)
+    // หมายเหตุ: ไม่ต้องลบ tb_delete_requests / tb_patients.deleted_by /
+    // tb_patients_deleted_log.deleted_by ด้วยตนเองแล้ว
+    // เพราะ FK ทุกตัวตั้งเป็น ON DELETE SET NULL — ลบ profile ไป
+    // ช่องอ้างอิงจะกลายเป็น null อัตโนมัติ และชื่อยังถูกเก็บไว้ใน *_name_at_* (snapshot)
 
     // ลบทั้ง profile + auth user
     const { error: profErr } = await admin.from('profiles').delete().eq('id', userId)

@@ -2758,7 +2758,9 @@ function TrashList({ currentUser, onRestore, onHardDelete, pendingDeleteRequests
           {cancelledRequests.map(req => {
             const requesterName = req.requester
               ? `${req.requester.first_name || ''} ${req.requester.last_name || ''}`.trim() || 'ผู้ใช้'
-              : 'ผู้ใช้'
+              : (req.requester_name_at_request
+                  ? `${req.requester_name_at_request} (ผู้ใช้ถูกลบออกจากระบบแล้ว)`
+                  : 'ผู้ใช้ไม่ทราบ')
             return (
               <div key={req.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex items-center gap-3 opacity-70">
                 <div className="w-8 h-8 rounded-lg bg-gray-200 flex items-center justify-center text-gray-400 flex-shrink-0">
@@ -3728,7 +3730,9 @@ function AuditLogTab() {
               {logs.map((log, i) => {
                 const adminName = log.admin
                   ? `${log.admin.first_name || ''} ${log.admin.last_name || ''}`.trim() || 'Admin'
-                  : 'Admin'
+                  : (log.deleter_name_at_delete
+                      ? `${log.deleter_name_at_delete} (ผู้ใช้ถูกลบออกจากระบบแล้ว)`
+                      : 'ผู้ใช้ไม่ทราบ')
                 return (
                   <tr key={log.id} style={{ background: i % 2 === 0 ? '#fff' : '#f9fafb' }}>
                     <td className="px-4 py-3 font-mono text-xs text-gray-500">{log.patient_hn || '—'}</td>
