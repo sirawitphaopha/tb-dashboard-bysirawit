@@ -1,7 +1,11 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-export async function proxy(request: NextRequest) {
+// หมายเหตุ: ใช้ชื่อ middleware.ts (ไม่ใช่ proxy.ts) เพราะ Cloudflare Pages
+// ยังไม่รองรับ Node.js middleware (proxy.ts บน Next.js 16 บังคับ Node runtime)
+// → ทนกับ deprecation warning ไปก่อนจนกว่า opennextjs-cloudflare จะรองรับ
+//    หรือย้าย host ไป Vercel
+export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
