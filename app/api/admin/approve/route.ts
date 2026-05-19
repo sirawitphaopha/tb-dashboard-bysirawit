@@ -35,6 +35,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'admin only' }, { status: 403 })
     }
 
+    // ตรวจสถานะเดิมของ target ก่อน approve
+    // อนุญาตเฉพาะ user ที่อยู่ในสถานะ pending เท่านั้น
+    // ป้องกัน bypass การพิจารณา เช่น ดึง rejected user กลับเข้าระบบโดยกดปุ่มผิด
+    const { data: targetCheck } = await admin
+      .from('profiles')
+      .select('status')
+      .eq('id', userId)
+      .single()
+    if (!targetCheck) {
+      return NextResponse.json({ error: 'user not found' }, { status: 404 })
+    }
+    if (targetCheck.status !== 'pending') {
+      const statusLabel: Record<string, string> = {
+        approved: 'อนุมัติแล้ว',
+        rejected: 'ถูกปฏิเสธ',
+        deactivated: 'ถูกระงับ',
+      }
+      const label = statusLabel[targetCheck.status] || targetCheck.status
+      return NextResponse.json(
+        {
+          error: `ไม่สามารถอนุมัติ user ที่สถานะ "${label}" ได้ — อนุมัติได้เฉพาะ user ที่รอพิจารณา (pending) เท่านั้น กรุณาใช้ปุ่ม Restore/Activate แทน`,
+        },
+        { status: 400 }
+      )
+    }
+
     // Approve
     const { data: target, error: updErr } = await admin
       .from('profiles')

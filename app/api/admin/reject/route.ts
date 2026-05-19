@@ -37,12 +37,35 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'admin only' }, { status: 403 })
     }
 
-    // query ก่อนเพื่อเอา rejection week data ปัจจุบัน + snapshot ตอน reject
+    // query ก่อนเพื่อเอา rejection week data ปัจจุบัน + snapshot ตอน reject + เช็คสถานะ
     const { data: current } = await admin
       .from('profiles')
-      .select('first_name, last_name, username, email, rejection_week_start, rejection_week_count')
+      .select('first_name, last_name, username, email, status, rejection_week_start, rejection_week_count')
       .eq('id', userId)
       .single()
+
+    if (!current) {
+      return NextResponse.json({ error: 'user not found' }, { status: 404 })
+    }
+
+    // ตรวจสถานะเดิมของ target ก่อน reject
+    // อนุญาตเฉพาะ user ที่อยู่ในสถานะ pending เท่านั้น
+    // ป้องกัน reject user ที่ approved อยู่ โดยตั้งใจหรือไม่ตั้งใจ
+    // (ถ้าอยากระงับ approved user → ต้องใช้ /api/admin/deactivate-user แทน)
+    if (current.status !== 'pending') {
+      const statusLabel: Record<string, string> = {
+        approved: 'อนุมัติแล้ว',
+        rejected: 'ถูกปฏิเสธอยู่แล้ว',
+        deactivated: 'ถูกระงับอยู่แล้ว',
+      }
+      const label = statusLabel[current.status] || current.status
+      return NextResponse.json(
+        {
+          error: `ไม่สามารถปฏิเสธ user ที่สถานะ "${label}" ได้ — ปฏิเสธได้เฉพาะ user ที่รอพิจารณา (pending) เท่านั้น หากต้องการระงับ user ที่อนุมัติแล้ว กรุณาใช้ปุ่ม Deactivate แทน`,
+        },
+        { status: 400 }
+      )
+    }
 
     // คำนวณ weekly counter — ถ้าผ่านไป 7 วันแล้ว รีเซ็ตใหม่
     const now = new Date()
