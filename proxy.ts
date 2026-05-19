@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -33,17 +33,14 @@ export async function middleware(request: NextRequest) {
                 || pathname.startsWith('/api/login-lookup')
   const isStatusPage = pathname === '/pending-approval' || pathname === '/rejected'
 
-  // ไม่ login → redirect ไป login (ยกเว้น public)
   if (!isAuthed && !isPublic) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // login แล้ว แต่อยู่หน้า login/register → ไปหน้าหลัก
   if (isAuthed && (pathname === '/login' || pathname === '/register')) {
     return NextResponse.redirect(new URL('/', request.url))
   }
 
-  // เช็ค profile status (pending/rejected redirect ไปหน้าเฉพาะ)
   if (user && !isPublic) {
     const { data: profile } = await supabase
       .from('profiles')
