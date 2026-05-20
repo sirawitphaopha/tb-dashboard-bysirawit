@@ -7,17 +7,20 @@ const PROFESSION_LABELS: Record<string, string> = {
   doctor:       'แพทย์',
   dentist:      'ทันตแพทย์',
   pharmacist:   'เภสัชกร',
-  nurse:        'พยาบาลวิชาชีพ',
+  nurse1:       'พยาบาลวิชาชีพ (ชั้นหนึ่ง)',
+  nurse2:       'พยาบาลเทคนิค (ชั้นสอง)',
   medtech:      'นักเทคนิคการแพทย์',
   physio:       'นักกายภาพบำบัด',
   radio:        'นักรังสีการแพทย์',
-  publichealth: 'เจ้าหน้าที่สาธารณสุข',
+  publichealthofficer: 'นักสาธารณสุข',
+  publichealthtech:    'นักวิชาการสาธารณสุข',
   officer:      'เจ้าพนักงาน',
   other:        'อื่นๆ',
 }
 
 const PREFIXES: Record<string, string> = {
-  doctor: 'ว.', dentist: 'ท.', pharmacist: 'ภ.', nurse: 'ป.',
+  doctor: 'ว.', dentist: 'ท.', pharmacist: 'ภ.', nurse1: 'ป.', nurse2: 'ช.',
+  medtech: 'ทน.', physio: 'ก.', radio: 'รส.', publichealthofficer: 'สธ.',
 }
 
 export async function POST(req: NextRequest) {
@@ -77,18 +80,22 @@ export async function POST(req: NextRequest) {
     }
 
     // 2.5) Check license_number ซ้ำ — กันคนเดิมเปลี่ยนเมลหนี rate limit
-    // เทียบเฉพาะตัวเลข (digits only) — ไม่สนใจ prefix ว./ท./ภ./ป.
-    // เพราะ admin/user เก่าอาจเก็บ license_number ในรูปแบบต่างกัน (เช่น "12345" vs "ภ.12345")
+    // เทียบเฉพาะตัวเลข (digits only) และวิชาชีพเดียวกันเท่านั้น
+    // เช่น แพทย์ "ว.12345" กับ เภสัช "ภ.12345" = เลขเดียวกันแต่ไม่ซ้ำกัน
     const licenseDigits = (licenseNumber || '').replace(/\D/g, '').trim()
     if (licenseDigits) {
-      const { data: allLicenses } = await admin
+      // ดึงเฉพาะวิชาชีพเดียวกัน และเฉพาะ format ที่อาจซ้ำ (มี prefix / ไม่มี prefix)
+      const possibleFormats = [licenseDigits, fullLicense].filter(Boolean)
+      let licenseQuery = admin
         .from('profiles')
-        .select('id, license_number, email, status')
-        .not('license_number', 'is', null)
-      const conflict = (allLicenses || []).find(p => {
-        if (isReregister && p.id === existingByEmail!.id) return false  // ข้ามตัวเอง
+        .select('id, license_number')
+        .eq('profession', profession)
+        .in('license_number', possibleFormats)
+      if (isReregister) licenseQuery = licenseQuery.neq('id', existingByEmail!.id)
+      const { data: candidates } = await licenseQuery
+      const conflict = (candidates || []).find(p => {
         const pDigits = (p.license_number || '').replace(/\D/g, '')
-        return pDigits && pDigits === licenseDigits
+        return pDigits === licenseDigits
       })
       if (conflict) {
         return NextResponse.json({

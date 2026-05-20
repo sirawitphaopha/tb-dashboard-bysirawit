@@ -8,13 +8,15 @@ const PROFESSIONS: Record<string, { label: string; prefix: string }> = {
   doctor:      { label: 'แพทย์',                  prefix: 'ว.' },
   dentist:     { label: 'ทันตแพทย์',              prefix: 'ท.' },
   pharmacist:  { label: 'เภสัชกร',                prefix: 'ภ.' },
-  nurse:       { label: 'พยาบาลวิชาชีพ',          prefix: 'ป.' },
-  medtech:     { label: 'นักเทคนิคการแพทย์',      prefix: '' },
-  physio:      { label: 'นักกายภาพบำบัด',         prefix: '' },
-  radio:       { label: 'นักรังสีการแพทย์',       prefix: '' },
-  publichealth:{ label: 'เจ้าหน้าที่สาธารณสุข',   prefix: '' },
-  officer:     { label: 'เจ้าพนักงาน',            prefix: '' },
-  other:       { label: 'อื่นๆ',                   prefix: '' },
+  nurse1:      { label: 'พยาบาลวิชาชีพ (ชั้นหนึ่ง) ป.',  prefix: 'ป.' },
+  nurse2:      { label: 'พยาบาลเทคนิค (ชั้นสอง) ช.',    prefix: 'ช.' },
+  medtech:     { label: 'นักเทคนิคการแพทย์',      prefix: 'ทน.' },
+  physio:      { label: 'นักกายภาพบำบัด',         prefix: 'ก.' },
+  radio:       { label: 'นักรังสีการแพทย์',       prefix: 'รส.' },
+  publichealthofficer: { label: 'นักสาธารณสุข',          prefix: 'สธ.' },
+  publichealthtech:    { label: 'นักวิชาการสาธารณสุข',   prefix: '' },
+  officer:             { label: 'เจ้าพนักงาน',           prefix: '' },
+  other:               { label: 'อื่นๆ',                  prefix: '' },
 }
 
 const HOSPITAL_TYPES = [
@@ -69,7 +71,7 @@ function formatPhone(val: string) {
 // ─────────────────────────────────────────────────────
 function validatePhone(phone: string): { ok: boolean; msg: string } {
   const d = phone.replace(/\D/g, '')
-  if (d.length === 0) return { ok: true, msg: '' }  // optional — ปล่อยว่างได้
+  if (d.length === 0) return { ok: false, msg: 'กรุณากรอกเบอร์โทรศัพท์' }
   if (d.length !== 10) return { ok: false, msg: 'เบอร์โทรต้องมี 10 หลัก (เช่น 081-234-5678)' }
 
   // ต้องขึ้นต้นด้วย 02 (เบอร์บ้าน กทม.) หรือ 06/08/09 (มือถือ)
@@ -184,6 +186,7 @@ export default function RegisterPage() {
     if (!passwordOk)           { setError('รหัสผ่านยังไม่ผ่านเกณฑ์ความปลอดภัย (ต้องผ่านอย่างน้อย 4/5 ข้อ และมีความยาว 8 ตัวอักษรขึ้นไป)'); return }
     if (password !== confirm)  { setError('รหัสผ่านไม่ตรงกัน'); return }
     if (!profession || !hospitalType || !department) { setError('กรุณากรอกข้อมูลให้ครบทุกช่อง'); return }
+    if (prefix && !licenseNum.trim()) { setError('กรุณากรอกเลขใบประกอบวิชาชีพ'); return }
     if (department === 'อื่นๆ' && !departmentOther.trim()) { setError('กรุณาระบุชื่อแผนก'); return }
     const phoneCheck = validatePhone(phone)
     if (!phoneCheck.ok) { setError(phoneCheck.msg); return }
@@ -275,14 +278,14 @@ export default function RegisterPage() {
             </p>
             <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 2fr' }}>
               <div>
-                <label style={lbl}>Username</label>
+                <label style={lbl}>Username <span style={{ color: '#ef4444' }}>*</span></label>
                 <input type="text" name="username" autoComplete="username"
                   value={username} onChange={e => setUsername(e.target.value.replace(/\s/g, ''))}
                   onKeyDown={e => { if (e.key === ' ') e.preventDefault() }}
                   placeholder="username" style={inp} onFocus={focus} onBlur={blur} required />
               </div>
               <div>
-                <label style={lbl}>Email</label>
+                <label style={lbl}>Email <span style={{ color: '#ef4444' }}>*</span></label>
                 <input type="email" name="email" autoComplete="email"
                   value={email} onChange={e => setEmail(e.target.value.replace(/\s/g, ''))}
                   onKeyDown={e => { if (e.key === ' ') e.preventDefault() }}
@@ -297,7 +300,7 @@ export default function RegisterPage() {
             </div>
 
             <div className="mt-3">
-              <label style={lbl}>Password</label>
+              <label style={lbl}>Password <span style={{ color: '#ef4444' }}>*</span></label>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
@@ -341,7 +344,7 @@ export default function RegisterPage() {
             </div>
 
             <div className="mt-3">
-              <label style={lbl}>Confirm Password</label>
+              <label style={lbl}>Confirm Password <span style={{ color: '#ef4444' }}>*</span></label>
               <div className="relative">
                 <input
                   type={showConfirm ? 'text' : 'password'}
@@ -371,19 +374,19 @@ export default function RegisterPage() {
             </p>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label style={lbl}>First Name</label>
+                <label style={lbl}>ชื่อ <span style={{ color: '#ef4444' }}>*</span></label>
                 <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)}
                   placeholder="ชื่อ" style={inp} onFocus={focus} onBlur={blur} required />
               </div>
               <div>
-                <label style={lbl}>Last Name</label>
+                <label style={lbl}>นามสกุล <span style={{ color: '#ef4444' }}>*</span></label>
                 <input type="text" value={lastName} onChange={e => setLastName(e.target.value)}
                   placeholder="นามสกุล" style={inp} onFocus={focus} onBlur={blur} required />
               </div>
             </div>
 
             <div className="mt-3">
-              <label style={lbl}>Profession</label>
+              <label style={lbl}>วิชาชีพ <span style={{ color: '#ef4444' }}>*</span></label>
               <select value={profession}
                 onChange={e => { setProfession(e.target.value); setLicenseNum('') }}
                 style={{ ...inp, cursor: 'pointer' }} onFocus={focus} onBlur={blur} required>
@@ -399,7 +402,8 @@ export default function RegisterPage() {
               return (
                 <div className="mt-3">
                   <label style={lbl}>
-                    License Number
+                    เลขใบประกอบวิชาชีพ
+                    {prefix && <span style={{ color: '#ef4444' }}> *</span>}
                     {prefix && (
                       <span className="ml-1.5 font-normal text-xs" style={{ color: '#0d9488' }}>
                         (prefix: {prefix})
@@ -421,7 +425,8 @@ export default function RegisterPage() {
                       type="text"
                       value={licenseNum}
                       onChange={e => { setLicenseNum(e.target.value.replace(/\D/g, '')); if (licenseDup) setError('') }}
-                      placeholder={prefix ? '00000' : 'กรอกเลขใบประกอบ (ถ้ามี)'}
+                      placeholder={prefix ? 'กรอกเลขใบประกอบวิชาชีพ *' : 'กรอกเลขใบประกอบ (ถ้ามี)'}
+                      required={!!prefix}
                       style={{ ...inp, borderColor: licenseDup ? '#ef4444' : '#e5e7eb' }}
                       onFocus={e => { e.target.style.border = `1.5px solid ${licenseDup ? '#ef4444' : '#0d9488'}`; e.target.style.background = '#fff' }}
                       onBlur={e => { e.target.style.border = `1px solid ${licenseDup ? '#ef4444' : '#e5e7eb'}`; e.target.style.background = '#f9fafb' }}
@@ -438,7 +443,7 @@ export default function RegisterPage() {
             })()}
 
             <div className="mt-3">
-              <label style={lbl}>Phone Number</label>
+              <label style={lbl}>เบอร์โทรศัพท์ <span style={{ color: '#ef4444' }}>*</span></label>
               {(() => {
                 const v = validatePhone(phone)
                 const showError = phone.replace(/\D/g, '').length > 0 && !v.ok
@@ -449,6 +454,7 @@ export default function RegisterPage() {
                       value={phone}
                       onChange={e => setPhone(formatPhone(e.target.value))}
                       placeholder="0xx-xxx-xxxx"
+                      required
                       style={{ ...inp, borderColor: showError ? '#ef4444' : '#e5e7eb' }}
                       onFocus={e => { e.target.style.border = `1.5px solid ${showError ? '#ef4444' : '#0d9488'}`; e.target.style.background = '#fff' }}
                       onBlur={e => { e.target.style.border = `1px solid ${showError ? '#ef4444' : '#e5e7eb'}`; e.target.style.background = '#f9fafb' }}
@@ -473,7 +479,7 @@ export default function RegisterPage() {
               Hospital
             </p>
             <div>
-              <label style={lbl}>Hospital Name</label>
+              <label style={lbl}>ชื่อโรงพยาบาล <span style={{ color: '#ef4444' }}>*</span></label>
               <input type="text" value={hospitalName} onChange={e => setHospitalName(e.target.value)}
                 placeholder="ชื่อโรงพยาบาล / สถานพยาบาล"
                 style={inp} onFocus={focus} onBlur={blur} required />
@@ -481,7 +487,7 @@ export default function RegisterPage() {
 
             <div className="grid grid-cols-2 gap-3 mt-3">
               <div>
-                <label style={lbl}>Hospital Type</label>
+                <label style={lbl}>ประเภทโรงพยาบาล <span style={{ color: '#ef4444' }}>*</span></label>
                 <select value={hospitalType} onChange={e => setHospitalType(e.target.value)}
                   style={{ ...inp, cursor: 'pointer' }} onFocus={focus} onBlur={blur} required>
                   <option value="">-- เลือกประเภท --</option>
@@ -491,7 +497,7 @@ export default function RegisterPage() {
                 </select>
               </div>
               <div>
-                <label style={lbl}>Department</label>
+                <label style={lbl}>แผนก <span style={{ color: '#ef4444' }}>*</span></label>
                 <select value={department}
                   onChange={e => { setDepartment(e.target.value); if (e.target.value !== 'อื่นๆ') setDepartmentOther('') }}
                   style={{ ...inp, cursor: 'pointer' }} onFocus={focus} onBlur={blur} required>
@@ -505,7 +511,7 @@ export default function RegisterPage() {
 
             {department === 'อื่นๆ' && (
               <div className="mt-3">
-                <label style={lbl}>ระบุแผนก</label>
+                <label style={lbl}>ระบุแผนก <span style={{ color: '#ef4444' }}>*</span></label>
                 <input type="text" value={departmentOther}
                   onChange={e => setDepartmentOther(e.target.value)}
                   placeholder="กรุณาระบุชื่อแผนกของคุณ"
