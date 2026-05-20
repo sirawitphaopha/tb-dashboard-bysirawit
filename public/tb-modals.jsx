@@ -109,7 +109,7 @@ function useNotifHelpers(alerts,patients,readAlerts,onRead,onOpen,onClose,onNavT
   const handleClick=a=>{
     onRead(a.id);
     if(a.patientId&&onOpen){const p=(patients||[]).find(x=>x.id===a.patientId);if(p){onOpen(p);if(onClose)onClose();}}
-    else if(a.navTarget&&onNavTarget){onNavTarget(a.navTarget);if(onClose)onClose();}
+    else if(a.navTarget&&onNavTarget){onNavTarget(a.navTarget,a.highlightUser);if(onClose)onClose();}
   };
 
   const renderItem=(a,i)=>{
@@ -3171,7 +3171,7 @@ function RejectHistoryTable({ logs, loading, expandedId, onToggle }) {
   );
 }
 
-function AdminUsersTab({ currentUser, onPendingChange }) {
+function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearHighlight }) {
   const [profiles, setProfiles] = useState([]);
   const [filter, setFilter] = useState('pending');
   const [loading, setLoading] = useState(true);
@@ -3191,6 +3191,13 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
   const [editForm, setEditForm] = useState({});
   const [editBusy, setEditBusy] = useState(false);
   const [editError, setEditError] = useState('');
+  // ── ระบบคำขอแก้ไขข้อมูล ──
+  const [editRequests, setEditRequests] = useState([]);   // คำขอที่ pending ทั้งหมด
+  const [editReqBusy, setEditReqBusy] = useState(null);    // id ของคำขอที่กำลังดำเนินการ
+  const [rejectReqTarget, setRejectReqTarget] = useState(null);  // คำขอที่กำลังจะปฏิเสธ
+  const [rejectReqNote, setRejectReqNote] = useState('');
+  const [flashUserId, setFlashUserId] = useState(null);    // user ที่ไฮไลต์ชั่วคราว
+  const userRefs = React.useRef({});
 
   const load = async () => {
     setLoading(true);
@@ -3200,7 +3207,56 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
     // อัปเดต badge ใน sidebar
     if (onPendingChange) onPendingChange((data||[]).filter(p => p.status === 'pending').length);
   };
-  useEffect(() => { load(); }, []);
+  const loadEditRequests = async () => {
+    const data = await window.loadPendingEditRequests();
+    setEditRequests(data || []);
+  };
+  useEffect(() => { load(); loadEditRequests(); }, []);
+
+  // คำขอแก้ไข จัดกลุ่มตาม user_id เพื่อแสดงใต้ผู้ใช้แต่ละคน
+  const editReqByUser = React.useMemo(() => {
+    const m = {};
+    editRequests.forEach(r => { (m[r.user_id] = m[r.user_id] || []).push(r); });
+    return m;
+  }, [editRequests]);
+
+  // เมื่อกดจากกระดิ่ง → เลื่อนไปหา user + ไฮไลต์ชั่วคราว
+  useEffect(() => {
+    if (!highlightUserId || loading) return;
+    setFilter('all');           // ให้แน่ใจว่าเห็น user ทุกสถานะ
+    setSearch('');
+    const t = setTimeout(() => {
+      const el = userRefs.current[highlightUserId];
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setFlashUserId(highlightUserId);
+      setTimeout(() => setFlashUserId(null), 2600);
+      if (onClearHighlight) onClearHighlight();
+    }, 250);
+    return () => clearTimeout(t);
+  }, [highlightUserId, loading]);
+
+  // อนุมัติ / ปฏิเสธ คำขอแก้ไขข้อมูล
+  const handleEditRequest = async (requestId, action, note) => {
+    setEditReqBusy(requestId);
+    const res = await fetch('/api/admin/approve-edit-request', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requestId, action, note: note || '' }),
+    });
+    setEditReqBusy(null);
+    if (res.ok) {
+      setToast({
+        kind: action === 'approve' ? 'success' : 'info',
+        title: action === 'approve' ? 'อนุมัติคำขอแล้ว' : 'ปฏิเสธคำขอแล้ว',
+        message: action === 'approve' ? 'อัปเดตข้อมูลผู้ใช้และส่งเมลแจ้งแล้ว' : 'ส่งเมลแจ้งผู้ใช้แล้ว',
+      });
+      setRejectReqTarget(null); setRejectReqNote('');
+      await loadEditRequests();
+      await load();
+    } else {
+      const e = await res.json();
+      setToast({ kind: 'error', title: 'เกิดข้อผิดพลาด', message: e.error });
+    }
+  };
 
   const loadRejectLog = async (showSpinner = true) => {
     if (showSpinner) setLogLoading(true);
@@ -3328,6 +3384,55 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
       setRejectingId(null); setRejectReason(''); load();
     }
     else { const e = await res.json(); setToast({ kind:'error', title:'เกิดข้อผิดพลาด', message: e.error }); }
+  };
+
+  // กล่องแสดงคำขอแก้ไขของผู้ใช้ — ใช้ทั้ง list view และ card view
+  const renderEditReqBox = (p) => {
+    const reqs = editReqByUser[p.id];
+    if (!reqs || reqs.length === 0) return null;
+    return (
+      <div className="mt-3 space-y-2">
+        {reqs.map(r => {
+          const working = editReqBusy === r.id;
+          return (
+            <div key={r.id} className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <i className="fa-solid fa-pen-clip text-amber-600 text-sm"></i>
+                <span className="text-xs font-bold text-amber-800">คำขอแก้ไขข้อมูล · {r.field_label}</span>
+              </div>
+              <div className="bg-white rounded-lg border border-amber-100 px-3 py-2 mb-2 text-xs">
+                <div className="flex items-start gap-2 mb-1">
+                  <span className="text-gray-400 w-16 flex-shrink-0">ค่าเดิม</span>
+                  <span className="text-gray-500 line-through break-all">{r.old_value || '—'}</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-gray-400 w-16 flex-shrink-0">ขอเปลี่ยนเป็น</span>
+                  <span className="text-teal-700 font-bold break-all">{r.new_value}</span>
+                </div>
+                {r.reason && (
+                  <div className="flex items-start gap-2 mt-1 pt-1 border-t border-gray-100">
+                    <span className="text-gray-400 w-16 flex-shrink-0">เหตุผล</span>
+                    <span className="text-gray-600 break-all">{r.reason}</span>
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <button type="button" disabled={working}
+                  onClick={()=>handleEditRequest(r.id, 'approve')}
+                  className="flex-1 px-3 py-1.5 rounded-lg font-bold text-white text-xs bg-teal-600 hover:bg-teal-700 disabled:opacity-50">
+                  {working ? <><i className="fa-solid fa-spinner fa-spin mr-1"></i>กำลังดำเนินการ...</> : <><i className="fa-solid fa-check mr-1"></i>อนุมัติ</>}
+                </button>
+                <button type="button" disabled={working}
+                  onClick={()=>{ setRejectReqTarget(r); setRejectReqNote(''); }}
+                  className="flex-1 px-3 py-1.5 rounded-lg font-bold text-white text-xs bg-red-500 hover:bg-red-600 disabled:opacity-50">
+                  <i className="fa-solid fa-xmark mr-1"></i>ปฏิเสธ
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   if (currentUser?.role !== 'admin') {
@@ -3458,8 +3563,12 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
             {filtered.map(p => {
               const sc = STATUS_STYLE[p.status];
               const dept = p.department === 'อื่นๆ' ? (p.department_other || 'อื่นๆ') : p.department;
+              const hasReq = !!editReqByUser[p.id];
+              const flashing = flashUserId === p.id;
               return (
-                <div key={p.id} className="grid grid-cols-12 gap-3 px-4 py-3 items-center hover:bg-teal-50/40 transition-colors text-sm">
+                <div key={p.id} ref={el => { if (el) userRefs.current[p.id] = el; }}
+                  className={'px-4 py-3 transition-colors ' + (flashing ? 'bg-amber-100 ring-2 ring-amber-400 ring-inset' : hasReq ? 'bg-amber-50/40' : 'hover:bg-teal-50/40')}>
+                <div className="grid grid-cols-12 gap-3 items-center text-sm">
                   <div className="col-span-3 min-w-0">
                     <p className="font-bold text-teal-900 truncate">{p.first_name} {p.last_name} {p.role === 'admin' && <span className="text-xs">👑</span>}</p>
                     <p className="text-xs text-gray-400 truncate">@{p.username} · {p.email || '—'}</p>
@@ -3474,12 +3583,15 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
                   </div>
                   <div className="col-span-2">
                     <span className="text-xs font-bold px-2 py-0.5 rounded-md inline-block" style={{ background:sc.bg, color:sc.fg }}>{sc.label}</span>
+                    {hasReq && <span className="ml-1 text-xs font-bold px-1.5 py-0.5 rounded-md bg-amber-200 text-amber-800" title="มีคำขอแก้ไข">{editReqByUser[p.id].length} คำขอ</span>}
                   </div>
                   <div className="col-span-2 flex justify-end gap-1.5">
-                    <button type="button" onClick={()=>openEdit(p)} disabled={busy}
-                      className="px-2.5 py-1 rounded-lg font-bold text-white text-xs bg-teal-700 hover:bg-teal-800 disabled:opacity-50" title="แก้ไขข้อมูล">
-                      <i className="fa-solid fa-pen-to-square"></i>
-                    </button>
+                    {filter === 'approved' && (
+                      <button type="button" onClick={()=>openEdit(p)} disabled={busy}
+                        className="px-2.5 py-1 rounded-lg font-bold text-white text-xs bg-teal-700 hover:bg-teal-800 disabled:opacity-50" title="แก้ไขข้อมูล">
+                        <i className="fa-solid fa-pen-to-square"></i>
+                      </button>
+                    )}
                     {p.status === 'pending' && (
                       <>
                         <button type="button" onClick={()=>handleApprove(p.id)} disabled={busy}
@@ -3525,6 +3637,8 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
                     })()}
                   </div>
                 </div>
+                {renderEditReqBox(p)}
+                </div>
               );
             })}
           </div>
@@ -3535,14 +3649,18 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
           {filtered.map(p => {
             const sc = STATUS_STYLE[p.status];
             const dept = p.department === 'อื่นๆ' ? (p.department_other || 'อื่นๆ') : p.department;
+            const hasReq = !!editReqByUser[p.id];
+            const flashing = flashUserId === p.id;
             return (
-              <div key={p.id} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 hover:border-teal-200 hover:shadow-md transition-all">
+              <div key={p.id} ref={el => { if (el) userRefs.current[p.id] = el; }}
+                className={'bg-white rounded-2xl p-5 shadow-sm border transition-all ' + (flashing ? 'border-amber-400 ring-2 ring-amber-400' : hasReq ? 'border-amber-200' : 'border-gray-100 hover:border-teal-200 hover:shadow-md')}>
                 <div className="flex items-start justify-between gap-4 mb-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <h3 className="text-base font-bold text-teal-900">{p.first_name} {p.last_name}</h3>
                       <span className="text-xs font-bold px-2 py-0.5 rounded-md" style={{ background:sc.bg, color:sc.fg }}>{sc.label}</span>
                       {p.role === 'admin' && <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-purple-100 text-purple-800">👑 Admin</span>}
+                      {hasReq && <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-amber-200 text-amber-800"><i className="fa-solid fa-pen-clip mr-1"></i>{editReqByUser[p.id].length} คำขอแก้ไข</span>}
                     </div>
                     <p className="text-xs text-gray-500">
                       {PROFESSION_LABELS_TH[p.profession] || p.profession}
@@ -3550,10 +3668,12 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
                     </p>
                   </div>
                   <div className="flex gap-2 flex-shrink-0 flex-wrap justify-end">
-                    <button type="button" onClick={()=>openEdit(p)} disabled={busy}
-                      className="px-3 py-2 rounded-xl font-bold text-white text-xs bg-teal-700 hover:bg-teal-800 disabled:opacity-50">
-                      <i className="fa-solid fa-pen-to-square mr-1"></i>แก้ไข
-                    </button>
+                    {filter === 'approved' && (
+                      <button type="button" onClick={()=>openEdit(p)} disabled={busy}
+                        className="px-3 py-2 rounded-xl font-bold text-white text-xs bg-teal-700 hover:bg-teal-800 disabled:opacity-50">
+                        <i className="fa-solid fa-pen-to-square mr-1"></i>แก้ไข
+                      </button>
+                    )}
                     {p.status === 'pending' && (
                       <>
                         <button type="button" onClick={() => handleApprove(p.id)} disabled={busy}
@@ -3593,10 +3713,6 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
                             <i className="fa-solid fa-lock-open mr-1"></i>ปลดล็อก
                           </button>
                         )}
-                        <button type="button" onClick={()=>openEdit(p)} disabled={busy}
-                          className="px-3 py-2 rounded-xl font-bold text-white text-xs bg-teal-700 hover:bg-teal-800 disabled:opacity-50">
-                          <i className="fa-solid fa-pen-to-square mr-1"></i>แก้ไข
-                        </button>
                         <button type="button" onClick={()=>{ setHardDelTarget(p); setConfirmText(''); }} disabled={busy}
                           className="px-4 py-2 rounded-xl font-bold text-white text-xs bg-gray-600 hover:bg-red-600 disabled:opacity-50">
                           <i className="fa-solid fa-fire mr-1"></i>ลบถาวร
@@ -3618,6 +3734,7 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
                     <strong>เหตุผลปฏิเสธ:</strong> {p.rejected_reason}
                   </div>
                 )}
+                {renderEditReqBox(p)}
               </div>
             );
           })}
@@ -3677,6 +3794,36 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
                 {busy ? <><i className="fa-solid fa-spinner fa-spin mr-1"></i>กำลังดำเนินการ...</> : 'ยืนยัน ปิดบัญชี'}
               </button>
               <button type="button" onClick={()=>setDeactivateTarget(null)} disabled={busy}
+                className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold">
+                ยกเลิก
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject edit-request modal — ปฏิเสธคำขอแก้ไขข้อมูล (ใส่เหตุผลได้) */}
+      {rejectReqTarget && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <h3 className="text-lg font-bold text-red-600 mb-2">
+              <i className="fa-solid fa-xmark mr-2"></i>ปฏิเสธคำขอแก้ไขข้อมูล
+            </h3>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4 text-xs text-amber-900">
+              <p><strong>ข้อมูลที่ขอแก้:</strong> {rejectReqTarget.field_label}</p>
+              <p className="mt-1"><strong>ค่าที่ขอ:</strong> {rejectReqTarget.new_value}</p>
+            </div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">เหตุผลในการปฏิเสธ (ไม่บังคับ)</label>
+            <textarea value={rejectReqNote} onChange={e=>setRejectReqNote(e.target.value)}
+              rows={3} placeholder="ระบุเหตุผล เพื่อแจ้งผู้ใช้ทางอีเมล"
+              className="w-full p-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-red-400 mb-4 resize-none"/>
+            <div className="flex gap-2">
+              <button type="button" onClick={()=>handleEditRequest(rejectReqTarget.id, 'reject', rejectReqNote)}
+                disabled={editReqBusy === rejectReqTarget.id}
+                className="flex-1 px-4 py-2 bg-red-500 hover:bg-red-600 disabled:bg-gray-300 text-white rounded-xl text-sm font-bold">
+                {editReqBusy === rejectReqTarget.id ? <><i className="fa-solid fa-spinner fa-spin mr-1"></i>กำลังดำเนินการ...</> : 'ยืนยัน ปฏิเสธคำขอ'}
+              </button>
+              <button type="button" onClick={()=>{ setRejectReqTarget(null); setRejectReqNote(''); }} disabled={editReqBusy === rejectReqTarget.id}
                 className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold">
                 ยกเลิก
               </button>

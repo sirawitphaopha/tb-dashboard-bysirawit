@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { getResend, EMAIL_FROM, ADMIN_EMAILS } from '@/lib/resend'
-import { adminEditRequestEmail } from '@/lib/email-templates'
+import { adminEditRequestEmail, userEditRequestReceivedEmail } from '@/lib/email-templates'
 
 export async function POST(req: NextRequest) {
   try {
@@ -67,6 +67,23 @@ export async function POST(req: NextRequest) {
         html: mail.html,
       })
     } catch (e) { console.error('request-edit email failed:', e) }
+
+    // ส่งเมลยืนยันกลับให้ user (เก็บไว้เป็นหลักฐานว่าขอแก้อะไรไป)
+    try {
+      if (user.email) {
+        const firstName = profile?.first_name || 'ผู้ใช้'
+        const mail = userEditRequestReceivedEmail(
+          firstName, field_label,
+          old_value || '', new_value, reason || ''
+        )
+        await getResend().emails.send({
+          from: EMAIL_FROM,
+          to: user.email,
+          subject: mail.subject,
+          html: mail.html,
+        })
+      }
+    } catch (e) { console.error('request-edit user confirm email failed:', e) }
 
     return NextResponse.json({ success: true })
   } catch (e: any) {

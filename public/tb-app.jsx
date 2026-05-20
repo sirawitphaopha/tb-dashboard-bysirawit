@@ -1738,6 +1738,9 @@ function App() {
   const [pendingDeleteRequests, setPendingDeleteRequests] = useState([]);
   const [cancelledDeleteCount, setCancelledDeleteCount] = useState(0);
   const [userDbNotifs, setUserDbNotifs] = useState([]);
+  // คำขอแก้ไขข้อมูลที่รออนุมัติ (admin) + user ที่จะ highlight เมื่อกดจากกระดิ่ง
+  const [pendingEditRequests, setPendingEditRequests] = useState([]);
+  const [highlightUserId, setHighlightUserId] = useState(null);
   useEffect(() => {
     if (!currentUser?.id) return;
     if (currentUser.role === 'admin') {
@@ -1751,6 +1754,8 @@ function App() {
           setPendingDeleteRequests(reqs);
           const cancelled = await window.loadCancelledDeleteCount();
           setCancelledDeleteCount(cancelled);
+          const editReqs = await window.loadPendingEditRequests();
+          setPendingEditRequests(editReqs);
         } catch (e) { console.error('Load pending count failed:', e); }
       })();
     } else {
@@ -1775,6 +1780,21 @@ function App() {
           const cancelled = await window.loadCancelledDeleteCount();
           setCancelledDeleteCount(cancelled);
         } catch (e) { console.error('Realtime reload failed:', e); }
+      })
+      .subscribe();
+    return () => { window._sb.removeChannel(channel); };
+  }, [currentUser]);
+
+  // Realtime: ฟังคำขอแก้ไขข้อมูลโปรไฟล์ (สำหรับ admin)
+  useEffect(() => {
+    if (currentUser?.role !== 'admin') return;
+    const channel = window._sb
+      .channel('edit-requests-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tb_profile_edit_requests' }, async () => {
+        try {
+          const editReqs = await window.loadPendingEditRequests();
+          setPendingEditRequests(editReqs);
+        } catch (e) { console.error('Realtime edit-requests failed:', e); }
       })
       .subscribe();
     return () => { window._sb.removeChannel(channel); };
@@ -1904,17 +1924,35 @@ function App() {
       msg: `มี ${cancelledDeleteCount} คำขอลบที่ผู้ใช้ยกเลิกเองแล้ว — คลิกเพื่อดู`,
       time: 'ล่าสุด',
     }] : []),
+    // คำขอแก้ไขข้อมูล — แยกรายตัว กดแล้วไปที่ผู้ใช้คนนั้นในหน้าจัดการผู้ใช้
+    ...(currentUser?.role === 'admin'
+      ? pendingEditRequests.map(r => {
+          const name = `${r.requester?.first_name || ''} ${r.requester?.last_name || ''}`.trim() || 'ผู้ใช้';
+          return {
+            id: 'admin-edit-req-' + r.id,
+            type: 'warning',
+            patient: null,
+            patientId: null,
+            navTarget: 'admin-users',
+            highlightUser: r.user_id,
+            msg: `${name} ขอแก้ไข "${r.field_label}" — คลิกเพื่อพิจารณา`,
+            time: 'ใหม่',
+          };
+        })
+      : []),
   ];
   const userNotifAlerts = userDbNotifs.map(n => ({
     id: 'user-notif-' + n.id,
     dbNotifId: n.id,
-    type: n.type === 'delete_rejected' ? 'warning' : 'info',
+    type: (n.type === 'delete_rejected' || n.type === 'edit_request_rejected') ? 'warning' : 'info',
     patient: n.patient_name || null,
     patientId: (n.type === 'delete_rejected' || n.type === 'delete_restored') ? n.patient_id : null,
     navTarget: null,
-    msg: n.type === 'delete_approved'     ? `Admin อนุมัติลบ "${n.patient_name}" แล้ว`
-       : n.type === 'delete_rejected'     ? `Admin ไม่อนุมัติลบ "${n.patient_name}"${n.note ? ` — ${n.note}` : ''}`
-       : n.type === 'delete_restored'     ? `Admin กู้คืน "${n.patient_name}" จากถังขยะแล้ว`
+    msg: n.type === 'delete_approved'         ? `Admin อนุมัติลบ "${n.patient_name}" แล้ว`
+       : n.type === 'delete_rejected'         ? `Admin ไม่อนุมัติลบ "${n.patient_name}"${n.note ? ` — ${n.note}` : ''}`
+       : n.type === 'delete_restored'         ? `Admin กู้คืน "${n.patient_name}" จากถังขยะแล้ว`
+       : n.type === 'edit_request_approved'   ? `Admin อนุมัติคำขอแก้ไข "${n.note}" แล้ว`
+       : n.type === 'edit_request_rejected'   ? `Admin ไม่อนุมัติคำขอแก้ไข${n.note ? ` "${n.note}"` : ''}`
        : `"${n.patient_name}" ถูกลบถาวรแล้ว`,
     time: new Date(n.created_at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }),
   }));
@@ -2192,7 +2230,7 @@ function App() {
             <div>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:0,whiteSpace:'nowrap'}}>พัฒนาโดย เภสัชกร สิรวิชญ์ เผ่าผา</p>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:'1px 0 0 0',whiteSpace:'nowrap'}}>โรงพยาบาลปรางค์กู่</p>
-              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.7.10.1 ·<span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
+              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.7.10.2 ·<span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
             </div>
           ) : (
             <div style={{display:'flex',justifyContent:'center'}}>
@@ -2335,7 +2373,7 @@ function App() {
                 alerts={alerts} patients={patients} readAlerts={readAlerts}
                 onRead={markRead} onReadAll={markAllRead}
                 onOpen={p=>{openFromNotif(p);setShowNotifs(false);}}
-                onNavTarget={target=>{ setNav(target); setShowNotifs(false); }}
+                onNavTarget={(target, highlight)=>{ setNav(target); if(highlight) setHighlightUserId(highlight); setShowNotifs(false); }}
                 onClose={()=>setShowNotifs(false)}
                 onExpand={()=>{setShowNotifs(false);setShowFullNotifs(true);}}
               />}
@@ -2354,7 +2392,7 @@ function App() {
           {!dbLoading && nav==='reports'       && <Reports patients={patients}/>}
           {!dbLoading && nav==='knowledge'     && <KnowledgeBase/>}
           {!dbLoading && nav==='settings'      && <AdminSettings settings={settings} setSettings={setSettings} setNav={setNav}/>}
-          {!dbLoading && nav==='admin-users'   && <AdminUsersTab currentUser={currentUser} onPendingChange={setPendingUserCount}/>}
+          {!dbLoading && nav==='admin-users'   && <AdminUsersTab currentUser={currentUser} onPendingChange={setPendingUserCount} highlightUserId={highlightUserId} onClearHighlight={()=>setHighlightUserId(null)}/>}
           {!dbLoading && nav==='trash'         && <TrashList currentUser={currentUser} onRestore={restorePatient} onHardDelete={hardDeletePatient} pendingDeleteRequests={pendingDeleteRequests} onApproveDelete={approveDeleteRequest} onRejectDelete={rejectDeleteRequest} onAcknowledgeCancelled={async () => { await window.acknowledgeCancelledRequests(); setCancelledDeleteCount(0); }}/>}
           {!dbLoading && nav==='audit-log'     && <AuditLogTab/>}
         </div>
@@ -2386,7 +2424,7 @@ function App() {
         alerts={alerts} patients={patients} readAlerts={readAlerts}
         onRead={markRead} onReadAll={markAllRead}
         onOpen={p=>{openFromNotif(p);}}
-        onNavTarget={target=>{ setNav(target); setShowFullNotifs(false); }}
+        onNavTarget={(target, highlight)=>{ setNav(target); if(highlight) setHighlightUserId(highlight); setShowFullNotifs(false); }}
         onClose={()=>setShowFullNotifs(false)}
       />}
     </div>
@@ -2463,7 +2501,7 @@ function RequestEditModal({ field, currentValue, onClose }) {
       });
       if (res.ok) {
         setSent(true);
-        setTimeout(() => onClose(), 2000);
+        // ไม่ปิดอัตโนมัติ — ให้ผู้ใช้กดปุ่มปิดเอง
       } else {
         const e = await res.json();
         alert('เกิดข้อผิดพลาด: ' + (e.error || 'ไม่ทราบสาเหตุ'));
@@ -2516,6 +2554,12 @@ function RequestEditModal({ field, currentValue, onClose }) {
 
           <p style={{fontSize:'11px',color:'#9ca3af',margin:'0 0 4px',fontWeight:600}}>ค่าใหม่ที่ต้องการ</p>
           {renderInput()}
+          {field.hint && (
+            <p style={{fontSize:'11px',color:'#0d9488',margin:'6px 0 0',display:'flex',alignItems:'flex-start',gap:'5px'}}>
+              <i className="fa-solid fa-circle-info" style={{marginTop:'2px'}}></i>
+              <span>{field.hint}</span>
+            </p>
+          )}
 
           <p style={{fontSize:'11px',color:'#9ca3af',margin:'14px 0 4px',fontWeight:600}}>เหตุผล <span style={{fontWeight:400}}>(ไม่บังคับ)</span></p>
           <textarea value={reason} onChange={e=>setReason(e.target.value)}
@@ -2527,7 +2571,7 @@ function RequestEditModal({ field, currentValue, onClose }) {
             <div style={{background:'#f0fdf4',border:'1px solid #bbf7d0',borderRadius:'10px',padding:'14px 12px',marginTop:'14px',textAlign:'center'}}>
               <i className="fa-solid fa-circle-check" style={{color:'#16a34a',fontSize:'22px',marginBottom:'6px',display:'block'}}></i>
               <p style={{fontSize:'13px',color:'#15803d',fontWeight:700,margin:0}}>ส่งคำขอเรียบร้อยแล้ว</p>
-              <p style={{fontSize:'11px',color:'#166534',margin:'4px 0 0'}}>ระบบแจ้งผู้ดูแลระบบทางเมลแล้ว รอการดำเนินการ</p>
+              <p style={{fontSize:'11px',color:'#166534',margin:'4px 0 0'}}>ระบบส่งอีเมลยืนยันให้ท่านแล้ว และแจ้งผู้ดูแลระบบเพื่อพิจารณา</p>
             </div>
           ) : (
             <div style={{background:'#fef3c7',border:'1px solid #fde68a',borderRadius:'10px',padding:'10px 12px',marginTop:'14px',display:'flex',gap:'8px',alignItems:'flex-start'}}>
@@ -2626,12 +2670,14 @@ function UserProfileModal({ onClose }) {
   ];
 
   // Admin-approval required fields
+  // key = ชื่อคอลัมน์จริงในฐานข้อมูล / currentValue = ค่าดิบ (ไม่จัดรูป) เพื่อให้บันทึกถูกตอนอนุมัติ
   const approvalFields = [
-    { key:'fullName',     icon:'fa-user',           label:'ชื่อ-นามสกุล',        currentValue: fullName },
-    { key:'profession',   icon:'fa-user-doctor',    label:'วิชาชีพ',             currentValue: prof.label, options: Object.values(PROFESSIONS).map(p=>p.label) },
-    { key:'license',      icon:'fa-id-card',        label:'เลขใบประกอบ',         currentValue: fullLicense },
-    { key:'hospitalName', icon:'fa-hospital',       label:'โรงพยาบาล',           currentValue: form.hospitalName },
-    { key:'hospitalType', icon:'fa-location-dot',   label:'ประเภทโรงพยาบาล',     currentValue: form.hospitalType, options: HOSPITAL_TYPES },
+    { key:'first_name',     icon:'fa-user',           label:'ชื่อ',                currentValue: form.firstName },
+    { key:'last_name',      icon:'fa-user',           label:'นามสกุล',             currentValue: form.lastName },
+    { key:'profession',     icon:'fa-user-doctor',    label:'วิชาชีพ',             currentValue: prof.label, options: Object.values(PROFESSIONS).map(p=>p.label) },
+    { key:'license_number', icon:'fa-id-card',        label:'เลขใบประกอบ',         currentValue: form.licenseNumber, hint:'กรอกเฉพาะตัวเลข ระบบจะเติมคำนำหน้าตามวิชาชีพให้อัตโนมัติ' },
+    { key:'hospital_name',  icon:'fa-hospital',       label:'โรงพยาบาล',           currentValue: form.hospitalName },
+    { key:'hospital_type',  icon:'fa-location-dot',   label:'ประเภทโรงพยาบาล',     currentValue: form.hospitalType, options: HOSPITAL_TYPES },
   ];
 
   // Read-only system fields

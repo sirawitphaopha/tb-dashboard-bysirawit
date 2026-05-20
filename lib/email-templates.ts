@@ -477,3 +477,95 @@ export function deleteRequestHardDeletedEmail(firstName: string, patientName: st
   `
   return { subject, html: wrap(subject, body) }
 }
+
+// ═════════════════════════════════════════════════════════
+// 15) User — ระบบรับคำขอแก้ไขข้อมูลแล้ว (ยืนยันกลับให้ผู้ขอ)
+// ═════════════════════════════════════════════════════════
+export function userEditRequestReceivedEmail(
+  firstName: string, fieldLabel: string,
+  oldValue: string, newValue: string, reason: string
+) {
+  const subject = `ได้รับคำขอแก้ไขข้อมูลของท่านแล้ว — ${fieldLabel}`
+  const body = `
+    <h2 style="margin:0 0 16px;color:${BRAND_TEAL_DARK};font-size:18px;">เรียน คุณ${firstName}</h2>
+    <p style="margin:0 0 16px;font-size:14px;color:#4b5563;line-height:1.7;">
+      ระบบได้รับคำขอแก้ไขข้อมูลโปรไฟล์ของท่านเรียบร้อยแล้ว และส่งให้ผู้ดูแลระบบพิจารณา
+      ท่านจะได้รับอีเมลแจ้งอีกครั้งเมื่อผู้ดูแลระบบดำเนินการเสร็จสิ้น
+    </p>
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:16px;margin:20px 0;">
+      <p style="margin:0 0 10px;font-size:12px;color:#92400e;font-weight:700;">รายละเอียดคำขอ</p>
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr><td style="padding:5px 0;font-size:12px;color:#6b7280;width:120px;">ข้อมูลที่ขอแก้</td>
+            <td style="padding:5px 0;font-size:14px;font-weight:700;color:${BRAND_TEAL};">${fieldLabel}</td></tr>
+        <tr><td style="padding:5px 0;font-size:12px;color:#6b7280;">ค่าเดิม</td>
+            <td style="padding:5px 0;font-size:14px;color:#6b7280;">${oldValue || '—'}</td></tr>
+        <tr><td style="padding:5px 0;font-size:12px;color:#6b7280;">ค่าใหม่ที่ขอ</td>
+            <td style="padding:5px 0;font-size:14px;font-weight:700;color:#1f2937;">${newValue}</td></tr>
+        <tr><td style="padding:5px 0;font-size:12px;color:#6b7280;">เหตุผล</td>
+            <td style="padding:5px 0;font-size:14px;color:#4b5563;">${reason || '(ไม่ระบุ)'}</td></tr>
+      </table>
+    </div>
+    <p style="margin:0 0 8px;font-size:13px;color:#6b7280;">สถานะปัจจุบัน: <strong style="color:#d97706;">รอผู้ดูแลระบบพิจารณา</strong></p>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB CARE &amp; JOURNEY</p>
+  `
+  return { subject, html: wrap(subject, body) }
+}
+
+// ═════════════════════════════════════════════════════════
+// 16) User — คำขอแก้ไขข้อมูลได้รับการอนุมัติแล้ว
+// ═════════════════════════════════════════════════════════
+export function userEditRequestApprovedEmail(
+  firstName: string, fieldLabel: string,
+  oldValue: string, newValue: string
+) {
+  const subject = `คำขอแก้ไขข้อมูลของท่านได้รับการอนุมัติ — ${fieldLabel}`
+  const body = `
+    <h2 style="margin:0 0 16px;color:${BRAND_TEAL_DARK};font-size:18px;">เรียน คุณ${firstName}</h2>
+    <p style="margin:0 0 16px;font-size:14px;color:#4b5563;line-height:1.7;">
+      ผู้ดูแลระบบได้<strong style="color:#0f766e;">อนุมัติ</strong>คำขอแก้ไขข้อมูลของท่าน และอัปเดตข้อมูลในระบบเรียบร้อยแล้ว
+    </p>
+    <div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:10px;padding:16px;margin:20px 0;">
+      <p style="margin:0 0 10px;font-size:12px;color:#134e4a;font-weight:700;">รายการที่เปลี่ยนแปลง</p>
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td style="padding:6px 0;font-size:13px;color:#6b7280;width:140px;">${fieldLabel}</td>
+          <td style="padding:6px 0;font-size:13px;color:#6b7280;text-decoration:line-through;">${oldValue || '—'}</td>
+          <td style="padding:6px 4px;font-size:13px;color:#374151;">→</td>
+          <td style="padding:6px 0;font-size:13px;font-weight:700;color:#0f766e;">${newValue}</td>
+        </tr>
+      </table>
+    </div>
+    <p style="margin:0 0 8px;font-size:14px;color:#4b5563;">หากท่านมีข้อสงสัย กรุณาติดต่อผู้ดูแลระบบโดยตรง</p>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB CARE &amp; JOURNEY</p>
+  `
+  return { subject, html: wrap(subject, body) }
+}
+
+// ═════════════════════════════════════════════════════════
+// 17) User — คำขอแก้ไขข้อมูลไม่ได้รับการอนุมัติ
+// ═════════════════════════════════════════════════════════
+export function userEditRequestRejectedEmail(
+  firstName: string, fieldLabel: string,
+  newValue: string, note: string
+) {
+  const subject = `คำขอแก้ไขข้อมูลของท่านไม่ได้รับการอนุมัติ — ${fieldLabel}`
+  const body = `
+    <h2 style="margin:0 0 16px;color:${BRAND_TEAL_DARK};font-size:18px;">เรียน คุณ${firstName}</h2>
+    <p style="margin:0 0 16px;font-size:14px;color:#4b5563;line-height:1.7;">
+      ขอเรียนแจ้งว่า ผู้ดูแลระบบ<strong style="color:#dc2626;">ไม่อนุมัติ</strong>คำขอแก้ไขข้อมูลของท่าน
+    </p>
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:16px;margin:20px 0;">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr><td style="padding:5px 0;font-size:12px;color:#991b1b;width:120px;">ข้อมูลที่ขอแก้</td>
+            <td style="padding:5px 0;font-size:14px;font-weight:700;color:#1f2937;">${fieldLabel}</td></tr>
+        <tr><td style="padding:5px 0;font-size:12px;color:#991b1b;">ค่าที่ขอ</td>
+            <td style="padding:5px 0;font-size:14px;color:#4b5563;">${newValue}</td></tr>
+        ${note ? `<tr><td style="padding:5px 0;font-size:12px;color:#991b1b;">เหตุผล</td>
+            <td style="padding:5px 0;font-size:14px;color:#4b5563;">${note}</td></tr>` : ''}
+      </table>
+    </div>
+    <p style="margin:0 0 8px;font-size:14px;color:#4b5563;">หากมีข้อสงสัย หรือต้องการส่งคำขอใหม่ กรุณาติดต่อผู้ดูแลระบบโดยตรง</p>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB CARE &amp; JOURNEY</p>
+  `
+  return { subject, html: wrap(subject, body) }
+}

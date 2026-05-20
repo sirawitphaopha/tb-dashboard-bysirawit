@@ -789,6 +789,26 @@ window.loadPendingDeleteRequests = async () => {
   return data || [];
 };
 
+// คำขอแก้ไขข้อมูลโปรไฟล์ที่รออนุมัติ (admin) — พร้อมชื่อผู้ขอ
+// join เอง ไม่พึ่ง foreign-key embed เพื่อกัน error ถ้าชื่อ FK ไม่ตรง
+window.loadPendingEditRequests = async () => {
+  const { data, error } = await window._sb.from('tb_profile_edit_requests')
+    .select('*')
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false });
+  if (error) { console.error('Load edit requests error:', error); return []; }
+  const reqs = data || [];
+  if (reqs.length === 0) return [];
+
+  const userIds = Array.from(new Set(reqs.map(r => r.user_id).filter(Boolean)));
+  const { data: profs } = await window._sb.from('profiles')
+    .select('id, first_name, last_name, profession')
+    .in('id', userIds);
+  const byId = {};
+  (profs || []).forEach(p => { byId[p.id] = p; });
+  return reqs.map(r => ({ ...r, requester: byId[r.user_id] || null }));
+};
+
 window.loadMyPendingDeleteRequests = async (userId) => {
   const { data } = await window._sb.from('tb_delete_requests')
     .select('id, patient_id, status, requested_by')
