@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { createAdminClient } from '@/lib/supabase-admin'
+import { getResend, EMAIL_FROM } from '@/lib/resend'
+import { userProfileEditedEmail } from '@/lib/email-templates'
 
 const ALLOWED_FIELDS = ['first_name', 'last_name', 'hospital_name', 'hospital_type', 'profession', 'license_number', 'department', 'department_other'] as const
 type AllowedField = typeof ALLOWED_FIELDS[number]
@@ -81,6 +83,33 @@ export async function POST(req: NextRequest) {
         snapshot_before: current,
       })
     if (logErr) console.error('edit log insert failed:', logErr)
+
+    // ส่งเมลแจ้ง user ว่าข้อมูลถูกแก้แล้ว
+    try {
+      const { data: authData } = await admin.auth.admin.getUserById(userId)
+      const userEmail = authData?.user?.email
+      if (userEmail && Object.keys(changes).length > 0) {
+        const FIELD_LABELS: Record<string, string> = {
+          first_name: 'ชื่อ', last_name: 'นามสกุล',
+          hospital_name: 'ชื่อโรงพยาบาล', hospital_type: 'ประเภทโรงพยาบาล',
+          profession: 'วิชาชีพ', license_number: 'เลขใบประกอบวิชาชีพ',
+          department: 'แผนก', department_other: 'แผนก (ระบุ)',
+        }
+        const changeList = Object.entries(changes).map(([field, val]) => ({
+          label: FIELD_LABELS[field] || field,
+          before: (val as any).before,
+          after: (val as any).after,
+        }))
+        const firstName = (current as any).first_name || 'ผู้ใช้'
+        const mail = userProfileEditedEmail(firstName, changeList)
+        await getResend().emails.send({
+          from: EMAIL_FROM,
+          to: userEmail,
+          subject: mail.subject,
+          html: mail.html,
+        })
+      }
+    } catch (e) { console.error('edit user email failed:', e) }
 
     return NextResponse.json({ success: true, changed: true })
   } catch (e: any) {

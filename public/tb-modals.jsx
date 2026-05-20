@@ -3222,7 +3222,7 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
       body: JSON.stringify({ userId }),
     });
     setBusy(false);
-    if (res.ok) { setToast({ kind:'success', title:'อนุมัติเรียบร้อย', message:'ส่งเมลแจ้งผู้ใช้แล้วค่ะ ✉️' }); load(); }
+    if (res.ok) { setToast({ kind:'success', title:'อนุมัติเรียบร้อย', message:'ส่งเมลแจ้งผู้ใช้แล้ว ✉️' }); load(); }
     else { const e = await res.json(); setToast({ kind:'error', title:'เกิดข้อผิดพลาด', message: e.error }); }
   };
 
@@ -3307,7 +3307,7 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
     });
     setEditBusy(false);
     if (res.ok) {
-      setToast({ kind:'success', title:'บันทึกเรียบร้อย', message:'อัปเดตข้อมูลผู้ใช้แล้วค่ะ' });
+      setToast({ kind:'success', title:'บันทึกเรียบร้อย', message:'อัปเดตข้อมูลผู้ใช้แล้ว' });
       closeEdit(); load();
     } else {
       const e = await res.json();
@@ -3324,7 +3324,7 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
     });
     setBusy(false);
     if (res.ok) {
-      setToast({ kind:'success', title:'ปฏิเสธเรียบร้อย', message:'ส่งเมลแจ้งผู้ใช้แล้วค่ะ ✉️' });
+      setToast({ kind:'success', title:'ปฏิเสธเรียบร้อย', message:'ส่งเมลแจ้งผู้ใช้แล้ว ✉️' });
       setRejectingId(null); setRejectReason(''); load();
     }
     else { const e = await res.json(); setToast({ kind:'error', title:'เกิดข้อผิดพลาด', message: e.error }); }

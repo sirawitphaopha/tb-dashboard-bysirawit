@@ -392,6 +392,75 @@ export function adminDeleteRequestCancelledEmail(
   return { subject, html: wrap(subject, body) }
 }
 
+// ═════════════════════════════════════════════════════════
+// 13) Admin — user ขอแก้ไขข้อมูลโปรไฟล์
+// ═════════════════════════════════════════════════════════
+export function adminEditRequestEmail(
+  userName: string, fieldLabel: string,
+  oldValue: string, newValue: string,
+  reason: string, baseUrl: string
+) {
+  const subject = `📝 คำขอแก้ไขข้อมูล: ${userName} — ${fieldLabel}`
+  const body = `
+    <h2 style="margin:0 0 16px;color:${BRAND_TEAL_DARK};font-size:18px;">คำขอแก้ไขข้อมูลโปรไฟล์</h2>
+    <p style="margin:0 0 20px;font-size:14px;color:#4b5563;">ผู้ใช้ส่งคำขอแก้ไขข้อมูลในโปรไฟล์ของตนเอง กรุณาตรวจสอบและดำเนินการ</p>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border-radius:10px;padding:16px;margin-bottom:20px;">
+      <tr><td style="padding:6px 0;font-size:12px;color:#6b7280;width:130px;">ผู้ขอแก้ไข</td>
+          <td style="padding:6px 0;font-size:14px;font-weight:600;color:#1f2937;">${userName}</td></tr>
+      <tr><td style="padding:6px 0;font-size:12px;color:#6b7280;">ข้อมูลที่ขอแก้</td>
+          <td style="padding:6px 0;font-size:14px;font-weight:700;color:${BRAND_TEAL};">${fieldLabel}</td></tr>
+      <tr><td style="padding:6px 0;font-size:12px;color:#6b7280;">ค่าเดิม</td>
+          <td style="padding:6px 0;font-size:14px;color:#6b7280;">${oldValue || '—'}</td></tr>
+      <tr><td style="padding:6px 0;font-size:12px;color:#6b7280;">ค่าใหม่ที่ต้องการ</td>
+          <td style="padding:6px 0;font-size:14px;font-weight:700;color:#1f2937;">${newValue}</td></tr>
+      <tr><td style="padding:6px 0;font-size:12px;color:#6b7280;">เหตุผล</td>
+          <td style="padding:6px 0;font-size:14px;color:#4b5563;">${reason || '(ไม่ระบุ)'}</td></tr>
+    </table>
+
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr><td align="center" style="padding:8px 0;">
+        <a href="${baseUrl}" style="display:inline-block;padding:14px 32px;background:${BRAND_TEAL};color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px;">
+          🛡️ ไปที่หน้าจัดการผู้ใช้
+        </a>
+      </td></tr>
+    </table>
+    <p style="margin:16px 0 0;font-size:12px;color:#9ca3af;text-align:center;">กรุณาเข้าไปแก้ไขข้อมูลให้ผู้ใช้ในหน้าจัดการผู้ใช้</p>
+  `
+  return { subject, html: wrap(subject, body) }
+}
+
+// ═════════════════════════════════════════════════════════
+// 14) User — admin แก้ไขข้อมูลโปรไฟล์ให้แล้ว
+// ═════════════════════════════════════════════════════════
+export function userProfileEditedEmail(
+  firstName: string,
+  changes: { label: string; before: string | null; after: string | null }[]
+) {
+  const subject = 'ข้อมูลโปรไฟล์ของท่านได้รับการอัปเดต'
+  const rows = changes.map(c => `
+    <tr>
+      <td style="padding:6px 0;font-size:12px;color:#6b7280;width:140px;">${c.label}</td>
+      <td style="padding:6px 0;font-size:13px;color:#6b7280;text-decoration:line-through;">${c.before || '—'}</td>
+      <td style="padding:6px 4px;font-size:13px;color:#374151;">→</td>
+      <td style="padding:6px 0;font-size:13px;font-weight:700;color:#0f766e;">${c.after || '—'}</td>
+    </tr>
+  `).join('')
+  const body = `
+    <h2 style="margin:0 0 16px;color:${BRAND_TEAL_DARK};font-size:18px;">เรียน คุณ${firstName}</h2>
+    <p style="margin:0 0 16px;font-size:14px;color:#4b5563;line-height:1.7;">
+      ผู้ดูแลระบบได้ทำการอัปเดตข้อมูลโปรไฟล์ของท่านเรียบร้อยแล้ว
+    </p>
+    <div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:10px;padding:16px;margin:20px 0;">
+      <p style="margin:0 0 10px;font-size:12px;color:#134e4a;font-weight:700;">รายการที่เปลี่ยนแปลง</p>
+      <table width="100%" cellpadding="0" cellspacing="0">${rows}</table>
+    </div>
+    <p style="margin:0 0 8px;font-size:14px;color:#4b5563;">หากท่านไม่ได้ขอให้แก้ไข หรือมีข้อสงสัย กรุณาติดต่อผู้ดูแลระบบโดยตรง</p>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB CARE &amp; JOURNEY</p>
+  `
+  return { subject, html: wrap(subject, body) }
+}
+
 export function deleteRequestHardDeletedEmail(firstName: string, patientName: string) {
   const subject = `✅ ข้อมูลผู้ป่วยถูกลบถาวรแล้ว: ${patientName}`
   const body = `
