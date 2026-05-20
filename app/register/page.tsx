@@ -479,10 +479,14 @@ export default function RegisterPage() {
               Hospital
             </p>
             <div>
-              <label style={lbl}>ชื่อโรงพยาบาล <span style={{ color: '#ef4444' }}>*</span></label>
+              <label style={lbl}>ชื่อโรงพยาบาล / หน่วยงาน <span style={{ color: '#ef4444' }}>*</span></label>
               <input type="text" value={hospitalName} onChange={e => setHospitalName(e.target.value)}
-                placeholder="ชื่อโรงพยาบาล / สถานพยาบาล"
+                placeholder="เช่น โรงพยาบาลปรางค์กู่ / สำนักงานสาธารณสุขจังหวัดศรีสะเกษ"
                 style={inp} onFocus={focus} onBlur={blur} required />
+              <p style={{ fontSize: '11px', color: '#6b7280', marginTop: '5px', lineHeight: 1.6 }}>
+                <i className="fa-solid fa-circle-info" style={{ marginRight: '4px', color: '#0d9488' }}></i>
+                กรุณาระบุชื่อเต็ม เช่น <strong>"โรงพยาบาลปรางค์กู่"</strong> ไม่ใช่แค่ <strong>"ปรางค์กู่"</strong>
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-3 mt-3">
