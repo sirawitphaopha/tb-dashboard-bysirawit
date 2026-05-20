@@ -2977,10 +2977,20 @@ function TrashList({ currentUser, onRestore, onHardDelete, pendingDeleteRequests
 // AdminUsersTab — จัดการผู้ใช้ (admin เท่านั้น) — embedded ใน dashboard
 // ─────────────────────────────────────────────────────
 const PROFESSION_LABELS_TH = {
-  doctor:'แพทย์', dentist:'ทันตแพทย์', pharmacist:'เภสัชกร', nurse:'พยาบาลวิชาชีพ',
+  doctor:'แพทย์', dentist:'ทันตแพทย์', pharmacist:'เภสัชกร',
+  nurse1:'พยาบาลวิชาชีพ (ชั้นหนึ่ง)', nurse2:'พยาบาลเทคนิค (ชั้นสอง)',
   medtech:'นักเทคนิคการแพทย์', physio:'นักกายภาพบำบัด', radio:'นักรังสีการแพทย์',
-  publichealth:'เจ้าหน้าที่สาธารณสุข', officer:'เจ้าพนักงาน', other:'อื่นๆ',
+  publichealthofficer:'นักสาธารณสุข', publichealthtech:'นักวิชาการสาธารณสุข',
+  officer:'เจ้าพนักงาน', other:'อื่นๆ',
 };
+const HOSPITAL_TYPES_LIST = [
+  'โรงพยาบาลศูนย์ (ระดับ A)', 'โรงพยาบาลทั่วไป (ระดับ S)',
+  'โรงพยาบาลทั่วไป (ระดับ M1)', 'โรงพยาบาลชุมชน (ระดับ M2)',
+  'โรงพยาบาลชุมชน (ระดับ F1)', 'โรงพยาบาลชุมชน (ระดับ F2)',
+  'โรงพยาบาลชุมชน (ระดับ F3)', 'โรงพยาบาลเอกชน',
+  'สำนักงานสาธารณสุข (สสจ./สสอ.)', 'โรงพยาบาลส่งเสริมสุขภาพตำบล (รพ.สต.)',
+];
+const DEPARTMENTS_LIST = ['กลุ่มงานเภสัชกรรม', 'กลุ่มงานการพยาบาล', 'กลุ่มงานแพทย์', 'อื่นๆ'];
 const STATUS_STYLE = {
   pending:  { bg:'#fef3c7', fg:'#92400e', label:'⏳ รออนุมัติ' },
   approved: { bg:'#d1fae5', fg:'#065f46', label:'✅ อนุมัติแล้ว' },
@@ -3177,6 +3187,10 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
   const [logLoading, setLogLoading] = useState(false);
   const [expandedLogId, setExpandedLogId] = useState(null);
   const [toast, setToast] = useState(null);  // {kind:'success'|'error'|'info', title?, message}
+  const [editingUser, setEditingUser] = useState(null);
+  const [editForm, setEditForm] = useState({});
+  const [editBusy, setEditBusy] = useState(false);
+  const [editError, setEditError] = useState('');
 
   const load = async () => {
     setLoading(true);
@@ -3263,6 +3277,42 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
     setBusy(false);
     if (res.ok) { setDeactivateTarget(null); load(); }
     else { const e = await res.json(); setToast({ kind:'error', title:'เกิดข้อผิดพลาด', message: e.error }); }
+  };
+
+  const openEdit = (p) => {
+    setEditingUser(p);
+    setEditForm({
+      first_name: p.first_name || '',
+      last_name: p.last_name || '',
+      hospital_name: p.hospital_name || '',
+      hospital_type: p.hospital_type || '',
+      department: p.department || '',
+      department_other: p.department_other || '',
+      profession: p.profession || '',
+      license_number: p.license_number || '',
+    });
+    setEditError('');
+  };
+  const closeEdit = () => { setEditingUser(null); setEditError(''); };
+  const submitEdit = async () => {
+    if (!editingUser) return;
+    if (!editForm.first_name.trim() || !editForm.last_name.trim()) {
+      setEditError('กรุณากรอกชื่อและนามสกุล'); return;
+    }
+    setEditBusy(true); setEditError('');
+    const res = await fetch('/api/admin/edit-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: editingUser.id, ...editForm }),
+    });
+    setEditBusy(false);
+    if (res.ok) {
+      setToast({ kind:'success', title:'บันทึกเรียบร้อย', message:'อัปเดตข้อมูลผู้ใช้แล้วค่ะ' });
+      closeEdit(); load();
+    } else {
+      const e = await res.json();
+      setEditError(e.error || 'เกิดข้อผิดพลาด');
+    }
   };
 
   const submitReject = async () => {
@@ -3426,6 +3476,10 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
                     <span className="text-xs font-bold px-2 py-0.5 rounded-md inline-block" style={{ background:sc.bg, color:sc.fg }}>{sc.label}</span>
                   </div>
                   <div className="col-span-2 flex justify-end gap-1.5">
+                    <button type="button" onClick={()=>openEdit(p)} disabled={busy}
+                      className="px-2.5 py-1 rounded-lg font-bold text-white text-xs bg-teal-700 hover:bg-teal-800 disabled:opacity-50" title="แก้ไขข้อมูล">
+                      <i className="fa-solid fa-pen-to-square"></i>
+                    </button>
                     {p.status === 'pending' && (
                       <>
                         <button type="button" onClick={()=>handleApprove(p.id)} disabled={busy}
@@ -3495,18 +3549,24 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
                       {p.license_number && ` · ${p.license_number}`}
                     </p>
                   </div>
-                  {p.status === 'pending' && (
-                    <div className="flex gap-2 flex-shrink-0">
-                      <button type="button" onClick={() => handleApprove(p.id)} disabled={busy}
-                        className="px-4 py-2 rounded-xl font-bold text-white text-xs bg-teal-600 hover:bg-teal-700 disabled:opacity-50">
-                        <i className="fa-solid fa-check mr-1"></i>อนุมัติ
-                      </button>
-                      <button type="button" onClick={() => { setRejectingId(p.id); setRejectReason(''); }} disabled={busy}
-                        className="px-4 py-2 rounded-xl font-bold text-white text-xs bg-red-500 hover:bg-red-600 disabled:opacity-50">
-                        <i className="fa-solid fa-xmark mr-1"></i>ปฏิเสธ
-                      </button>
-                    </div>
-                  )}
+                  <div className="flex gap-2 flex-shrink-0 flex-wrap justify-end">
+                    <button type="button" onClick={()=>openEdit(p)} disabled={busy}
+                      className="px-3 py-2 rounded-xl font-bold text-white text-xs bg-teal-700 hover:bg-teal-800 disabled:opacity-50">
+                      <i className="fa-solid fa-pen-to-square mr-1"></i>แก้ไข
+                    </button>
+                    {p.status === 'pending' && (
+                      <>
+                        <button type="button" onClick={() => handleApprove(p.id)} disabled={busy}
+                          className="px-4 py-2 rounded-xl font-bold text-white text-xs bg-teal-600 hover:bg-teal-700 disabled:opacity-50">
+                          <i className="fa-solid fa-check mr-1"></i>อนุมัติ
+                        </button>
+                        <button type="button" onClick={() => { setRejectingId(p.id); setRejectReason(''); }} disabled={busy}
+                          className="px-4 py-2 rounded-xl font-bold text-white text-xs bg-red-500 hover:bg-red-600 disabled:opacity-50">
+                          <i className="fa-solid fa-xmark mr-1"></i>ปฏิเสธ
+                        </button>
+                      </>
+                    )}
+                  </div>
                   {p.status === 'approved' && p.role !== 'admin' && (
                     <div className="flex gap-2 flex-shrink-0">
                       <button type="button" onClick={()=>setDeactivateTarget(p)} disabled={busy}
@@ -3520,7 +3580,7 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
                     const isBlocked = ws && (new Date() - ws) < 7*24*60*60*1000 && (p.rejection_week_count||0) >= 3;
                     const isDeactivated = p.rejected_reason === 'ปิดบัญชีโดย Admin';
                     return (
-                      <div className="flex gap-2 flex-shrink-0">
+                      <div className="flex gap-2 flex-shrink-0 flex-wrap justify-end">
                         {isDeactivated && (
                           <button type="button" onClick={()=>handleRestoreUser(p)} disabled={busy}
                             className="px-4 py-2 rounded-xl font-bold text-white text-xs bg-teal-600 hover:bg-teal-700 disabled:opacity-50">
@@ -3533,6 +3593,10 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
                             <i className="fa-solid fa-lock-open mr-1"></i>ปลดล็อก
                           </button>
                         )}
+                        <button type="button" onClick={()=>openEdit(p)} disabled={busy}
+                          className="px-3 py-2 rounded-xl font-bold text-white text-xs bg-teal-700 hover:bg-teal-800 disabled:opacity-50">
+                          <i className="fa-solid fa-pen-to-square mr-1"></i>แก้ไข
+                        </button>
                         <button type="button" onClick={()=>{ setHardDelTarget(p); setConfirmText(''); }} disabled={busy}
                           className="px-4 py-2 rounded-xl font-bold text-white text-xs bg-gray-600 hover:bg-red-600 disabled:opacity-50">
                           <i className="fa-solid fa-fire mr-1"></i>ลบถาวร
@@ -3623,6 +3687,94 @@ function AdminUsersTab({ currentUser, onPendingChange }) {
 
       {/* Custom Toast (แทน alert() ของเบราว์เซอร์) */}
       <ToastModal toast={toast} onClose={()=>setToast(null)} />
+
+      {/* Edit User Modal */}
+      {editingUser && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-bold text-teal-900">
+                <i className="fa-solid fa-pen-to-square mr-2 text-teal-600"></i>แก้ไขข้อมูล
+              </h3>
+              <button type="button" onClick={closeEdit} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+            </div>
+            <p className="text-xs mb-4 px-3 py-2 rounded-lg bg-teal-50 text-teal-800">
+              <i className="fa-solid fa-circle-info mr-1.5"></i>
+              แก้ไขข้อมูลของ <strong>{editingUser.first_name} {editingUser.last_name}</strong>
+            </p>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">ชื่อ</label>
+                  <input value={editForm.first_name} onChange={e=>setEditForm(f=>({...f,first_name:e.target.value}))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-teal-400"/>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">นามสกุล</label>
+                  <input value={editForm.last_name} onChange={e=>setEditForm(f=>({...f,last_name:e.target.value}))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-teal-400"/>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">ชื่อโรงพยาบาล</label>
+                <input value={editForm.hospital_name} onChange={e=>setEditForm(f=>({...f,hospital_name:e.target.value}))}
+                  placeholder="เช่น โรงพยาบาลปรางค์กู่"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-teal-400"/>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">ประเภทโรงพยาบาล</label>
+                <select value={editForm.hospital_type} onChange={e=>setEditForm(f=>({...f,hospital_type:e.target.value}))}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-teal-400">
+                  <option value="">— เลือก —</option>
+                  {HOSPITAL_TYPES_LIST.map(t=><option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">แผนก</label>
+                <select value={editForm.department} onChange={e=>setEditForm(f=>({...f,department:e.target.value}))}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-teal-400">
+                  <option value="">— เลือก —</option>
+                  {DEPARTMENTS_LIST.map(d=><option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+              {editForm.department === 'อื่นๆ' && (
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">ระบุแผนก</label>
+                  <input value={editForm.department_other} onChange={e=>setEditForm(f=>({...f,department_other:e.target.value}))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-teal-400"/>
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">วิชาชีพ</label>
+                <select value={editForm.profession} onChange={e=>setEditForm(f=>({...f,profession:e.target.value}))}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-teal-400">
+                  <option value="">— เลือก —</option>
+                  {Object.entries(PROFESSION_LABELS_TH).map(([key,label])=>(
+                    <option key={key} value={key}>{label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">เลขใบประกอบวิชาชีพ</label>
+                <input value={editForm.license_number} onChange={e=>setEditForm(f=>({...f,license_number:e.target.value}))}
+                  placeholder="เช่น ภ.12345 (รวม prefix ด้วย)"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-teal-400"/>
+                <p className="text-xs mt-1 text-gray-400">กรอกรวม prefix วิชาชีพ เช่น ภ.12345, ว.98765</p>
+              </div>
+            </div>
+            {editError && <p className="mt-3 text-xs text-center font-semibold text-red-500">{editError}</p>}
+            <div className="flex gap-2 mt-5">
+              <button type="button" onClick={closeEdit} disabled={editBusy}
+                className="flex-1 py-2.5 rounded-xl font-bold text-sm bg-gray-100 hover:bg-gray-200 text-gray-700">ยกเลิก</button>
+              <button type="button" onClick={submitEdit} disabled={editBusy}
+                className="flex-1 py-2.5 rounded-xl font-bold text-sm text-white"
+                style={{ background: editBusy ? '#5eead4' : '#0f766e' }}>
+                {editBusy ? <><i className="fa-solid fa-spinner fa-spin mr-1"></i>กำลังบันทึก...</> : 'บันทึกข้อมูล'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Reject Modal */}
       {rejectingId && (

@@ -25,15 +25,38 @@ type Profile = {
 }
 
 const PROFESSION_LABELS: Record<string, string> = {
-  doctor:'แพทย์', dentist:'ทันตแพทย์', pharmacist:'เภสัชกร', nurse:'พยาบาลวิชาชีพ',
-  medtech:'นักเทคนิคการแพทย์', physio:'นักกายภาพบำบัด', radio:'นักรังสีการแพทย์',
-  publichealth:'เจ้าหน้าที่สาธารณสุข', officer:'เจ้าพนักงาน', other:'อื่นๆ',
+  doctor: 'แพทย์', dentist: 'ทันตแพทย์', pharmacist: 'เภสัชกร',
+  nurse1: 'พยาบาลวิชาชีพ (ชั้นหนึ่ง)', nurse2: 'พยาบาลเทคนิค (ชั้นสอง)',
+  medtech: 'นักเทคนิคการแพทย์', physio: 'นักกายภาพบำบัด', radio: 'นักรังสีการแพทย์',
+  publichealthofficer: 'นักสาธารณสุข', publichealthtech: 'นักวิชาการสาธารณสุข',
+  officer: 'เจ้าพนักงาน', other: 'อื่นๆ',
 }
+
+const HOSPITAL_TYPES = [
+  'โรงพยาบาลศูนย์ (ระดับ A)', 'โรงพยาบาลทั่วไป (ระดับ S)',
+  'โรงพยาบาลทั่วไป (ระดับ M1)', 'โรงพยาบาลชุมชน (ระดับ M2)',
+  'โรงพยาบาลชุมชน (ระดับ F1)', 'โรงพยาบาลชุมชน (ระดับ F2)',
+  'โรงพยาบาลชุมชน (ระดับ F3)', 'โรงพยาบาลเอกชน',
+  'สำนักงานสาธารณสุข (สสจ./สสอ.)', 'โรงพยาบาลส่งเสริมสุขภาพตำบล (รพ.สต.)',
+]
+
+const DEPARTMENTS = ['กลุ่มงานเภสัชกรรม', 'กลุ่มงานการพยาบาล', 'กลุ่มงานแพทย์', 'อื่นๆ']
 
 const STATUS_COLORS: Record<string, { bg: string; fg: string; label: string }> = {
   pending:  { bg:'#fef3c7', fg:'#92400e', label:'⏳ รออนุมัติ' },
   approved: { bg:'#d1fae5', fg:'#065f46', label:'✅ อนุมัติแล้ว' },
   rejected: { bg:'#fee2e2', fg:'#991b1b', label:'❌ ปฏิเสธ' },
+}
+
+type EditForm = {
+  first_name: string
+  last_name: string
+  hospital_name: string
+  hospital_type: string
+  department: string
+  department_other: string
+  profession: string
+  license_number: string
 }
 
 export default function AdminUsersPage() {
@@ -45,6 +68,14 @@ export default function AdminUsersPage() {
   const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const [busy, setBusy] = useState(false)
+
+  const [editingUser, setEditingUser] = useState<Profile | null>(null)
+  const [editForm, setEditForm] = useState<EditForm>({
+    first_name: '', last_name: '', hospital_name: '', hospital_type: '',
+    department: '', department_other: '', profession: '', license_number: '',
+  })
+  const [editBusy, setEditBusy] = useState(false)
+  const [editError, setEditError] = useState('')
 
   const loadProfiles = async () => {
     setLoading(true)
@@ -88,6 +119,47 @@ export default function AdminUsersPage() {
     setBusy(false)
     if (res.ok) { alert('ปฏิเสธแล้ว ส่งเมลแจ้ง user เรียบร้อยค่ะ'); closeReject(); loadProfiles() }
     else { const e = await res.json(); alert('error: ' + e.error) }
+  }
+
+  const openEdit = (p: Profile) => {
+    setEditingUser(p)
+    setEditForm({
+      first_name: p.first_name || '',
+      last_name: p.last_name || '',
+      hospital_name: p.hospital_name || '',
+      hospital_type: p.hospital_type || '',
+      department: p.department || '',
+      department_other: p.department_other || '',
+      profession: p.profession || '',
+      license_number: p.license_number || '',
+    })
+    setEditError('')
+  }
+  const closeEdit = () => { setEditingUser(null); setEditError('') }
+
+  const submitEdit = async () => {
+    if (!editingUser) return
+    if (!editForm.first_name.trim() || !editForm.last_name.trim()) {
+      setEditError('กรุณากรอกชื่อและนามสกุล'); return
+    }
+    if (!editForm.hospital_name.trim()) {
+      setEditError('กรุณากรอกชื่อโรงพยาบาล'); return
+    }
+    setEditBusy(true)
+    setEditError('')
+    const res = await fetch('/api/admin/edit-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: editingUser.id, ...editForm }),
+    })
+    setEditBusy(false)
+    if (res.ok) {
+      closeEdit()
+      loadProfiles()
+    } else {
+      const e = await res.json()
+      setEditError(e.error || 'เกิดข้อผิดพลาด')
+    }
   }
 
   const filtered = filter === 'all' ? profiles : profiles.filter(p => p.status === filter)
@@ -173,20 +245,27 @@ export default function AdminUsersPage() {
                         {p.license_number && ` · ${p.license_number}`}
                       </p>
                     </div>
-                    {p.status === 'pending' && (
-                      <div className="flex gap-2 shrink-0">
-                        <button onClick={() => handleApprove(p.id)} disabled={busy}
-                          className="px-4 py-2 rounded-lg font-bold text-white text-sm shadow-md"
-                          style={{ background:'#22c55e' }}>
-                          <i className="fa-solid fa-check mr-1.5"></i>อนุมัติ
-                        </button>
-                        <button onClick={() => openReject(p.id)} disabled={busy}
-                          className="px-4 py-2 rounded-lg font-bold text-white text-sm shadow-md"
-                          style={{ background:'#ef4444' }}>
-                          <i className="fa-solid fa-xmark mr-1.5"></i>ปฏิเสธ
-                        </button>
-                      </div>
-                    )}
+                    <div className="flex gap-2 shrink-0 flex-wrap justify-end">
+                      <button onClick={() => openEdit(p)} disabled={busy}
+                        className="px-3 py-2 rounded-lg font-bold text-white text-sm shadow-md"
+                        style={{ background:'#0f766e' }}>
+                        <i className="fa-solid fa-pen-to-square mr-1.5"></i>แก้ไข
+                      </button>
+                      {p.status === 'pending' && (
+                        <>
+                          <button onClick={() => handleApprove(p.id)} disabled={busy}
+                            className="px-4 py-2 rounded-lg font-bold text-white text-sm shadow-md"
+                            style={{ background:'#22c55e' }}>
+                            <i className="fa-solid fa-check mr-1.5"></i>อนุมัติ
+                          </button>
+                          <button onClick={() => openReject(p.id)} disabled={busy}
+                            className="px-4 py-2 rounded-lg font-bold text-white text-sm shadow-md"
+                            style={{ background:'#ef4444' }}>
+                            <i className="fa-solid fa-xmark mr-1.5"></i>ปฏิเสธ
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 text-xs pt-3 border-t" style={{ borderColor:'#f3f4f6' }}>
@@ -232,6 +311,115 @@ export default function AdminUsersPage() {
                   className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm"
                   style={{ background: busy ? '#fca5a5' : '#ef4444' }}>
                   {busy ? 'กำลังส่ง...' : 'ยืนยันปฏิเสธ'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Modal */}
+        {editingUser && (
+          <div className="fixed inset-0 flex items-center justify-center p-5 z-50" style={{ background:'rgba(15,23,42,0.5)', backdropFilter:'blur(3px)' }}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold" style={{ color:'#134e4a' }}>
+                  <i className="fa-solid fa-pen-to-square mr-2"></i>แก้ไขข้อมูล
+                </h3>
+                <button onClick={closeEdit} style={{ color:'#9ca3af', fontSize:'20px' }}>✕</button>
+              </div>
+
+              <p className="text-xs mb-4 px-3 py-2 rounded-lg" style={{ background:'#f0fdf4', color:'#166534' }}>
+                <i className="fa-solid fa-circle-info mr-1.5"></i>
+                แก้ไขข้อมูลของ <strong>{editingUser.first_name} {editingUser.last_name}</strong>
+              </p>
+
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold mb-1" style={{ color:'#374151' }}>ชื่อ</label>
+                    <input value={editForm.first_name} onChange={e => setEditForm(f => ({ ...f, first_name: e.target.value }))}
+                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none"
+                      style={{ borderColor:'#e5e7eb' }} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold mb-1" style={{ color:'#374151' }}>นามสกุล</label>
+                    <input value={editForm.last_name} onChange={e => setEditForm(f => ({ ...f, last_name: e.target.value }))}
+                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none"
+                      style={{ borderColor:'#e5e7eb' }} />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold mb-1" style={{ color:'#374151' }}>ชื่อโรงพยาบาล</label>
+                  <input value={editForm.hospital_name} onChange={e => setEditForm(f => ({ ...f, hospital_name: e.target.value }))}
+                    className="w-full px-3 py-2 border rounded-lg text-sm outline-none"
+                    style={{ borderColor:'#e5e7eb' }}
+                    placeholder="เช่น โรงพยาบาลปรางค์กู่" />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold mb-1" style={{ color:'#374151' }}>ประเภทโรงพยาบาล</label>
+                  <select value={editForm.hospital_type} onChange={e => setEditForm(f => ({ ...f, hospital_type: e.target.value }))}
+                    className="w-full px-3 py-2 border rounded-lg text-sm outline-none"
+                    style={{ borderColor:'#e5e7eb' }}>
+                    <option value="">— เลือก —</option>
+                    {HOSPITAL_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold mb-1" style={{ color:'#374151' }}>แผนก</label>
+                  <select value={editForm.department} onChange={e => setEditForm(f => ({ ...f, department: e.target.value }))}
+                    className="w-full px-3 py-2 border rounded-lg text-sm outline-none"
+                    style={{ borderColor:'#e5e7eb' }}>
+                    <option value="">— เลือก —</option>
+                    {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                </div>
+
+                {editForm.department === 'อื่นๆ' && (
+                  <div>
+                    <label className="block text-xs font-semibold mb-1" style={{ color:'#374151' }}>ระบุแผนก</label>
+                    <input value={editForm.department_other} onChange={e => setEditForm(f => ({ ...f, department_other: e.target.value }))}
+                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none"
+                      style={{ borderColor:'#e5e7eb' }} />
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-semibold mb-1" style={{ color:'#374151' }}>วิชาชีพ</label>
+                  <select value={editForm.profession} onChange={e => setEditForm(f => ({ ...f, profession: e.target.value }))}
+                    className="w-full px-3 py-2 border rounded-lg text-sm outline-none"
+                    style={{ borderColor:'#e5e7eb' }}>
+                    <option value="">— เลือก —</option>
+                    {Object.entries(PROFESSION_LABELS).map(([key, label]) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold mb-1" style={{ color:'#374151' }}>เลขใบประกอบวิชาชีพ</label>
+                  <input value={editForm.license_number} onChange={e => setEditForm(f => ({ ...f, license_number: e.target.value }))}
+                    className="w-full px-3 py-2 border rounded-lg text-sm outline-none"
+                    style={{ borderColor:'#e5e7eb' }}
+                    placeholder="เช่น ภ.12345 (รวม prefix ด้วย)" />
+                  <p className="text-xs mt-1" style={{ color:'#9ca3af' }}>กรอกรวม prefix วิชาชีพ เช่น ภ.12345, ว.98765</p>
+                </div>
+              </div>
+
+              {editError && (
+                <p className="mt-3 text-xs text-center font-semibold" style={{ color:'#ef4444' }}>{editError}</p>
+              )}
+
+              <div className="flex gap-2 mt-5">
+                <button onClick={closeEdit} disabled={editBusy}
+                  className="flex-1 py-2.5 rounded-xl font-semibold text-sm border"
+                  style={{ borderColor:'#e5e7eb', color:'#374151' }}>ยกเลิก</button>
+                <button onClick={submitEdit} disabled={editBusy}
+                  className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm"
+                  style={{ background: editBusy ? '#5eead4' : '#0f766e' }}>
+                  {editBusy ? 'กำลังบันทึก...' : 'บันทึกข้อมูล'}
                 </button>
               </div>
             </div>
