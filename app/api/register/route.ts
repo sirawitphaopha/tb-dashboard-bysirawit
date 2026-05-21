@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
     const {
       username, email, password,
       firstName, lastName,
-      profession, licenseNumber, phone,
+      profession, title, licenseNumber, phone,
       hospitalName, hospitalType, department, departmentOther,
     } = body
 
@@ -99,6 +99,7 @@ export async function POST(req: NextRequest) {
         first_name:       firstName,
         last_name:        lastName,
         profession,
+        title:            title || null,
         license_number:   fullLicense,
         phone:            phone || null,
         hospital_name:    hospitalName,
@@ -134,6 +135,7 @@ export async function POST(req: NextRequest) {
         first_name:        firstName,
         last_name:         lastName,
         profession,
+        title:             title || null,
         license_number:    fullLicense,
         phone:             phone || null,
         hospital_name:     hospitalName,

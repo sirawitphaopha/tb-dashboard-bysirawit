@@ -1853,11 +1853,12 @@ function App() {
         if (!data?.profile) return;
         const p = data.profile;
         const prof = PROFESSIONS[p.profession] || PROFESSIONS.other;
+        const shown = window.tbDisplayTitle(p.profession, p.title);  // ตัวย่อวิชาชีพตามเพศ (เช่น ภญ.) หรือคำนำหน้านาม
         setCurrentUser({
           id:          p.id,
-          fullName:    `${prof.avatar} ${p.first_name || ''} ${p.last_name || ''}`.trim(),
+          fullName:    `${shown} ${p.first_name || ''} ${p.last_name || ''}`.trim(),
           profession:  prof.label,
-          avatar:      prof.avatar.replace('.', ''),  // "ภก." → "ภก"
+          avatar:      shown,
           role:        p.role,
         });
       })
@@ -2199,7 +2200,7 @@ function App() {
             onMouseEnter={e=>e.currentTarget.style.background='#f0fdfa'}
             onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
             <span style={{width:'36px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-              <div style={{width:'32px',height:'32px',borderRadius:'50%',background:'#0f766e',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:'11px'}}>{currentUser?.avatar || '?'}</div>
+              <div style={{width:'32px',height:'32px',borderRadius:'50%',background:'#0f766e',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:(currentUser?.avatar||'').length>3?'8px':'11px'}}>{currentUser?.avatar || '?'}</div>
             </span>
             <div style={{overflow:'hidden',maxWidth:sidebarOpen?'160px':'0px',opacity:sidebarOpen?1:0,transition:'max-width 0.2s ease,opacity 0.15s ease',whiteSpace:'nowrap'}}>
               <p style={{fontWeight:700,fontSize:'12px',color:'#1f2937',margin:0}}>{currentUser?.fullName || '—'}</p>
@@ -2230,7 +2231,7 @@ function App() {
             <div>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:0,whiteSpace:'nowrap'}}>พัฒนาโดย เภสัชกร สิรวิชญ์ เผ่าผา</p>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:'1px 0 0 0',whiteSpace:'nowrap'}}>โรงพยาบาลปรางค์กู่</p>
-              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.7.10.3 ·<span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
+              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.7.10.4 ·<span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
             </div>
           ) : (
             <div style={{display:'flex',justifyContent:'center'}}>
@@ -2623,6 +2624,7 @@ function UserProfileModal({ onClose }) {
       firstName:      db.first_name,
       lastName:       db.last_name,
       profession:     db.profession,
+      title:          db.title || '',  // คำนำหน้านามที่ผู้ใช้เลือก (นาย/นาง/นางสาว) — ระบบแปลงเป็นตัวย่อวิชาชีพตอนแสดง
       licenseNumber:  licenseDigits,
       hospitalName:   db.hospital_name,
       hospitalType:   db.hospital_type,
@@ -2652,6 +2654,7 @@ function UserProfileModal({ onClose }) {
   const prof = PROFESSIONS[form.profession] || PROFESSIONS.other;
   const fullName = `${form.firstName || ''} ${form.lastName || ''}`.trim() || '—';
   const fullLicense = (prof.prefix || '') + (form.licenseNumber || '');
+  const shownTitle = window.tbDisplayTitle(form.profession, form.title);  // ตัวย่อวิชาชีพตามเพศ (ภญ.) หรือคำนำหน้านาม
 
   // Self-editable fields (เบอร์โทร + แผนก)
   const selfFields = [
@@ -2662,6 +2665,7 @@ function UserProfileModal({ onClose }) {
   // Admin-approval required fields
   // key = ชื่อคอลัมน์จริงในฐานข้อมูล / currentValue = ค่าดิบ (ไม่จัดรูป) เพื่อให้บันทึกถูกตอนอนุมัติ
   const approvalFields = [
+    { key:'title',          icon:'fa-user-tag',       label:'คำนำหน้าชื่อ',        currentValue: form.title, options: window.TB_NAME_PREFIXES },
     { key:'first_name',     icon:'fa-user',           label:'ชื่อ',                currentValue: form.firstName },
     { key:'last_name',      icon:'fa-user',           label:'นามสกุล',             currentValue: form.lastName },
     { key:'profession',     icon:'fa-user-doctor',    label:'วิชาชีพ',             currentValue: prof.label, options: Object.values(PROFESSIONS).map(p=>p.label) },
@@ -2753,10 +2757,10 @@ function UserProfileModal({ onClose }) {
           <div style={{background:'linear-gradient(160deg,#0f766e,#14b8a6)',padding:'32px 24px',width:'280px',flexShrink:0,display:'flex',flexDirection:'column',position:'relative'}}>
 
             <div style={{textAlign:'center',marginTop:'10px'}}>
-              <div style={{width:'90px',height:'90px',borderRadius:'50%',background:'rgba(255,255,255,0.2)',border:'3px solid rgba(255,255,255,0.3)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:800,fontSize:'22px',margin:'0 auto 16px'}}>
-                {prof.avatar}
+              <div style={{width:'90px',height:'90px',borderRadius:'50%',background:'rgba(255,255,255,0.2)',border:'3px solid rgba(255,255,255,0.3)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:800,fontSize:(shownTitle||'').length>3?'15px':'22px',margin:'0 auto 16px'}}>
+                {shownTitle}
               </div>
-              <p style={{fontWeight:800,fontSize:'18px',color:'#fff',margin:0,lineHeight:1.3}}>{prof.avatar} {fullName}</p>
+              <p style={{fontWeight:800,fontSize:'18px',color:'#fff',margin:0,lineHeight:1.3}}>{shownTitle} {fullName}</p>
               <p style={{fontSize:'13px',color:'rgba(255,255,255,0.85)',margin:'5px 0 0'}}>{prof.label}</p>
               <span style={{display:'inline-block',marginTop:'12px',background:'rgba(255,255,255,0.2)',color:'#fff',fontSize:'11px',fontWeight:700,padding:'4px 12px',borderRadius:'20px'}}>
                 <i className={"fa-solid " + (form.role === 'Admin' ? 'fa-shield' : 'fa-user')} style={{marginRight:'5px'}}></i>{form.role}
@@ -2801,6 +2805,7 @@ function UserProfileModal({ onClose }) {
                 <SectionHeader icon="fa-user" color="#d97706" label="ข้อมูลโปรไฟล์" hint="✏️ กดปุ่มปากกาเพื่อแก้ไข" />
                 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0 20px'}}>
                   {[
+                    { key:'title',       dbKey:'title',         icon:'fa-user-tag',     label:'คำนำหน้าชื่อ',       type:'select', options: window.TB_NAME_PREFIXES },
                     { key:'firstName',   dbKey:'first_name',    icon:'fa-user',         label:'ชื่อ',               type:'text' },
                     { key:'lastName',    dbKey:'last_name',     icon:'fa-user',         label:'นามสกุล',            type:'text' },
                     { key:'phone',       dbKey:'phone',         icon:'fa-phone',        label:'เบอร์โทรศัพท์',      type:'text' },
@@ -2809,7 +2814,8 @@ function UserProfileModal({ onClose }) {
                     { key:'hospitalType',dbKey:'hospital_type', icon:'fa-location-dot', label:'ประเภทโรงพยาบาล',    type:'select', options: HOSPITAL_TYPES },
                     { key:'licenseNumber',dbKey:'license_number',icon:'fa-id-card',    label:'เลขใบประกอบ',         type:'text' },
                   ].map(field => (
-                    <RowShell key={field.key} icon={field.icon} label={field.label}
+                    <div key={field.key} style={field.key==='title'?{gridColumn:'1 / -1'}:undefined}>
+                    <RowShell icon={field.icon} label={field.label}
                       action={editingKey === field.key
                         ? (
                           <div style={{display:'flex',gap:'4px'}}>
@@ -2830,6 +2836,7 @@ function UserProfileModal({ onClose }) {
                         ? (field.type === 'select'
                             ? <select value={tempValue} onChange={e=>setTempValue(e.target.value)} autoFocus
                                 style={{width:'100%',fontSize:'13px',fontWeight:600,color:'#1f2937',border:'none',borderBottom:'1.5px solid #d97706',outline:'none',background:'transparent',padding:'2px 0',cursor:'pointer'}}>
+                                <option value="">— เลือก —</option>
                                 {(field.options||[]).map(o=><option key={o} value={o}>{o}</option>)}
                               </select>
                             : field.key === 'licenseNumber'
@@ -2844,6 +2851,7 @@ function UserProfileModal({ onClose }) {
                         : <p style={{fontSize:'13px',fontWeight:600,color:'#1f2937',margin:0}}>{field.key === 'licenseNumber' ? (((prof.prefix||'') + (form.licenseNumber||'')) || '—') : (form[field.key] || '—')}</p>
                       }
                     </RowShell>
+                    </div>
                   ))}
                 </div>
               </>
@@ -2885,7 +2893,8 @@ function UserProfileModal({ onClose }) {
                 <SectionHeader icon="fa-shield" color="#d97706" label="ต้องขออนุมัติแก้ไข" hint="🔒 ส่งคำขอถึง admin" />
                 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0 20px'}}>
                   {approvalFields.map(field => (
-                    <RowShell key={field.key} icon={field.icon} label={field.label}
+                    <div key={field.key} style={field.key==='title'?{gridColumn:'1 / -1'}:undefined}>
+                    <RowShell icon={field.icon} label={field.label}
                       action={
                         <button onClick={()=>setRequestField(field)} title="ต้องขออนุมัติจากผู้ดูแลระบบ"
                           style={{width:'28px',height:'28px',borderRadius:'7px',border:'1px solid #fde68a',background:'#fef3c7',color:'#d97706',cursor:'pointer'}}>
@@ -2894,6 +2903,7 @@ function UserProfileModal({ onClose }) {
                       }>
                       <p style={{fontSize:'13px',fontWeight:600,color:'#1f2937',margin:0}}>{field.displayValue || field.currentValue || '—'}</p>
                     </RowShell>
+                    </div>
                   ))}
                 </div>
               </>

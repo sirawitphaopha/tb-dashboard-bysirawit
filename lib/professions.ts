@@ -9,23 +9,48 @@
 
 export interface Profession {
   label: string
-  prefix: string
+  prefix: string             // คำนำหน้า "เลขใบประกอบ" (เช่น ภ.12345)
+  titleMale: string | null   // ตัวย่อวิชาชีพเพศชาย (null = วิชาชีพนี้ไม่มีตัวย่อ → ใช้คำนำหน้านามตรงๆ)
+  titleFemale: string | null // ตัวย่อวิชาชีพเพศหญิง
 }
+
+// คำนำหน้านามที่ผู้ใช้เลือกเอง (ใช้บอกเพศ + เป็นคำนำหน้าจริงของวิชาชีพที่ไม่มีตัวย่อ)
+export const NAME_PREFIXES = ['นาย', 'นาง', 'นางสาว']
 
 // key = ค่าที่เก็บจริงในฐานข้อมูล (คอลัมน์ profession)
 export const PROFESSIONS: Record<string, Profession> = {
-  doctor:              { label: 'แพทย์',                     prefix: 'ว.'  },
-  dentist:             { label: 'ทันตแพทย์',                 prefix: 'ท.'  },
-  pharmacist:          { label: 'เภสัชกร',                   prefix: 'ภ.'  },
-  nurse1:              { label: 'พยาบาลวิชาชีพ (ชั้นหนึ่ง)', prefix: 'ป.'  },
-  nurse2:              { label: 'พยาบาลเทคนิค (ชั้นสอง)',    prefix: 'ช.'  },
-  medtech:             { label: 'นักเทคนิคการแพทย์',         prefix: 'ทน.' },
-  physio:              { label: 'นักกายภาพบำบัด',            prefix: 'ก.'  },
-  radio:               { label: 'นักรังสีการแพทย์',          prefix: 'รส.' },
-  publichealthofficer: { label: 'นักสาธารณสุข',              prefix: 'สธ.' },
-  publichealthtech:    { label: 'นักวิชาการสาธารณสุข',       prefix: ''    },
-  officer:             { label: 'เจ้าพนักงาน',               prefix: ''    },
-  other:               { label: 'อื่นๆ',                      prefix: ''    },
+  doctor:              { label: 'แพทย์',                     prefix: 'ว.',  titleMale: 'นพ.',  titleFemale: 'พญ.'   },
+  dentist:             { label: 'ทันตแพทย์',                 prefix: 'ท.',  titleMale: 'ทพ.',  titleFemale: 'ทพญ.'  },
+  pharmacist:          { label: 'เภสัชกร',                   prefix: 'ภ.',  titleMale: 'ภก.',  titleFemale: 'ภญ.'   },
+  nurse1:              { label: 'พยาบาลวิชาชีพ (ชั้นหนึ่ง)', prefix: 'ป.',  titleMale: null,   titleFemale: null    },
+  nurse2:              { label: 'พยาบาลเทคนิค (ชั้นสอง)',    prefix: 'ช.',  titleMale: null,   titleFemale: null    },
+  medtech:             { label: 'นักเทคนิคการแพทย์',         prefix: 'ทน.', titleMale: 'ทนพ.', titleFemale: 'ทนพญ.' },
+  physio:              { label: 'นักกายภาพบำบัด',            prefix: 'ก.',  titleMale: 'กภ.',  titleFemale: 'กภ.'   },
+  radio:               { label: 'นักรังสีการแพทย์',          prefix: 'รส.', titleMale: null,   titleFemale: null    },
+  publichealthofficer: { label: 'นักสาธารณสุข',              prefix: 'สธ.', titleMale: null,   titleFemale: null    },
+  publichealthtech:    { label: 'นักวิชาการสาธารณสุข',       prefix: '',    titleMale: null,   titleFemale: null    },
+  officer:             { label: 'เจ้าพนักงาน',               prefix: '',    titleMale: null,   titleFemale: null    },
+  other:               { label: 'อื่นๆ',                      prefix: '',    titleMale: null,   titleFemale: null    },
+}
+
+/** เพศหญิงไหม — ดูจากคำนำหน้านาม (นาง/นางสาว = หญิง) */
+function isFemalePrefix(namePrefix: string | null | undefined): boolean {
+  return namePrefix === 'นาง' || namePrefix === 'นางสาว'
+}
+
+/**
+ * คำนำหน้าที่แสดงจริง = ตัวย่อวิชาชีพตามเพศ (ถ้าวิชาชีพมีตัวย่อ)
+ * ไม่งั้นใช้คำนำหน้านามตรงๆ (นาย/นาง/นางสาว)
+ */
+export function displayTitle(
+  professionKey: string | null | undefined,
+  namePrefix: string | null | undefined,
+): string {
+  const p = PROFESSIONS[professionKey || '']
+  if (p && p.titleMale) {
+    return isFemalePrefix(namePrefix) ? (p.titleFemale || p.titleMale) : p.titleMale
+  }
+  return namePrefix || ''
 }
 
 const LABEL_TO_KEY: Record<string, string> = Object.fromEntries(

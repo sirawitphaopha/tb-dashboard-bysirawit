@@ -7,7 +7,7 @@ import { professionKeyFromLabel, professionLabel, buildLicense } from '@/lib/pro
 
 // field ที่อนุญาตให้แก้ผ่านระบบคำขอ (whitelist กันแก้ field นอกรายการ)
 const ALLOWED_FIELDS = [
-  'first_name', 'last_name', 'hospital_name', 'hospital_type',
+  'title', 'first_name', 'last_name', 'hospital_name', 'hospital_type',
   'profession', 'license_number', 'department', 'department_other', 'phone',
 ] as const
 

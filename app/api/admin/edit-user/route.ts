@@ -5,7 +5,7 @@ import { getResend, EMAIL_FROM } from '@/lib/resend'
 import { userProfileEditedEmail } from '@/lib/email-templates'
 import { buildLicense, professionLabel } from '@/lib/professions'
 
-const ALLOWED_FIELDS = ['first_name', 'last_name', 'hospital_name', 'hospital_type', 'profession', 'license_number', 'department', 'department_other'] as const
+const ALLOWED_FIELDS = ['title', 'first_name', 'last_name', 'hospital_name', 'hospital_type', 'profession', 'license_number', 'department', 'department_other'] as const
 type AllowedField = typeof ALLOWED_FIELDS[number]
 
 export async function POST(req: NextRequest) {
@@ -103,6 +103,7 @@ export async function POST(req: NextRequest) {
       const userEmail = authData?.user?.email
       if (userEmail && Object.keys(changes).length > 0) {
         const FIELD_LABELS: Record<string, string> = {
+          title: 'คำนำหน้าชื่อ',
           first_name: 'ชื่อ', last_name: 'นามสกุล',
           hospital_name: 'ชื่อโรงพยาบาล', hospital_type: 'ประเภทโรงพยาบาล',
           profession: 'วิชาชีพ', license_number: 'เลขใบประกอบวิชาชีพ',

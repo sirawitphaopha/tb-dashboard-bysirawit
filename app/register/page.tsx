@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import PasswordEye from '@/components/PasswordEye'
-import { PROFESSIONS } from '@/lib/professions'
+import { PROFESSIONS, NAME_PREFIXES, displayTitle } from '@/lib/professions'
 
 const HOSPITAL_TYPES = [
   'โรงพยาบาลศูนย์ (ระดับ A)',
@@ -148,6 +148,7 @@ export default function RegisterPage() {
   const [firstName,    setFirstName]    = useState('')
   const [lastName,     setLastName]     = useState('')
   const [profession,   setProfession]   = useState('')
+  const [title,        setTitle]        = useState('')
   const [licenseNum,   setLicenseNum]   = useState('')
   const [phone,        setPhone]        = useState('')
 
@@ -165,6 +166,7 @@ export default function RegisterPage() {
   const passedCount  = Object.values(checks).filter(Boolean).length
   const passwordOk   = passedCount >= 4 && checks.length
   const prefix       = PROFESSIONS[profession]?.prefix ?? ''
+  const shownTitle   = displayTitle(profession, title)  // ตัวย่อวิชาชีพที่ระบบจะแสดงให้ (เช่น ภญ.)
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -172,6 +174,7 @@ export default function RegisterPage() {
     if (!passwordOk)           { setError('รหัสผ่านยังไม่ผ่านเกณฑ์ความปลอดภัย (ต้องผ่านอย่างน้อย 4/5 ข้อ และมีความยาว 8 ตัวอักษรขึ้นไป)'); return }
     if (password !== confirm)  { setError('รหัสผ่านไม่ตรงกัน'); return }
     if (!profession || !hospitalType || !department) { setError('กรุณากรอกข้อมูลให้ครบทุกช่อง'); return }
+    if (profession && !title) { setError('กรุณาเลือกคำนำหน้าชื่อ'); return }
     if (prefix && !licenseNum.trim()) { setError('กรุณากรอกเลขใบประกอบวิชาชีพ'); return }
     if (department === 'อื่นๆ' && !departmentOther.trim()) { setError('กรุณาระบุชื่อแผนก'); return }
     const phoneCheck = validatePhone(phone)
@@ -185,7 +188,7 @@ export default function RegisterPage() {
         body: JSON.stringify({
           username, email, password,
           firstName, lastName,
-          profession, licenseNumber: licenseNum, phone,
+          profession, title, licenseNumber: licenseNum, phone,
           hospitalName, hospitalType, department, departmentOther,
         }),
       })
@@ -358,11 +361,29 @@ export default function RegisterPage() {
             <p className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: '#9ca3af' }}>
               Personal Info
             </p>
+            <div className="mb-3">
+              <label style={lbl}>คำนำหน้าชื่อ <span style={{ color: '#ef4444' }}>*</span></label>
+              <select value={title} onChange={e => setTitle(e.target.value)}
+                style={{ ...inp, cursor: 'pointer' }} onFocus={focus} onBlur={blur} required>
+                <option value="">-- เลือกคำนำหน้า --</option>
+                {NAME_PREFIXES.map(t => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label style={lbl}>ชื่อ <span style={{ color: '#ef4444' }}>*</span></label>
-                <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)}
-                  placeholder="ชื่อ" style={inp} onFocus={focus} onBlur={blur} required />
+                <div className="flex items-center gap-2">
+                  {shownTitle && (
+                    <span className="text-sm font-bold shrink-0 px-2.5 py-2 rounded-xl" style={{ background: '#f0fdf4', color: '#0d9488', border: '1px solid #d1fae5' }}>
+                      {shownTitle}
+                    </span>
+                  )}
+                  <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)}
+                    placeholder="ชื่อ" style={inp} onFocus={focus} onBlur={blur} required />
+                </div>
               </div>
               <div>
                 <label style={lbl}>นามสกุล <span style={{ color: '#ef4444' }}>*</span></label>

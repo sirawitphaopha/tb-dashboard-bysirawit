@@ -3362,6 +3362,7 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
   const openEdit = (p) => {
     setEditingUser(p);
     setEditForm({
+      title: p.title || '',
       first_name: p.first_name || '',
       last_name: p.last_name || '',
       hospital_name: p.hospital_name || '',
@@ -3879,6 +3880,15 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
               <span className="text-[11px] font-bold uppercase tracking-wide text-teal-700 hidden sm:block">แก้เป็น</span>
             </div>
             <div className="space-y-0">
+              <EditRow label="คำนำหน้าชื่อ" original={editingUser.title || '—'} changed={editForm.title !== (editingUser.title || '')}>
+                <select value={editForm.title} onChange={e=>setEditForm(f=>({...f,title:e.target.value}))}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-amber-400 bg-white">
+                  <option value="">— เลือก —</option>
+                  {window.TB_NAME_PREFIXES.map(t=>(
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </EditRow>
               <EditRow label="ชื่อ" original={editingUser.first_name} changed={editForm.first_name !== (editingUser.first_name||'')}>
                 <input value={editForm.first_name} onChange={e=>setEditForm(f=>({...f,first_name:e.target.value}))}
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-amber-400 bg-white"/>

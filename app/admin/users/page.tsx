@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { PROFESSIONS, professionPrefix, licenseDigits } from '@/lib/professions'
+import { PROFESSIONS, professionPrefix, licenseDigits, NAME_PREFIXES } from '@/lib/professions'
 
 type Profile = {
   id: string
@@ -47,6 +47,7 @@ const STATUS_COLORS: Record<string, { bg: string; fg: string; label: string }> =
 }
 
 type EditForm = {
+  title: string
   first_name: string
   last_name: string
   hospital_name: string
@@ -69,7 +70,7 @@ export default function AdminUsersPage() {
 
   const [editingUser, setEditingUser] = useState<Profile | null>(null)
   const [editForm, setEditForm] = useState<EditForm>({
-    first_name: '', last_name: '', hospital_name: '', hospital_type: '',
+    title: '', first_name: '', last_name: '', hospital_name: '', hospital_type: '',
     department: '', department_other: '', profession: '', license_number: '',
   })
   const [editBusy, setEditBusy] = useState(false)
@@ -122,6 +123,7 @@ export default function AdminUsersPage() {
   const openEdit = (p: Profile) => {
     setEditingUser(p)
     setEditForm({
+      title: (p as any).title || '',
       first_name: p.first_name || '',
       last_name: p.last_name || '',
       hospital_name: p.hospital_name || '',
@@ -393,6 +395,18 @@ export default function AdminUsersPage() {
                     <option value="">— เลือก —</option>
                     {Object.entries(PROFESSION_LABELS).map(([key, label]) => (
                       <option key={key} value={key}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold mb-1" style={{ color:'#374151' }}>คำนำหน้าชื่อ</label>
+                  <select value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
+                    className="w-full px-3 py-2 border rounded-lg text-sm outline-none"
+                    style={{ borderColor:'#e5e7eb' }}>
+                    <option value="">— เลือก —</option>
+                    {NAME_PREFIXES.map(t => (
+                      <option key={t} value={t}>{t}</option>
                     ))}
                   </select>
                 </div>

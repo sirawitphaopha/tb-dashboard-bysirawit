@@ -3,7 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { buildLicense } from '@/lib/professions'
 
-const ALLOWED_FIELDS = ['first_name', 'last_name', 'hospital_name', 'hospital_type', 'profession', 'license_number', 'department', 'department_other', 'phone'] as const
+const ALLOWED_FIELDS = ['title', 'first_name', 'last_name', 'hospital_name', 'hospital_type', 'profession', 'license_number', 'department', 'department_other', 'phone'] as const
 type AllowedField = typeof ALLOWED_FIELDS[number]
 
 export async function POST(req: NextRequest) {

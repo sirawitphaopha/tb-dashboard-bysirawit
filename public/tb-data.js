@@ -10,30 +10,42 @@ window.PREFIXES = ['นาย','นาง','นางสาว','เด็กช
 // ════════ บัญชีกลางวิชาชีพ (ฝั่งหน้าเว็บ) ════════
 // ⚠️ ต้องตรงกับ lib/professions.ts ฝั่งเซิร์ฟเวอร์เสมอ (key + label + prefix)
 // key = ค่าที่เก็บจริงในฐานข้อมูล (คอลัมน์ profession)
+// prefix = คำนำหน้า "เลขใบประกอบ" (ภ.12345)
+// titleMale/titleFemale = ตัวย่อวิชาชีพตามเพศ (null = ไม่มีตัวย่อ → ใช้คำนำหน้านามตรงๆ)
+window.TB_NAME_PREFIXES = ['นาย', 'นาง', 'นางสาว'];  // ผู้ใช้เลือกคำนำหน้านี้ ระบบแปลงเป็นตัวย่อวิชาชีพให้
 window.TB_PROFESSIONS = {
-  doctor:              { label: 'แพทย์',                     prefix: 'ว.',  avatar: 'นพ.'  },
-  dentist:             { label: 'ทันตแพทย์',                 prefix: 'ท.',  avatar: 'ทพ.'  },
-  pharmacist:          { label: 'เภสัชกร',                   prefix: 'ภ.',  avatar: 'ภก.'  },
-  nurse1:              { label: 'พยาบาลวิชาชีพ (ชั้นหนึ่ง)', prefix: 'ป.',  avatar: 'พว.'  },
-  nurse2:              { label: 'พยาบาลเทคนิค (ชั้นสอง)',    prefix: 'ช.',  avatar: 'พท.'  },
-  medtech:             { label: 'นักเทคนิคการแพทย์',         prefix: 'ทน.', avatar: 'นทพ.' },
-  physio:              { label: 'นักกายภาพบำบัด',            prefix: 'ก.',  avatar: 'นกบ.' },
-  radio:               { label: 'นักรังสีการแพทย์',          prefix: 'รส.', avatar: 'นรพ.' },
-  publichealthofficer: { label: 'นักสาธารณสุข',              prefix: 'สธ.', avatar: 'นสธ.' },
-  publichealthtech:    { label: 'นักวิชาการสาธารณสุข',       prefix: '',    avatar: 'นวก.' },
-  officer:             { label: 'เจ้าพนักงาน',               prefix: '',    avatar: 'จพ.'  },
-  other:               { label: 'อื่นๆ',                      prefix: '',    avatar: '?'    },
+  doctor:              { label: 'แพทย์',                     prefix: 'ว.',  titleMale: 'นพ.',  titleFemale: 'พญ.'   },
+  dentist:             { label: 'ทันตแพทย์',                 prefix: 'ท.',  titleMale: 'ทพ.',  titleFemale: 'ทพญ.'  },
+  pharmacist:          { label: 'เภสัชกร',                   prefix: 'ภ.',  titleMale: 'ภก.',  titleFemale: 'ภญ.'   },
+  nurse1:              { label: 'พยาบาลวิชาชีพ (ชั้นหนึ่ง)', prefix: 'ป.',  titleMale: null,   titleFemale: null    },
+  nurse2:              { label: 'พยาบาลเทคนิค (ชั้นสอง)',    prefix: 'ช.',  titleMale: null,   titleFemale: null    },
+  medtech:             { label: 'นักเทคนิคการแพทย์',         prefix: 'ทน.', titleMale: 'ทนพ.', titleFemale: 'ทนพญ.' },
+  physio:              { label: 'นักกายภาพบำบัด',            prefix: 'ก.',  titleMale: 'กภ.',  titleFemale: 'กภ.'   },
+  radio:               { label: 'นักรังสีการแพทย์',          prefix: 'รส.', titleMale: null,   titleFemale: null    },
+  publichealthofficer: { label: 'นักสาธารณสุข',              prefix: 'สธ.', titleMale: null,   titleFemale: null    },
+  publichealthtech:    { label: 'นักวิชาการสาธารณสุข',       prefix: '',    titleMale: null,   titleFemale: null    },
+  officer:             { label: 'เจ้าพนักงาน',               prefix: '',    titleMale: null,   titleFemale: null    },
+  other:               { label: 'อื่นๆ',                      prefix: '',    titleMale: null,   titleFemale: null    },
 };
 // ป้ายภาษาไทยล้วน (key → label) ใช้ตอนแสดงผล/dropdown
 window.TB_PROFESSION_LABELS = Object.fromEntries(
   Object.entries(window.TB_PROFESSIONS).map(([k, v]) => [k, v.label])
 );
-// helper: คำนำหน้าตามวิชาชีพ
+// helper: คำนำหน้าเลขใบประกอบตามวิชาชีพ
 window.tbProfPrefix = (key) => (window.TB_PROFESSIONS[key] && window.TB_PROFESSIONS[key].prefix) || '';
 // helper: ตัดเหลือเฉพาะตัวเลข (ลอกคำนำหน้าทุกแบบออก)
 window.tbLicenseDigits = (val) => (val || '').replace(/\D/g, '');
 // helper: ประกอบเลขใบประกอบเต็ม = คำนำหน้า + ตัวเลข
 window.tbBuildLicense = (key, raw) => window.tbProfPrefix(key) + window.tbLicenseDigits(raw);
+// helper: คำนำหน้าที่แสดงจริง = ตัวย่อวิชาชีพตามเพศ (ถ้ามี) ไม่งั้นใช้คำนำหน้านามตรงๆ
+window.tbDisplayTitle = (key, namePrefix) => {
+  var p = window.TB_PROFESSIONS[key];
+  if (p && p.titleMale) {
+    var isFemale = (namePrefix === 'นาง' || namePrefix === 'นางสาว');
+    return isFemale ? (p.titleFemale || p.titleMale) : p.titleMale;
+  }
+  return namePrefix || '';
+};
 
 window.OUTCOME_TYPES = [
   { value:'Cured',          label:'รักษาหาย (Cured)',                color:'text-green-700 bg-green-100'   },
