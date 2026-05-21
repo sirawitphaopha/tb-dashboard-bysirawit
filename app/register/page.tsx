@@ -182,7 +182,7 @@ export default function RegisterPage() {
         <div className="text-center mb-6">
           <i className="fa-solid fa-lungs-virus text-5xl" style={{ color: '#0f766e' }}></i>
           <h1 className="text-2xl font-bold mt-2" style={{ color: '#134e4a' }}>Register</h1>
-          <p className="text-xs mt-0.5" style={{ color: '#9ca3af' }}>TB CARE & JOURNEY · รพ.ปรางค์กู่</p>
+          <p className="text-xs mt-0.5" style={{ color: '#9ca3af' }}>TB JOURNEY & CARE · รพ.ปรางค์กู่</p>
         </div>
 
         <form onSubmit={handleRegister} className="space-y-5">

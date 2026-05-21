@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'TB CARE & JOURNEY — รพ.ปรางค์กู่',
+  title: 'TB JOURNEY & CARE — รพ.ปรางค์กู่',
   description: 'ระบบบริหารจัดการผู้ป่วยวัณโรค โรงพยาบาลปรางค์กู่',
 };
 

@@ -36,7 +36,7 @@ export default async function Page() {
     <iframe
       src="/app.html"
       className="w-full h-screen border-0"
-      title="TB CARE & JOURNEY"
+      title="TB JOURNEY & CARE"
     />
   )
 }

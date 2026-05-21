@@ -11,7 +11,7 @@ export function getResend(): Resend {
 }
 
 // Email sender — ใช้ noreply@tbjourney.care (domain verify ใน Resend แล้ว 2026-05-16)
-export const EMAIL_FROM = 'TB CARE & JOURNEY <noreply@tbjourney.care>'
+export const EMAIL_FROM = 'TB JOURNEY & CARE <noreply@tbjourney.care>'
 
 // รองรับหลาย email (คั่นด้วย comma ใน .env.local)
 // fallback เป็น email แอดมินตายตัว กันกรณี env var หายหลัง deploy

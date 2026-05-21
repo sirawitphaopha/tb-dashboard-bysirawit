@@ -61,7 +61,7 @@ export default function LoginPage() {
         <div style={{ marginBottom: '16px' }}>
           <i className="fa-solid fa-lungs-virus" style={{ fontSize: '56px', color: '#0d9488' }}></i>
         </div>
-        <h1 style={{ fontSize: '28px', fontWeight: 800, color: '#134e4a', margin: '0 0 4px 0', letterSpacing: '-0.5px' }}>TB CARE & JOURNEY</h1>
+        <h1 style={{ fontSize: '28px', fontWeight: 800, color: '#134e4a', margin: '0 0 4px 0', letterSpacing: '-0.5px' }}>TB JOURNEY & CARE</h1>
         <p style={{ fontSize: '13px', color: '#9ca3af', margin: '0 0 28px 0' }}>รพ.ปรางค์กู่ · กลุ่มงานเภสัชกรรม</p>
 
         <form onSubmit={handleLogin} style={{ textAlign: 'left' }}>
@@ -128,7 +128,7 @@ export default function LoginPage() {
         <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #f3f4f6' }}>
           <p style={{ fontSize: '11px', color: '#9ca3af', margin: '0 0 2px 0' }}>พัฒนาโดย เภสัชกร สิรวิชญ์ เผ่าผา</p>
           <p style={{ fontSize: '11px', color: '#9ca3af', margin: '0 0 4px 0' }}>โรงพยาบาลปรางค์กู่</p>
-          <p style={{ fontSize: '11px', color: '#d1d5db', margin: 0 }}>Version 0.7.10.5 · <span style={{ color: '#fbbf24', fontWeight: 600 }}>ยังไม่เผยแพร่</span></p>
+          <p style={{ fontSize: '11px', color: '#d1d5db', margin: 0 }}>Version 0.7.11 · <span style={{ color: '#fbbf24', fontWeight: 600 }}>ยังไม่เผยแพร่</span></p>
         </div>
       </div>
     </div>

@@ -1,4 +1,4 @@
-// Email templates สำหรับ TB CARE & JOURNEY
+// Email templates สำหรับ TB JOURNEY & CARE
 // ทุก template ใช้ inline CSS เพราะ email client ไม่รองรับ external CSS
 
 type ProfileSummary = {
@@ -31,7 +31,7 @@ function wrap(title: string, body: string): string {
         <tr><td align="center">
           <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.05);">
             <tr><td style="background:linear-gradient(135deg,${BRAND_TEAL_DARK},${BRAND_TEAL});padding:24px 32px;text-align:center;">
-              <h1 style="margin:0;color:#fff;font-size:22px;font-weight:800;letter-spacing:-0.3px;">🩺 TB CARE &amp; JOURNEY</h1>
+              <h1 style="margin:0;color:#fff;font-size:22px;font-weight:800;letter-spacing:-0.3px;">🩺 TB JOURNEY &amp; CARE</h1>
               <p style="margin:4px 0 0;color:rgba(255,255,255,0.85);font-size:12px;">รพ.ปรางค์กู่ · ระบบจัดการข้อมูลผู้ป่วยวัณโรค</p>
             </td></tr>
             <tr><td style="padding:32px;">${body}</td></tr>
@@ -109,7 +109,7 @@ export function userPendingEmail(firstName: string) {
     </div>
 
     <p style="margin:0 0 8px;font-size:14px;color:#4b5563;">ขอขอบคุณที่ให้ความสนใจในระบบ</p>
-    <p style="margin:0;font-size:13px;color:#6b7280;">TB CARE &amp; JOURNEY</p>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB JOURNEY &amp; CARE</p>
   `
   return { subject, html: wrap(subject, body) }
 }
@@ -133,7 +133,7 @@ export function userApprovedEmail(firstName: string, baseUrl: string) {
       </td></tr>
     </table>
 
-    <p style="margin:0;font-size:13px;color:#6b7280;">TB CARE &amp; JOURNEY</p>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB JOURNEY &amp; CARE</p>
   `
   return { subject, html: wrap(subject, body) }
 }
@@ -173,7 +173,7 @@ export function userRejectedEmail(firstName: string, reason: string, baseUrl?: s
     <p style="margin:0 0 8px;font-size:13px;color:#6b7280;line-height:1.7;">
       หากมีข้อสงสัย กรุณาติดต่อผู้ดูแลระบบ
     </p>
-    <p style="margin:0;font-size:13px;color:#6b7280;">TB CARE &amp; JOURNEY</p>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB JOURNEY &amp; CARE</p>
   `
   return { subject, html: wrap(subject, body) }
 }
@@ -236,7 +236,7 @@ export function deleteRequestApprovedEmail(firstName: string, patientName: strin
       <p style="margin:6px 0 0;font-size:12px;color:#166534;">ข้อมูลถูกย้ายไปถังขยะ — Admin สามารถกู้คืนได้ภายใน 60 วัน</p>
     </div>
 
-    <p style="margin:0;font-size:13px;color:#6b7280;">TB CARE &amp; JOURNEY</p>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB JOURNEY &amp; CARE</p>
   `
   return { subject, html: wrap(subject, body) }
 }
@@ -259,7 +259,7 @@ export function deleteRequestRejectedEmail(firstName: string, patientName: strin
     </div>` : ''}
 
     <p style="margin:0 0 8px;font-size:14px;color:#4b5563;">หากมีข้อสงสัย กรุณาติดต่อผู้ดูแลระบบโดยตรง</p>
-    <p style="margin:0;font-size:13px;color:#6b7280;">TB CARE &amp; JOURNEY</p>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB JOURNEY &amp; CARE</p>
   `
   return { subject, html: wrap(subject, body) }
 }
@@ -280,7 +280,7 @@ export function deleteRequestRestoredEmail(firstName: string, patientName: strin
       <p style="margin:6px 0 0;font-size:12px;color:#1e40af;">ข้อมูลผู้ป่วยกลับไปอยู่ในรายการผู้ป่วย Active ตามเดิม</p>
     </div>
     <p style="margin:0 0 8px;font-size:14px;color:#4b5563;">หากมีข้อสงสัย กรุณาติดต่อผู้ดูแลระบบโดยตรง</p>
-    <p style="margin:0;font-size:13px;color:#6b7280;">TB CARE &amp; JOURNEY</p>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB JOURNEY &amp; CARE</p>
   `
   return { subject, html: wrap(subject, body) }
 }
@@ -289,7 +289,7 @@ export function deleteRequestRestoredEmail(firstName: string, patientName: strin
 // 11) User Account Deactivated — admin ปิดบัญชีชั่วคราว (30 วัน)
 // ═════════════════════════════════════════════════════════
 export function userDeactivatedEmail(firstName: string, adminEmail: string, deletionDate: string) {
-  const subject = 'แจ้งการปิดบัญชีชั่วคราว — TB CARE & JOURNEY'
+  const subject = 'แจ้งการปิดบัญชีชั่วคราว — TB JOURNEY & CARE'
   const body = `
     <h2 style="margin:0 0 16px;color:${BRAND_TEAL_DARK};font-size:18px;">เรียน คุณ${firstName}</h2>
     <p style="margin:0 0 16px;font-size:14px;color:#4b5563;line-height:1.7;">
@@ -308,7 +308,7 @@ export function userDeactivatedEmail(firstName: string, adminEmail: string, dele
         <strong>${adminEmail}</strong>
       </p>
     </div>
-    <p style="margin:0;font-size:13px;color:#6b7280;">TB CARE &amp; JOURNEY</p>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB JOURNEY &amp; CARE</p>
   `
   return { subject, html: wrap(subject, body) }
 }
@@ -317,7 +317,7 @@ export function userDeactivatedEmail(firstName: string, adminEmail: string, dele
 // 12) User Account Restored — admin กู้คืนบัญชี
 // ═════════════════════════════════════════════════════════
 export function userRestoredEmail(firstName: string, baseUrl: string) {
-  const subject = 'บัญชีของท่านได้รับการกู้คืนแล้ว — TB CARE & JOURNEY'
+  const subject = 'บัญชีของท่านได้รับการกู้คืนแล้ว — TB JOURNEY & CARE'
   const body = `
     <h2 style="margin:0 0 16px;color:${BRAND_TEAL_DARK};font-size:18px;">เรียน คุณ${firstName}</h2>
     <p style="margin:0 0 16px;font-size:14px;color:#4b5563;line-height:1.7;">
@@ -333,7 +333,7 @@ export function userRestoredEmail(firstName: string, baseUrl: string) {
         </a>
       </td></tr>
     </table>
-    <p style="margin:0;font-size:13px;color:#6b7280;">TB CARE &amp; JOURNEY</p>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB JOURNEY &amp; CARE</p>
   `
   return { subject, html: wrap(subject, body) }
 }
@@ -342,7 +342,7 @@ export function userRestoredEmail(firstName: string, baseUrl: string) {
 // 10) User Account Deleted — admin ลบบัญชีผู้ใช้ถาวร (กรณีปฏิเสธแล้วลบทิ้ง)
 // ═════════════════════════════════════════════════════════
 export function userAccountDeletedEmail(firstName: string) {
-  const subject = 'แจ้งยกเลิกสิทธิ์การเข้าใช้งานระบบ TB CARE & JOURNEY'
+  const subject = 'แจ้งยกเลิกสิทธิ์การเข้าใช้งานระบบ TB JOURNEY & CARE'
   const body = `
     <h2 style="margin:0 0 16px;color:${BRAND_TEAL_DARK};font-size:18px;">เรียน คุณ${firstName}</h2>
     <p style="margin:0 0 16px;font-size:14px;color:#4b5563;line-height:1.7;">
@@ -357,7 +357,7 @@ export function userAccountDeletedEmail(firstName: string) {
     <p style="margin:0 0 8px;font-size:14px;color:#4b5563;line-height:1.7;">
       หากท่านเชื่อว่าเกิดความผิดพลาด หรือต้องการสอบถามเพิ่มเติม กรุณาติดต่อผู้ดูแลระบบโดยตรง
     </p>
-    <p style="margin:0;font-size:13px;color:#6b7280;">TB CARE &amp; JOURNEY</p>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB JOURNEY &amp; CARE</p>
   `
   return { subject, html: wrap(subject, body) }
 }
@@ -387,7 +387,7 @@ export function adminDeleteRequestCancelledEmail(
         ผู้ป่วยยังคงอยู่ในระบบตามปกติ ไม่มีการเปลี่ยนแปลงข้อมูลใดๆ
       </p>
     </div>
-    <p style="margin:0;font-size:13px;color:#6b7280;">TB CARE &amp; JOURNEY</p>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB JOURNEY &amp; CARE</p>
   `
   return { subject, html: wrap(subject, body) }
 }
@@ -456,7 +456,7 @@ export function userProfileEditedEmail(
       <table width="100%" cellpadding="0" cellspacing="0">${rows}</table>
     </div>
     <p style="margin:0 0 8px;font-size:14px;color:#4b5563;">หากท่านไม่ได้ขอให้แก้ไข หรือมีข้อสงสัย กรุณาติดต่อผู้ดูแลระบบโดยตรง</p>
-    <p style="margin:0;font-size:13px;color:#6b7280;">TB CARE &amp; JOURNEY</p>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB JOURNEY &amp; CARE</p>
   `
   return { subject, html: wrap(subject, body) }
 }
@@ -473,7 +473,7 @@ export function deleteRequestHardDeletedEmail(firstName: string, patientName: st
       <p style="margin:0;font-size:16px;font-weight:700;color:#dc2626;">${patientName}</p>
       <p style="margin:6px 0 0;font-size:12px;color:#991b1b;">ข้อมูลถูกลบออกจากระบบถาวร — ไม่สามารถกู้คืนได้</p>
     </div>
-    <p style="margin:0;font-size:13px;color:#6b7280;">TB CARE &amp; JOURNEY</p>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB JOURNEY &amp; CARE</p>
   `
   return { subject, html: wrap(subject, body) }
 }
@@ -506,7 +506,7 @@ export function userEditRequestReceivedEmail(
       </table>
     </div>
     <p style="margin:0 0 8px;font-size:13px;color:#6b7280;">สถานะปัจจุบัน: <strong style="color:#d97706;">รอผู้ดูแลระบบพิจารณา</strong></p>
-    <p style="margin:0;font-size:13px;color:#6b7280;">TB CARE &amp; JOURNEY</p>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB JOURNEY &amp; CARE</p>
   `
   return { subject, html: wrap(subject, body) }
 }
@@ -536,7 +536,7 @@ export function userEditRequestApprovedEmail(
       </table>
     </div>
     <p style="margin:0 0 8px;font-size:14px;color:#4b5563;">หากท่านมีข้อสงสัย กรุณาติดต่อผู้ดูแลระบบโดยตรง</p>
-    <p style="margin:0;font-size:13px;color:#6b7280;">TB CARE &amp; JOURNEY</p>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB JOURNEY &amp; CARE</p>
   `
   return { subject, html: wrap(subject, body) }
 }
@@ -565,7 +565,7 @@ export function userEditRequestRejectedEmail(
       </table>
     </div>
     <p style="margin:0 0 8px;font-size:14px;color:#4b5563;">หากมีข้อสงสัย หรือต้องการส่งคำขอใหม่ กรุณาติดต่อผู้ดูแลระบบโดยตรง</p>
-    <p style="margin:0;font-size:13px;color:#6b7280;">TB CARE &amp; JOURNEY</p>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB JOURNEY &amp; CARE</p>
   `
   return { subject, html: wrap(subject, body) }
 }

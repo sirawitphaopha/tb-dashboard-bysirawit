@@ -2157,7 +2157,7 @@ function App() {
             <span style={{width:'36px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
               <i className="fa-solid fa-lungs-virus" style={{color:'#0f766e',fontSize:'18px'}}></i>
             </span>
-            <span style={{overflow:'hidden',whiteSpace:'nowrap',fontWeight:700,fontSize:'15px',color:'#0f766e',flex:1,maxWidth:sidebarOpen?'140px':'0px',opacity:sidebarOpen?1:0,transition:'max-width 0.2s ease,opacity 0.15s ease'}}>TB CARE & JOURNEY</span>
+            <span style={{overflow:'hidden',whiteSpace:'nowrap',fontWeight:700,fontSize:'15px',color:'#0f766e',flex:1,maxWidth:sidebarOpen?'140px':'0px',opacity:sidebarOpen?1:0,transition:'max-width 0.2s ease,opacity 0.15s ease'}}>TB JOURNEY & CARE</span>
           </div>
         </div>
 
@@ -2599,7 +2599,7 @@ function RequestEditModal({ field, currentValue, onClose }) {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.10.5';
+const APP_VERSION = '0.7.11';
 const BUILD_DATE = '21 พ.ค. 2569';
 function AboutModal({ onClose }) {
   return (
@@ -2610,7 +2610,7 @@ function AboutModal({ onClose }) {
           <div style={{width:'64px',height:'64px',borderRadius:'18px',background:'rgba(255,255,255,0.2)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 12px'}}>
             <i className="fa-solid fa-lungs-virus" style={{fontSize:'30px',color:'#fff'}}></i>
           </div>
-          <p style={{fontWeight:800,fontSize:'18px',color:'#fff',margin:0}}>TB CARE &amp; JOURNEY</p>
+          <p style={{fontWeight:800,fontSize:'18px',color:'#fff',margin:0}}>TB JOURNEY &amp; CARE</p>
           <p style={{fontSize:'12px',color:'rgba(255,255,255,0.85)',margin:'5px 0 0',lineHeight:1.4}}>ระบบเก็บข้อมูลผู้ป่วยวัณโรคและติดตามการรักษา</p>
         </div>
         {/* Body */}
@@ -2635,7 +2635,7 @@ function AboutModal({ onClose }) {
             <p style={{fontSize:'13px',color:'#b45309',fontWeight:600,margin:0,fontStyle:'italic',lineHeight:1.5}}>“ เภสัชควรใช้ Claude เขียนโค้ดให้เป็นนะจ๊ะ ”</p>
           </div>
           <button onClick={onClose} style={{width:'100%',marginTop:'16px',padding:'11px',borderRadius:'12px',border:'none',background:'#0f766e',color:'#fff',fontWeight:700,fontSize:'14px',cursor:'pointer'}}>ปิด</button>
-          <p style={{fontSize:'10px',color:'#cbd5e1',textAlign:'center',margin:'10px 0 0'}}>© 2026 TB CARE &amp; JOURNEY</p>
+          <p style={{fontSize:'10px',color:'#cbd5e1',textAlign:'center',margin:'10px 0 0'}}>© 2026 TB JOURNEY &amp; CARE</p>
         </div>
       </div>
     </div>
@@ -2652,6 +2652,7 @@ function UserProfileModal({ onClose }) {
   const [saving, setSaving]             = React.useState(false);
   const [warnClose, setWarnClose]       = React.useState(false);
   const [editErr, setEditErr]           = React.useState('');  // ข้อความเตือนใต้ช่องที่กำลังแก้ (แทน popup)
+  const [showAvatarSoon, setShowAvatarSoon] = React.useState(false);  // ป้าย "เร็วๆ นี้" ตอนกดไอคอนกล้อง (ฟีเจอร์อัปโหลดรูป)
 
   const handleClose = () => {
     if (editingKey !== null) { setWarnClose(true); return; }
@@ -2825,9 +2826,20 @@ function UserProfileModal({ onClose }) {
           <div style={{background:'linear-gradient(160deg,#0f766e,#14b8a6)',padding:'32px 24px',width:'280px',flexShrink:0,display:'flex',flexDirection:'column',position:'relative'}}>
 
             <div style={{textAlign:'center',marginTop:'10px'}}>
-              <div style={{width:'90px',height:'90px',borderRadius:'50%',background:'rgba(255,255,255,0.2)',border:'3px solid rgba(255,255,255,0.3)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:800,fontSize:(shownTitle||'').length>3?'15px':'22px',margin:'0 auto 16px'}}>
-                {shownTitle}
+              <div style={{position:'relative',width:'90px',margin:'0 auto 16px'}}>
+                <div style={{width:'90px',height:'90px',borderRadius:'50%',background:'rgba(255,255,255,0.2)',border:'3px solid rgba(255,255,255,0.3)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:800,fontSize:(shownTitle||'').length>3?'15px':'22px'}}>
+                  {shownTitle}
+                </div>
+                <button onClick={()=>setShowAvatarSoon(true)} title="อัปโหลดรูปโปรไฟล์ (เร็วๆ นี้)"
+                  style={{position:'absolute',bottom:'0',right:'0',width:'30px',height:'30px',borderRadius:'50%',background:'#fff',border:'2px solid #14b8a6',color:'#0f766e',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 6px rgba(0,0,0,0.15)'}}>
+                  <i className="fa-solid fa-camera" style={{fontSize:'12px'}}></i>
+                </button>
               </div>
+              {showAvatarSoon && (
+                <p style={{fontSize:'11px',color:'#fef3c7',background:'rgba(0,0,0,0.15)',borderRadius:'8px',padding:'5px 10px',margin:'0 0 12px',display:'inline-block'}}>
+                  <i className="fa-solid fa-clock" style={{marginRight:'5px'}}></i>อัปโหลดรูปโปรไฟล์ — เร็วๆ นี้ (กำลังพัฒนา)
+                </p>
+              )}
               <p style={{fontWeight:800,fontSize:'18px',color:'#fff',margin:0,lineHeight:1.3}}>{shownTitle} {fullName}</p>
               <p style={{fontSize:'13px',color:'rgba(255,255,255,0.85)',margin:'5px 0 0'}}>{prof.label}</p>
               {fullLicense && <p style={{fontSize:'12px',color:'rgba(255,255,255,0.7)',margin:'2px 0 0'}}><i className="fa-solid fa-id-card" style={{marginRight:'5px',fontSize:'11px'}}></i>{fullLicense}</p>}
