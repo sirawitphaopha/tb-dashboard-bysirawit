@@ -1359,6 +1359,18 @@ function AdminSettings({ settings, setSettings, setNav }) {
             <input value={newDrug} onChange={e => setNewDrug(e.target.value)} onKeyDown={e => e.key==='Enter'&&addDrug()} placeholder="เพิ่มยา เช่น Omeprazole 20mg" className="flex-1 p-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 outline-none focus:ring-2 focus:ring-blue-300"/>
             <button onClick={addDrug} className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold transition-colors"><i className="fa-solid fa-plus"></i></button>
           </div>
+
+          {/* แผนพัฒนา — note ไว้กันลืม (โชว์ในเว็บ) */}
+          <div className="mt-5 bg-amber-50 border border-amber-200 rounded-xl p-4">
+            <p className="text-sm font-bold text-amber-800 mb-2"><i className="fa-solid fa-lightbulb mr-2"></i>แผนพัฒนาระบบยา (ยังพัฒนาไม่เสร็จ)</p>
+            <ul className="text-xs text-amber-800 leading-relaxed list-disc pl-5 space-y-1">
+              <li>เพิ่มรายการยาให้ครบ 100+ รายการ (ครอบคลุมยาที่พบบ่อยในเวชปฏิบัติ)</li>
+              <li>จัดกลุ่มยาตามหมวด เช่น เบาหวาน / ความดัน-หัวใจ / ยาต้านไวรัส HIV / ระบบทางเดินอาหาร ฯลฯ</li>
+              <li>เชื่อมรายการยานี้กับประวัติผู้ป่วย — เลือกยาโรคร่วมตอนสร้าง/แก้ไขเคสได้โดยตรง</li>
+              <li>เชื่อมกับระบบตรวจปฏิกิริยาระหว่างยา (Drug Interaction) อัตโนมัติ</li>
+              <li>ผู้ใช้เพิ่มยาที่ไม่มีในระบบเองได้ <span className="text-green-700 font-semibold">(ทำแล้ว — ช่องด้านบน)</span></li>
+            </ul>
+          </div>
         </div>
       )}
 
@@ -2599,7 +2611,7 @@ function RequestEditModal({ field, currentValue, onClose }) {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.11';
+const APP_VERSION = '0.7.11.1';
 const BUILD_DATE = '21 พ.ค. 2569';
 function AboutModal({ onClose }) {
   return (
