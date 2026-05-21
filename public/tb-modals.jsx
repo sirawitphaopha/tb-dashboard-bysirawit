@@ -2976,13 +2976,37 @@ function TrashList({ currentUser, onRestore, onHardDelete, pendingDeleteRequests
 // ─────────────────────────────────────────────────────
 // AdminUsersTab — จัดการผู้ใช้ (admin เท่านั้น) — embedded ใน dashboard
 // ─────────────────────────────────────────────────────
-const PROFESSION_LABELS_TH = {
-  doctor:'แพทย์', dentist:'ทันตแพทย์', pharmacist:'เภสัชกร',
-  nurse1:'พยาบาลวิชาชีพ (ชั้นหนึ่ง)', nurse2:'พยาบาลเทคนิค (ชั้นสอง)',
-  medtech:'นักเทคนิคการแพทย์', physio:'นักกายภาพบำบัด', radio:'นักรังสีการแพทย์',
-  publichealthofficer:'นักสาธารณสุข', publichealthtech:'นักวิชาการสาธารณสุข',
-  officer:'เจ้าพนักงาน', other:'อื่นๆ',
-};
+// ใช้บัญชีกลางจาก tb-data.js (โหลดก่อน tb-modals เสมอ) — แหล่งเดียวกับ lib/professions.ts
+const PROFESSION_LABELS_TH = window.TB_PROFESSION_LABELS;
+
+// แถวแก้ไขข้อมูลแบบ 2 ฝั่ง: ซ้าย = ค่าเดิม (อ่านอย่างเดียว) | ขวา = ช่องแก้ (ไฮไลต์อำพันเมื่อแก้)
+function EditRow({ label, original, changed, children }) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start py-2.5 border-b border-gray-50 last:border-0">
+      {/* ฝั่งซ้าย: ค่าเดิม */}
+      <div>
+        <label className="block text-xs font-semibold text-gray-400 mb-1">{label} <span className="font-normal">(เดิม)</span></label>
+        <div className="px-3 py-2 rounded-lg bg-gray-50 text-sm text-gray-500 border border-gray-100 break-words min-h-[38px] flex items-center">
+          {original || '—'}
+        </div>
+      </div>
+      {/* ฝั่งขวา: ช่องแก้ */}
+      <div>
+        <label className="block text-xs font-semibold text-gray-700 mb-1">
+          {label}
+          {changed && (
+            <span className="ml-1.5 text-[10px] font-bold text-amber-600">
+              <i className="fa-solid fa-pen mr-0.5"></i>แก้แล้ว
+            </span>
+          )}
+        </label>
+        <div className={changed ? 'rounded-lg p-1 -m-1 bg-amber-50 ring-1 ring-amber-300' : ''}>
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
 const HOSPITAL_TYPES_LIST = [
   'โรงพยาบาลศูนย์ (ระดับ A)', 'โรงพยาบาลทั่วไป (ระดับ S)',
   'โรงพยาบาลทั่วไป (ระดับ M1)', 'โรงพยาบาลชุมชน (ระดับ M2)',
@@ -3345,7 +3369,8 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
       department: p.department || '',
       department_other: p.department_other || '',
       profession: p.profession || '',
-      license_number: p.license_number || '',
+      // เก็บเฉพาะตัวเลขในช่องกรอก — เซิร์ฟเวอร์จะเติมคำนำหน้าตามวิชาชีพให้เอง
+      license_number: window.tbLicenseDigits(p.license_number),
     });
     setEditError('');
   };
@@ -3513,7 +3538,7 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
           <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
           <input type="text" value={search} onChange={e=>setSearch(e.target.value)}
             placeholder="ค้นหาชื่อ / username / email / รพ. / เลขใบประกอบ"
-            className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:border-teal-400 bg-white"/>
+            className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:border-amber-400 bg-white"/>
         </div>
         <div className="flex bg-white rounded-xl border border-gray-200 p-1">
           {[
@@ -3838,7 +3863,7 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
       {/* Edit User Modal */}
       {editingUser && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-base font-bold text-teal-900">
                 <i className="fa-solid fa-pen-to-square mr-2 text-teal-600"></i>แก้ไขข้อมูล
@@ -3849,65 +3874,66 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
               <i className="fa-solid fa-circle-info mr-1.5"></i>
               แก้ไขข้อมูลของ <strong>{editingUser.first_name} {editingUser.last_name}</strong>
             </p>
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">ชื่อ</label>
-                  <input value={editForm.first_name} onChange={e=>setEditForm(f=>({...f,first_name:e.target.value}))}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-teal-400"/>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">นามสกุล</label>
-                  <input value={editForm.last_name} onChange={e=>setEditForm(f=>({...f,last_name:e.target.value}))}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-teal-400"/>
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">ชื่อโรงพยาบาล</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-1 px-1">
+              <span className="text-[11px] font-bold uppercase tracking-wide text-gray-400">ค่าเดิม</span>
+              <span className="text-[11px] font-bold uppercase tracking-wide text-teal-700 hidden sm:block">แก้เป็น</span>
+            </div>
+            <div className="space-y-0">
+              <EditRow label="ชื่อ" original={editingUser.first_name} changed={editForm.first_name !== (editingUser.first_name||'')}>
+                <input value={editForm.first_name} onChange={e=>setEditForm(f=>({...f,first_name:e.target.value}))}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-amber-400 bg-white"/>
+              </EditRow>
+              <EditRow label="นามสกุล" original={editingUser.last_name} changed={editForm.last_name !== (editingUser.last_name||'')}>
+                <input value={editForm.last_name} onChange={e=>setEditForm(f=>({...f,last_name:e.target.value}))}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-amber-400 bg-white"/>
+              </EditRow>
+              <EditRow label="ชื่อโรงพยาบาล" original={editingUser.hospital_name} changed={editForm.hospital_name !== (editingUser.hospital_name||'')}>
                 <input value={editForm.hospital_name} onChange={e=>setEditForm(f=>({...f,hospital_name:e.target.value}))}
                   placeholder="เช่น โรงพยาบาลปรางค์กู่"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-teal-400"/>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">ประเภทโรงพยาบาล</label>
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-amber-400 bg-white"/>
+              </EditRow>
+              <EditRow label="ประเภทโรงพยาบาล" original={editingUser.hospital_type} changed={editForm.hospital_type !== (editingUser.hospital_type||'')}>
                 <select value={editForm.hospital_type} onChange={e=>setEditForm(f=>({...f,hospital_type:e.target.value}))}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-teal-400">
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-amber-400 bg-white">
                   <option value="">— เลือก —</option>
                   {HOSPITAL_TYPES_LIST.map(t=><option key={t} value={t}>{t}</option>)}
                 </select>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">แผนก</label>
+              </EditRow>
+              <EditRow label="แผนก" original={editingUser.department} changed={editForm.department !== (editingUser.department||'')}>
                 <select value={editForm.department} onChange={e=>setEditForm(f=>({...f,department:e.target.value}))}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-teal-400">
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-amber-400 bg-white">
                   <option value="">— เลือก —</option>
                   {DEPARTMENTS_LIST.map(d=><option key={d} value={d}>{d}</option>)}
                 </select>
-              </div>
+              </EditRow>
               {editForm.department === 'อื่นๆ' && (
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">ระบุแผนก</label>
+                <EditRow label="ระบุแผนก" original={editingUser.department_other} changed={editForm.department_other !== (editingUser.department_other||'')}>
                   <input value={editForm.department_other} onChange={e=>setEditForm(f=>({...f,department_other:e.target.value}))}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-teal-400"/>
-                </div>
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-amber-400 bg-white"/>
+                </EditRow>
               )}
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">วิชาชีพ</label>
+              <EditRow label="วิชาชีพ" original={PROFESSION_LABELS_TH[editingUser.profession] || editingUser.profession} changed={editForm.profession !== (editingUser.profession||'')}>
                 <select value={editForm.profession} onChange={e=>setEditForm(f=>({...f,profession:e.target.value}))}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-teal-400">
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-amber-400 bg-white">
                   <option value="">— เลือก —</option>
                   {Object.entries(PROFESSION_LABELS_TH).map(([key,label])=>(
                     <option key={key} value={key}>{label}</option>
                   ))}
                 </select>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">เลขใบประกอบวิชาชีพ</label>
-                <input value={editForm.license_number} onChange={e=>setEditForm(f=>({...f,license_number:e.target.value}))}
-                  placeholder="เช่น ภ.12345 (รวม prefix ด้วย)"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-teal-400"/>
-                <p className="text-xs mt-1 text-gray-400">กรอกรวม prefix วิชาชีพ เช่น ภ.12345, ว.98765</p>
-              </div>
+              </EditRow>
+              <EditRow label="เลขใบประกอบวิชาชีพ" original={editingUser.license_number} changed={editForm.license_number !== window.tbLicenseDigits(editingUser.license_number)}>
+                <div className="flex items-center gap-2">
+                  {window.tbProfPrefix(editForm.profession) && (
+                    <span className="text-sm font-bold shrink-0 px-3 py-2 rounded-lg bg-teal-50 text-teal-700 border border-teal-100">
+                      {window.tbProfPrefix(editForm.profession)}
+                    </span>
+                  )}
+                  <input value={editForm.license_number} onChange={e=>setEditForm(f=>({...f,license_number:e.target.value.replace(/\D/g,'')}))}
+                    placeholder="กรอกเฉพาะตัวเลข"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-amber-400 bg-white"/>
+                </div>
+                <p className="text-xs mt-1 text-gray-400">กรอกเฉพาะตัวเลข ระบบจะเติมคำนำหน้าตามวิชาชีพให้อัตโนมัติ</p>
+              </EditRow>
             </div>
             {editError && <p className="mt-3 text-xs text-center font-semibold text-red-500">{editError}</p>}
             <div className="flex gap-2 mt-5">

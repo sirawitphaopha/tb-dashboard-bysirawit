@@ -2,26 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { getResend, EMAIL_FROM, ADMIN_EMAILS } from '@/lib/resend'
 import { adminNotifyEmail, userPendingEmail } from '@/lib/email-templates'
-
-const PROFESSION_LABELS: Record<string, string> = {
-  doctor:       'แพทย์',
-  dentist:      'ทันตแพทย์',
-  pharmacist:   'เภสัชกร',
-  nurse1:       'พยาบาลวิชาชีพ (ชั้นหนึ่ง)',
-  nurse2:       'พยาบาลเทคนิค (ชั้นสอง)',
-  medtech:      'นักเทคนิคการแพทย์',
-  physio:       'นักกายภาพบำบัด',
-  radio:        'นักรังสีการแพทย์',
-  publichealthofficer: 'นักสาธารณสุข',
-  publichealthtech:    'นักวิชาการสาธารณสุข',
-  officer:      'เจ้าพนักงาน',
-  other:        'อื่นๆ',
-}
-
-const PREFIXES: Record<string, string> = {
-  doctor: 'ว.', dentist: 'ท.', pharmacist: 'ภ.', nurse1: 'ป.', nurse2: 'ช.',
-  medtech: 'ทน.', physio: 'ก.', radio: 'รส.', publichealthofficer: 'สธ.',
-}
+import { professionLabel, buildLicense } from '@/lib/professions'
 
 export async function POST(req: NextRequest) {
   try {
@@ -39,7 +20,7 @@ export async function POST(req: NextRequest) {
     }
 
     const admin = createAdminClient()
-    const fullLicense = (PREFIXES[profession] || '') + (licenseNumber || '')
+    const fullLicense = buildLicense(profession, licenseNumber)
 
     // 1) เช็คว่า email นี้เคยมีไหม — ถ้าเคย reject สามารถสมัครใหม่ได้ (reset เป็น pending)
     const { data: existingByEmail } = await admin
@@ -174,7 +155,7 @@ export async function POST(req: NextRequest) {
       userId,
       username, email,
       firstName, lastName,
-      profession: PROFESSION_LABELS[profession] || profession,
+      profession: professionLabel(profession),
       licenseNumber: fullLicense,
       hospitalName, hospitalType,
       department: department === 'อื่นๆ' ? (departmentOther || 'อื่นๆ') : department,

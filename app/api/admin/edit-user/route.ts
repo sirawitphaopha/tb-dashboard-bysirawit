@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { getResend, EMAIL_FROM } from '@/lib/resend'
 import { userProfileEditedEmail } from '@/lib/email-templates'
+import { buildLicense, professionLabel } from '@/lib/professions'
 
 const ALLOWED_FIELDS = ['first_name', 'last_name', 'hospital_name', 'hospital_type', 'profession', 'license_number', 'department', 'department_other'] as const
 type AllowedField = typeof ALLOWED_FIELDS[number]
@@ -45,6 +46,18 @@ export async function POST(req: NextRequest) {
       .single()
     if (fetchErr || !current) {
       return NextResponse.json({ error: 'user not found' }, { status: 404 })
+    }
+
+    // เลขใบประกอบ: ให้เซิร์ฟเวอร์เติมคำนำหน้าตามวิชาชีพเสมอ (รับ admin พิมพ์เลขเปล่าหรือเต็มก็ได้)
+    const cur = current as Record<string, string | null>
+    const targetProfession = ('profession' in updates && updates.profession)
+      ? updates.profession
+      : cur.profession
+    if ('license_number' in updates) {
+      updates.license_number = buildLicense(targetProfession, updates.license_number)
+    } else if ('profession' in updates && updates.profession !== cur.profession) {
+      // เปลี่ยนวิชาชีพแต่ไม่ได้แก้เลข → เปลี่ยนคำนำหน้าให้ตรงวิชาชีพใหม่
+      updates.license_number = buildLicense(targetProfession, cur.license_number)
     }
 
     // กรองเฉพาะ field ที่อนุญาต และสร้าง changes log
@@ -95,11 +108,12 @@ export async function POST(req: NextRequest) {
           profession: 'วิชาชีพ', license_number: 'เลขใบประกอบวิชาชีพ',
           department: 'แผนก', department_other: 'แผนก (ระบุ)',
         }
-        const changeList = Object.entries(changes).map(([field, val]) => ({
-          label: FIELD_LABELS[field] || field,
-          before: (val as any).before,
-          after: (val as any).after,
-        }))
+        const changeList = Object.entries(changes).map(([field, val]) => {
+          const v = val as any
+          // วิชาชีพเก็บเป็น key ในฐานข้อมูล → แปลงเป็นชื่อไทยก่อนแสดงในเมล
+          const fmt = (x: string | null) => (field === 'profession' ? professionLabel(x) : x)
+          return { label: FIELD_LABELS[field] || field, before: fmt(v.before), after: fmt(v.after) }
+        })
         const firstName = (current as any).first_name || 'ผู้ใช้'
         const mail = userProfileEditedEmail(firstName, changeList)
         await getResend().emails.send({

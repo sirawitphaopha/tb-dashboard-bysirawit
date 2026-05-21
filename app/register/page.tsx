@@ -3,21 +3,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import PasswordEye from '@/components/PasswordEye'
-
-const PROFESSIONS: Record<string, { label: string; prefix: string }> = {
-  doctor:      { label: 'แพทย์',                  prefix: 'ว.' },
-  dentist:     { label: 'ทันตแพทย์',              prefix: 'ท.' },
-  pharmacist:  { label: 'เภสัชกร',                prefix: 'ภ.' },
-  nurse1:      { label: 'พยาบาลวิชาชีพ (ชั้นหนึ่ง) ป.',  prefix: 'ป.' },
-  nurse2:      { label: 'พยาบาลเทคนิค (ชั้นสอง) ช.',    prefix: 'ช.' },
-  medtech:     { label: 'นักเทคนิคการแพทย์',      prefix: 'ทน.' },
-  physio:      { label: 'นักกายภาพบำบัด',         prefix: 'ก.' },
-  radio:       { label: 'นักรังสีการแพทย์',       prefix: 'รส.' },
-  publichealthofficer: { label: 'นักสาธารณสุข',          prefix: 'สธ.' },
-  publichealthtech:    { label: 'นักวิชาการสาธารณสุข',   prefix: '' },
-  officer:             { label: 'เจ้าพนักงาน',           prefix: '' },
-  other:               { label: 'อื่นๆ',                  prefix: '' },
-}
+import { PROFESSIONS } from '@/lib/professions'
 
 const HOSPITAL_TYPES = [
   'โรงพยาบาลศูนย์ (ระดับ A)',
@@ -406,7 +392,7 @@ export default function RegisterPage() {
                     {prefix && <span style={{ color: '#ef4444' }}> *</span>}
                     {prefix && (
                       <span className="ml-1.5 font-normal text-xs" style={{ color: '#0d9488' }}>
-                        (prefix: {prefix})
+                        (คำนำหน้า: {prefix})
                       </span>
                     )}
                   </label>

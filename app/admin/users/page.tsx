@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { PROFESSIONS, professionPrefix, licenseDigits } from '@/lib/professions'
 
 type Profile = {
   id: string
@@ -24,13 +25,10 @@ type Profile = {
   email?: string
 }
 
-const PROFESSION_LABELS: Record<string, string> = {
-  doctor: 'แพทย์', dentist: 'ทันตแพทย์', pharmacist: 'เภสัชกร',
-  nurse1: 'พยาบาลวิชาชีพ (ชั้นหนึ่ง)', nurse2: 'พยาบาลเทคนิค (ชั้นสอง)',
-  medtech: 'นักเทคนิคการแพทย์', physio: 'นักกายภาพบำบัด', radio: 'นักรังสีการแพทย์',
-  publichealthofficer: 'นักสาธารณสุข', publichealthtech: 'นักวิชาการสาธารณสุข',
-  officer: 'เจ้าพนักงาน', other: 'อื่นๆ',
-}
+// ใช้บัญชีกลางจาก lib/professions.ts — แหล่งเดียวกับ window.TB_PROFESSIONS ฝั่งหน้าเว็บ
+const PROFESSION_LABELS: Record<string, string> = Object.fromEntries(
+  Object.entries(PROFESSIONS).map(([k, v]) => [k, v.label])
+)
 
 const HOSPITAL_TYPES = [
   'โรงพยาบาลศูนย์ (ระดับ A)', 'โรงพยาบาลทั่วไป (ระดับ S)',
@@ -131,7 +129,8 @@ export default function AdminUsersPage() {
       department: p.department || '',
       department_other: p.department_other || '',
       profession: p.profession || '',
-      license_number: p.license_number || '',
+      // เก็บเฉพาะตัวเลขในช่องกรอก — เซิร์ฟเวอร์เติมคำนำหน้าตามวิชาชีพให้เอง
+      license_number: licenseDigits(p.license_number),
     })
     setEditError('')
   }
@@ -400,11 +399,18 @@ export default function AdminUsersPage() {
 
                 <div>
                   <label className="block text-xs font-semibold mb-1" style={{ color:'#374151' }}>เลขใบประกอบวิชาชีพ</label>
-                  <input value={editForm.license_number} onChange={e => setEditForm(f => ({ ...f, license_number: e.target.value }))}
-                    className="w-full px-3 py-2 border rounded-lg text-sm outline-none"
-                    style={{ borderColor:'#e5e7eb' }}
-                    placeholder="เช่น ภ.12345 (รวม prefix ด้วย)" />
-                  <p className="text-xs mt-1" style={{ color:'#9ca3af' }}>กรอกรวม prefix วิชาชีพ เช่น ภ.12345, ว.98765</p>
+                  <div className="flex items-center gap-2">
+                    {professionPrefix(editForm.profession) && (
+                      <span className="text-sm font-bold shrink-0 px-3 py-2 rounded-lg" style={{ background:'#f0fdfa', color:'#0d9488', border:'1px solid #d1fae5' }}>
+                        {professionPrefix(editForm.profession)}
+                      </span>
+                    )}
+                    <input value={editForm.license_number} onChange={e => setEditForm(f => ({ ...f, license_number: e.target.value.replace(/\D/g, '') }))}
+                      className="w-full px-3 py-2 border rounded-lg text-sm outline-none"
+                      style={{ borderColor:'#e5e7eb' }}
+                      placeholder="กรอกเฉพาะตัวเลข" />
+                  </div>
+                  <p className="text-xs mt-1" style={{ color:'#9ca3af' }}>กรอกเฉพาะตัวเลข ระบบจะเติมคำนำหน้าตามวิชาชีพให้อัตโนมัติ</p>
                 </div>
               </div>
 

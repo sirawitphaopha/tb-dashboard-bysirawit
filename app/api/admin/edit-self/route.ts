@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { createAdminClient } from '@/lib/supabase-admin'
+import { buildLicense } from '@/lib/professions'
 
 const ALLOWED_FIELDS = ['first_name', 'last_name', 'hospital_name', 'hospital_type', 'profession', 'license_number', 'department', 'department_other', 'phone'] as const
 type AllowedField = typeof ALLOWED_FIELDS[number]
@@ -41,6 +42,17 @@ export async function POST(req: NextRequest) {
       .single()
     if (fetchErr || !current) {
       return NextResponse.json({ error: 'profile not found' }, { status: 404 })
+    }
+
+    // เลขใบประกอบ: ให้เซิร์ฟเวอร์เติมคำนำหน้าตามวิชาชีพเสมอ (รับพิมพ์เลขเปล่าหรือเต็มก็ได้)
+    const curSelf = current as Record<string, string | null>
+    const selfProfession = ('profession' in body && body.profession)
+      ? body.profession
+      : curSelf.profession
+    if ('license_number' in body) {
+      body.license_number = buildLicense(selfProfession, body.license_number)
+    } else if ('profession' in body && body.profession !== curSelf.profession) {
+      body.license_number = buildLicense(selfProfession, curSelf.license_number)
     }
 
     // กรองเฉพาะ field ที่อนุญาต และเปรียบเทียบ changes

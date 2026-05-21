@@ -2230,7 +2230,7 @@ function App() {
             <div>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:0,whiteSpace:'nowrap'}}>พัฒนาโดย เภสัชกร สิรวิชญ์ เผ่าผา</p>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:'1px 0 0 0',whiteSpace:'nowrap'}}>โรงพยาบาลปรางค์กู่</p>
-              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.7.10.2 ·<span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
+              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.7.10.3 ·<span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
             </div>
           ) : (
             <div style={{display:'flex',justifyContent:'center'}}>
@@ -2431,18 +2431,8 @@ function App() {
   );
 }
 
-const PROFESSIONS = {
-  doctor:       { label: 'แพทย์',                  prefix: 'ว.', avatar: 'นพ.' },
-  dentist:      { label: 'ทันตแพทย์',              prefix: 'ท.', avatar: 'ทพ.' },
-  pharmacist:   { label: 'เภสัชกร',                prefix: 'ภ.', avatar: 'ภก.' },
-  nurse:        { label: 'พยาบาลวิชาชีพ',          prefix: 'ป.', avatar: 'พว.' },
-  medtech:      { label: 'นักเทคนิคการแพทย์',      prefix: '',   avatar: 'นทพ.' },
-  physio:       { label: 'นักกายภาพบำบัด',         prefix: '',   avatar: 'นกบ.' },
-  radio:        { label: 'นักรังสีการแพทย์',       prefix: '',   avatar: 'นรพ.' },
-  publichealth: { label: 'เจ้าหน้าที่สาธารณสุข',   prefix: '',   avatar: 'จสธ.' },
-  officer:      { label: 'เจ้าพนักงาน',            prefix: '',   avatar: 'จพ.' },
-  other:        { label: 'อื่นๆ',                   prefix: '',   avatar: '?' },
-};
+// ใช้บัญชีกลางจาก tb-data.js (window.TB_PROFESSIONS) — แหล่งเดียวกับ lib/professions.ts ฝั่งเซิร์ฟเวอร์
+const PROFESSIONS = window.TB_PROFESSIONS;
 
 const DEPARTMENTS = ['กลุ่มงานเภสัชกรรม','กลุ่มงานการพยาบาล','กลุ่มงานแพทย์','อื่นๆ'];
 
@@ -2536,7 +2526,7 @@ function RequestEditModal({ field, currentValue, onClose }) {
       <div style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'420px',boxShadow:'0 20px 60px rgba(0,0,0,0.2)',overflow:'hidden'}}>
 
         <div style={{background:'linear-gradient(135deg,#f59e0b,#fbbf24)',padding:'18px 20px',color:'#fff',display:'flex',alignItems:'center',gap:'10px'}}>
-          <i className="fa-solid fa-shield-halved" style={{fontSize:'20px'}}></i>
+          <i className="fa-solid fa-shield" style={{fontSize:'20px'}}></i>
           <div style={{flex:1}}>
             <p style={{fontSize:'11px',margin:0,opacity:0.9}}>ส่งคำขอแก้ไขข้อมูล</p>
             <p style={{fontSize:'15px',fontWeight:700,margin:'2px 0 0'}}>{field.label}</p>
@@ -2619,8 +2609,8 @@ function UserProfileModal({ onClose }) {
   // Map DB profile → form ที่ modal ใช้
   const mapDb = (db) => {
     if (!db) return null;
-    // license_number ใน DB เก็บแบบเต็ม (เช่น "ภ.12345") → ตัด prefix ออกเพื่อให้ UI เติมกลับ
-    const prefixMatch = (db.license_number || '').match(/^([วทภป]\.)?(.*)$/);
+    // license_number ใน DB เก็บแบบเต็ม (เช่น "ภ.12345") → ตัดเหลือเฉพาะตัวเลขเพื่อให้ UI เติมคำนำหน้ากลับ
+    const licenseDigits = window.tbLicenseDigits(db.license_number);
     return {
       username:       db.username,
       email:          db.email,
@@ -2633,7 +2623,7 @@ function UserProfileModal({ onClose }) {
       firstName:      db.first_name,
       lastName:       db.last_name,
       profession:     db.profession,
-      licenseNumber:  prefixMatch ? prefixMatch[2] : (db.license_number || ''),
+      licenseNumber:  licenseDigits,
       hospitalName:   db.hospital_name,
       hospitalType:   db.hospital_type,
     };
@@ -2675,7 +2665,7 @@ function UserProfileModal({ onClose }) {
     { key:'first_name',     icon:'fa-user',           label:'ชื่อ',                currentValue: form.firstName },
     { key:'last_name',      icon:'fa-user',           label:'นามสกุล',             currentValue: form.lastName },
     { key:'profession',     icon:'fa-user-doctor',    label:'วิชาชีพ',             currentValue: prof.label, options: Object.values(PROFESSIONS).map(p=>p.label) },
-    { key:'license_number', icon:'fa-id-card',        label:'เลขใบประกอบ',         currentValue: form.licenseNumber, hint:'กรอกเฉพาะตัวเลข ระบบจะเติมคำนำหน้าตามวิชาชีพให้อัตโนมัติ' },
+    { key:'license_number', icon:'fa-id-card',        label:'เลขใบประกอบ',         currentValue: form.licenseNumber, displayValue: fullLicense, hint:'กรอกเฉพาะตัวเลข ระบบจะเติมคำนำหน้าตามวิชาชีพให้อัตโนมัติ' },
     { key:'hospital_name',  icon:'fa-hospital',       label:'โรงพยาบาล',           currentValue: form.hospitalName },
     { key:'hospital_type',  icon:'fa-location-dot',   label:'ประเภทโรงพยาบาล',     currentValue: form.hospitalType, options: HOSPITAL_TYPES },
   ];
@@ -2684,7 +2674,7 @@ function UserProfileModal({ onClose }) {
   const systemFields = [
     { key:'email',    icon:'fa-envelope',       label:'อีเมล',              value: form.email },
     { key:'username', icon:'fa-at',             label:'ชื่อผู้ใช้',          value: form.username },
-    { key:'role',     icon:'fa-shield-halved',  label:'สิทธิ์การใช้งาน',     value: form.role },
+    { key:'role',     icon: form.role === 'Admin' ? 'fa-shield' : 'fa-user',  label:'สิทธิ์การใช้งาน',     value: form.role },
     { key:'since',    icon:'fa-calendar',       label:'ใช้งานระบบตั้งแต่',   value: form.since },
   ];
 
@@ -2769,7 +2759,7 @@ function UserProfileModal({ onClose }) {
               <p style={{fontWeight:800,fontSize:'18px',color:'#fff',margin:0,lineHeight:1.3}}>{prof.avatar} {fullName}</p>
               <p style={{fontSize:'13px',color:'rgba(255,255,255,0.85)',margin:'5px 0 0'}}>{prof.label}</p>
               <span style={{display:'inline-block',marginTop:'12px',background:'rgba(255,255,255,0.2)',color:'#fff',fontSize:'11px',fontWeight:700,padding:'4px 12px',borderRadius:'20px'}}>
-                <i className="fa-solid fa-shield-halved" style={{marginRight:'5px'}}></i>{form.role}
+                <i className={"fa-solid " + (form.role === 'Admin' ? 'fa-shield' : 'fa-user')} style={{marginRight:'5px'}}></i>{form.role}
               </span>
             </div>
 
@@ -2842,9 +2832,16 @@ function UserProfileModal({ onClose }) {
                                 style={{width:'100%',fontSize:'13px',fontWeight:600,color:'#1f2937',border:'none',borderBottom:'1.5px solid #d97706',outline:'none',background:'transparent',padding:'2px 0',cursor:'pointer'}}>
                                 {(field.options||[]).map(o=><option key={o} value={o}>{o}</option>)}
                               </select>
-                            : <input value={tempValue} onChange={e=>setTempValue(e.target.value)} autoFocus
-                                style={{width:'100%',fontSize:'13px',fontWeight:600,color:'#1f2937',border:'none',borderBottom:'1.5px solid #d97706',outline:'none',background:'transparent',padding:'2px 0'}}/>)
-                        : <p style={{fontSize:'13px',fontWeight:600,color:'#1f2937',margin:0}}>{form[field.key] || '—'}</p>
+                            : field.key === 'licenseNumber'
+                              ? <div style={{display:'flex',alignItems:'center',gap:'6px',borderBottom:'1.5px solid #d97706'}}>
+                                  {prof.prefix && <span style={{fontSize:'13px',fontWeight:700,color:'#0d9488',flexShrink:0}}>{prof.prefix}</span>}
+                                  <input value={tempValue} onChange={e=>setTempValue(e.target.value.replace(/\D/g,''))} autoFocus
+                                    placeholder="กรอกเฉพาะตัวเลข"
+                                    style={{width:'100%',fontSize:'13px',fontWeight:600,color:'#1f2937',border:'none',outline:'none',background:'transparent',padding:'2px 0'}}/>
+                                </div>
+                              : <input value={tempValue} onChange={e=>setTempValue(e.target.value)} autoFocus
+                                  style={{width:'100%',fontSize:'13px',fontWeight:600,color:'#1f2937',border:'none',borderBottom:'1.5px solid #d97706',outline:'none',background:'transparent',padding:'2px 0'}}/>)
+                        : <p style={{fontSize:'13px',fontWeight:600,color:'#1f2937',margin:0}}>{field.key === 'licenseNumber' ? (((prof.prefix||'') + (form.licenseNumber||'')) || '—') : (form[field.key] || '—')}</p>
                       }
                     </RowShell>
                   ))}
@@ -2885,7 +2882,7 @@ function UserProfileModal({ onClose }) {
                     </RowShell>
                   ))}
                 </div>
-                <SectionHeader icon="fa-shield-halved" color="#d97706" label="ต้องขออนุมัติแก้ไข" hint="🔒 ส่งคำขอถึง admin" />
+                <SectionHeader icon="fa-shield" color="#d97706" label="ต้องขออนุมัติแก้ไข" hint="🔒 ส่งคำขอถึง admin" />
                 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0 20px'}}>
                   {approvalFields.map(field => (
                     <RowShell key={field.key} icon={field.icon} label={field.label}
@@ -2895,7 +2892,7 @@ function UserProfileModal({ onClose }) {
                           <i className="fa-solid fa-lock" style={{fontSize:'11px'}}></i>
                         </button>
                       }>
-                      <p style={{fontSize:'13px',fontWeight:600,color:'#1f2937',margin:0}}>{field.currentValue || '—'}</p>
+                      <p style={{fontSize:'13px',fontWeight:600,color:'#1f2937',margin:0}}>{field.displayValue || field.currentValue || '—'}</p>
                     </RowShell>
                   ))}
                 </div>

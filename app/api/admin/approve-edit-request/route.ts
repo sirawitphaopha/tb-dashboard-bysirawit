@@ -3,29 +3,13 @@ import { createServerClient } from '@supabase/ssr'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { getResend, EMAIL_FROM } from '@/lib/resend'
 import { userEditRequestApprovedEmail, userEditRequestRejectedEmail } from '@/lib/email-templates'
+import { professionKeyFromLabel, professionLabel, buildLicense } from '@/lib/professions'
 
 // field ที่อนุญาตให้แก้ผ่านระบบคำขอ (whitelist กันแก้ field นอกรายการ)
 const ALLOWED_FIELDS = [
   'first_name', 'last_name', 'hospital_name', 'hospital_type',
   'profession', 'license_number', 'department', 'department_other', 'phone',
 ] as const
-
-// วิชาชีพ: หน้าเว็บส่งมาเป็น "ป้ายภาษาไทย" แต่ฐานข้อมูลเก็บเป็น key ต้องแปลงก่อนบันทึก
-const PROFESSION_LABEL_TO_KEY: Record<string, string> = {
-  'แพทย์': 'doctor', 'ทันตแพทย์': 'dentist', 'เภสัชกร': 'pharmacist',
-  'พยาบาลวิชาชีพ': 'nurse', 'นักเทคนิคการแพทย์': 'medtech', 'นักกายภาพบำบัด': 'physio',
-  'นักรังสีการแพทย์': 'radio', 'เจ้าหน้าที่สาธารณสุข': 'publichealth',
-  'เจ้าพนักงาน': 'officer', 'อื่นๆ': 'other',
-}
-const PROFESSION_KEY_TO_LABEL: Record<string, string> = Object.fromEntries(
-  Object.entries(PROFESSION_LABEL_TO_KEY).map(([label, key]) => [key, label])
-)
-
-// คำนำหน้าเลขใบประกอบตามวิชาชีพ (วิชาชีพที่ไม่มีใบประกอบ = ค่าว่าง)
-const PROFESSION_PREFIX: Record<string, string> = {
-  doctor: 'ว.', dentist: 'ท.', pharmacist: 'ภ.', nurse: 'ป.',
-  medtech: '', physio: '', radio: '', publichealth: '', officer: '', other: '',
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -148,14 +132,12 @@ export async function POST(req: NextRequest) {
 
     if (field === 'profession') {
       // หน้าเว็บส่งป้ายไทยมา → แปลงเป็น key ก่อนบันทึก
-      writeVal = PROFESSION_LABEL_TO_KEY[afterRaw || ''] || afterRaw
-      beforeDisplay = PROFESSION_KEY_TO_LABEL[beforeRaw || ''] || beforeRaw
+      writeVal = professionKeyFromLabel(afterRaw)
+      beforeDisplay = professionLabel(beforeRaw)
       afterDisplay = afterRaw
     } else if (field === 'license_number') {
-      // user กรอกแค่ตัวเลข → เติมคำนำหน้าตามวิชาชีพปัจจุบันให้เอง (กัน prefix ซ้ำด้วย)
-      const prefix = PROFESSION_PREFIX[cur.profession || ''] ?? ''
-      const cleanNum = (afterRaw || '').replace(/^[วทภป]\.\s*/, '').trim()
-      writeVal = prefix + cleanNum
+      // user กรอกแค่ตัวเลข → เติมคำนำหน้าตามวิชาชีพปัจจุบันให้เอง (กันคำนำหน้าซ้ำด้วย)
+      writeVal = buildLicense(cur.profession, afterRaw)
       beforeDisplay = beforeRaw          // ค่าเดิมใน DB (มีคำนำหน้าอยู่แล้ว)
       afterDisplay = writeVal            // แสดงค่าเต็มหลังเติมคำนำหน้า
     } else {

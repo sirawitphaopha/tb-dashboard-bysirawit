@@ -7,6 +7,34 @@ window.PATIENT_TYPES = ['New','Relapse','Treatment Failure'];
 window.DISEASE_LOCATIONS = ['LTBI','Pulmonary','Extra-pulmonary'];
 window.PREFIXES = ['นาย','นาง','นางสาว','เด็กชาย','เด็กหญิง'];
 
+// ════════ บัญชีกลางวิชาชีพ (ฝั่งหน้าเว็บ) ════════
+// ⚠️ ต้องตรงกับ lib/professions.ts ฝั่งเซิร์ฟเวอร์เสมอ (key + label + prefix)
+// key = ค่าที่เก็บจริงในฐานข้อมูล (คอลัมน์ profession)
+window.TB_PROFESSIONS = {
+  doctor:              { label: 'แพทย์',                     prefix: 'ว.',  avatar: 'นพ.'  },
+  dentist:             { label: 'ทันตแพทย์',                 prefix: 'ท.',  avatar: 'ทพ.'  },
+  pharmacist:          { label: 'เภสัชกร',                   prefix: 'ภ.',  avatar: 'ภก.'  },
+  nurse1:              { label: 'พยาบาลวิชาชีพ (ชั้นหนึ่ง)', prefix: 'ป.',  avatar: 'พว.'  },
+  nurse2:              { label: 'พยาบาลเทคนิค (ชั้นสอง)',    prefix: 'ช.',  avatar: 'พท.'  },
+  medtech:             { label: 'นักเทคนิคการแพทย์',         prefix: 'ทน.', avatar: 'นทพ.' },
+  physio:              { label: 'นักกายภาพบำบัด',            prefix: 'ก.',  avatar: 'นกบ.' },
+  radio:               { label: 'นักรังสีการแพทย์',          prefix: 'รส.', avatar: 'นรพ.' },
+  publichealthofficer: { label: 'นักสาธารณสุข',              prefix: 'สธ.', avatar: 'นสธ.' },
+  publichealthtech:    { label: 'นักวิชาการสาธารณสุข',       prefix: '',    avatar: 'นวก.' },
+  officer:             { label: 'เจ้าพนักงาน',               prefix: '',    avatar: 'จพ.'  },
+  other:               { label: 'อื่นๆ',                      prefix: '',    avatar: '?'    },
+};
+// ป้ายภาษาไทยล้วน (key → label) ใช้ตอนแสดงผล/dropdown
+window.TB_PROFESSION_LABELS = Object.fromEntries(
+  Object.entries(window.TB_PROFESSIONS).map(([k, v]) => [k, v.label])
+);
+// helper: คำนำหน้าตามวิชาชีพ
+window.tbProfPrefix = (key) => (window.TB_PROFESSIONS[key] && window.TB_PROFESSIONS[key].prefix) || '';
+// helper: ตัดเหลือเฉพาะตัวเลข (ลอกคำนำหน้าทุกแบบออก)
+window.tbLicenseDigits = (val) => (val || '').replace(/\D/g, '');
+// helper: ประกอบเลขใบประกอบเต็ม = คำนำหน้า + ตัวเลข
+window.tbBuildLicense = (key, raw) => window.tbProfPrefix(key) + window.tbLicenseDigits(raw);
+
 window.OUTCOME_TYPES = [
   { value:'Cured',          label:'รักษาหาย (Cured)',                color:'text-green-700 bg-green-100'   },
   { value:'Completed',      label:'ครบการรักษา (Treatment Completed)',color:'text-teal-700 bg-teal-100'     },

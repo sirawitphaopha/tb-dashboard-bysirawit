@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { getResend, EMAIL_FROM, ADMIN_EMAILS } from '@/lib/resend'
 import { adminDeleteRequestEmail } from '@/lib/email-templates'
+import { professionLabel } from '@/lib/professions'
 
 export async function POST(req: NextRequest) {
   try {
@@ -28,8 +29,7 @@ export async function POST(req: NextRequest) {
     // ดึงชื่อ + วิชาชีพผู้ขอลบ
     const { data: profile } = await supabase.from('profiles').select('first_name, last_name, profession').eq('id', user.id).single()
     const requesterName = profile ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() : 'ผู้ใช้'
-    const PROFESSION_MAP: Record<string,string> = { doctor:'แพทย์', dentist:'ทันตแพทย์', pharmacist:'เภสัชกร', nurse:'พยาบาลวิชาชีพ', medtech:'นักเทคนิคการแพทย์', physio:'นักกายภาพบำบัด', radio:'นักรังสีการแพทย์', publichealth:'เจ้าหน้าที่สาธารณสุข', officer:'เจ้าพนักงาน', other:'อื่นๆ' }
-    const requesterProfession = PROFESSION_MAP[profile?.profession || ''] || profile?.profession || '—'
+    const requesterProfession = professionLabel(profile?.profession) || '—'
 
     // ส่งเมลให้ admin
     if (ADMIN_EMAILS.length > 0) {
