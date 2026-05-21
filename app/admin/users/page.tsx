@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { PROFESSIONS, professionPrefix, licenseDigits, NAME_PREFIXES } from '@/lib/professions'
+import { validatePhone, formatPhone } from '@/lib/phone'
 
 type Profile = {
   id: string
@@ -56,6 +57,7 @@ type EditForm = {
   department_other: string
   profession: string
   license_number: string
+  phone: string
 }
 
 export default function AdminUsersPage() {
@@ -71,7 +73,7 @@ export default function AdminUsersPage() {
   const [editingUser, setEditingUser] = useState<Profile | null>(null)
   const [editForm, setEditForm] = useState<EditForm>({
     title: '', first_name: '', last_name: '', hospital_name: '', hospital_type: '',
-    department: '', department_other: '', profession: '', license_number: '',
+    department: '', department_other: '', profession: '', license_number: '', phone: '',
   })
   const [editBusy, setEditBusy] = useState(false)
   const [editError, setEditError] = useState('')
@@ -133,6 +135,7 @@ export default function AdminUsersPage() {
       profession: p.profession || '',
       // เก็บเฉพาะตัวเลขในช่องกรอก — เซิร์ฟเวอร์เติมคำนำหน้าตามวิชาชีพให้เอง
       license_number: licenseDigits(p.license_number),
+      phone: formatPhone(p.phone),
     })
     setEditError('')
   }
@@ -145,6 +148,10 @@ export default function AdminUsersPage() {
     }
     if (!editForm.hospital_name.trim()) {
       setEditError('กรุณากรอกชื่อโรงพยาบาล'); return
+    }
+    if (editForm.phone && editForm.phone.trim()) {
+      const chk = validatePhone(editForm.phone)
+      if (!chk.ok) { setEditError(chk.msg); return }
     }
     setEditBusy(true)
     setEditError('')
@@ -425,6 +432,14 @@ export default function AdminUsersPage() {
                       placeholder="กรอกเฉพาะตัวเลข" />
                   </div>
                   <p className="text-xs mt-1" style={{ color:'#9ca3af' }}>กรอกเฉพาะตัวเลข ระบบจะเติมคำนำหน้าตามวิชาชีพให้อัตโนมัติ</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold mb-1" style={{ color:'#374151' }}>เบอร์โทรศัพท์</label>
+                  <input value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: formatPhone(e.target.value) }))}
+                    className="w-full px-3 py-2 border rounded-lg text-sm outline-none"
+                    style={{ borderColor:'#e5e7eb' }}
+                    placeholder="08x-xxx-xxxx" />
                 </div>
               </div>
 

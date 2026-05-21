@@ -1719,6 +1719,7 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sidebarHovered, setSidebarHovered] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
   const [settings, setSettings] = useState({ comorbidities: DEFAULT_COMORBIDITIES, drugs: DEFAULT_DRUGS, labGroups: null, customDrugInteractions: [], restartReasons: DEFAULT_RESTART_REASONS, regimens: [...REGIMENS] });
   const [ptSearch, setPtSearch] = useState('');
   const [ptFilter, setPtFilter] = useState('all');
@@ -2228,14 +2229,17 @@ function App() {
         {/* Version info */}
         <div style={{padding:'8px 12px',borderTop:'1px solid #f1f5f9',flexShrink:0,overflow:'hidden'}}>
           {sidebarOpen ? (
-            <div>
+            <div onClick={()=>setShowAbout(true)} title="ดูข้อมูลระบบ"
+              style={{cursor:'pointer',borderRadius:'8px',padding:'4px 6px',margin:'-4px -6px',transition:'background 0.15s'}}
+              onMouseEnter={e=>e.currentTarget.style.background='#f0fdfa'}
+              onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:0,whiteSpace:'nowrap'}}>พัฒนาโดย เภสัชกร สิรวิชญ์ เผ่าผา</p>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:'1px 0 0 0',whiteSpace:'nowrap'}}>โรงพยาบาลปรางค์กู่</p>
-              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v0.7.10.4 ·<span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span></p>
+              <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v{APP_VERSION} ·<span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span> <i className="fa-solid fa-circle-info" style={{color:'#9ca3af'}}></i></p>
             </div>
           ) : (
-            <div style={{display:'flex',justifyContent:'center'}}>
-              <span style={{fontSize:'9px',color:'#d1d5db',fontWeight:700}}>0.5</span>
+            <div onClick={()=>setShowAbout(true)} title="ดูข้อมูลระบบ" style={{display:'flex',justifyContent:'center',cursor:'pointer'}}>
+              <i className="fa-solid fa-circle-info" style={{fontSize:'12px',color:'#cbd5e1'}}></i>
             </div>
           )}
         </div>
@@ -2420,6 +2424,7 @@ function App() {
 
       {/* User Profile Modal */}
       {showProfile && <UserProfileModal onClose={()=>setShowProfile(false)}/>}
+      {showAbout && <AboutModal onClose={()=>setShowAbout(false)}/>}
       {/* Notification Full Modal */}
       {showFullNotifs && <NotificationFullModal
         alerts={alerts} patients={patients} readAlerts={readAlerts}
@@ -2592,6 +2597,51 @@ function RequestEditModal({ field, currentValue, onClose }) {
   );
 }
 
+// ───── About / เกี่ยวกับระบบ Modal ─────
+// ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
+const APP_VERSION = '0.7.10.5';
+const BUILD_DATE = '21 พ.ค. 2569';
+function AboutModal({ onClose }) {
+  return (
+    <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.45)',backdropFilter:'blur(2px)',zIndex:60,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'20px',width:'100%',maxWidth:'380px',boxShadow:'0 20px 60px rgba(0,0,0,0.25)',overflow:'hidden'}}>
+        {/* Header */}
+        <div style={{background:'linear-gradient(160deg,#0f766e,#14b8a6)',padding:'28px 24px',textAlign:'center'}}>
+          <div style={{width:'64px',height:'64px',borderRadius:'18px',background:'rgba(255,255,255,0.2)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 12px'}}>
+            <i className="fa-solid fa-lungs-virus" style={{fontSize:'30px',color:'#fff'}}></i>
+          </div>
+          <p style={{fontWeight:800,fontSize:'18px',color:'#fff',margin:0}}>TB CARE &amp; JOURNEY</p>
+          <p style={{fontSize:'12px',color:'rgba(255,255,255,0.85)',margin:'5px 0 0',lineHeight:1.4}}>ระบบเก็บข้อมูลผู้ป่วยวัณโรคและติดตามการรักษา</p>
+        </div>
+        {/* Body */}
+        <div style={{padding:'20px 24px'}}>
+          <div style={{textAlign:'center',marginBottom:'16px'}}>
+            <p style={{fontSize:'14px',fontWeight:700,color:'#0f766e',margin:0}}>เวอร์ชัน {APP_VERSION}</p>
+            <p style={{fontSize:'12px',color:'#f59e0b',fontWeight:600,margin:'3px 0 0'}}>ยังไม่เผยแพร่ (อยู่ระหว่างพัฒนา)</p>
+            <p style={{fontSize:'11px',color:'#9ca3af',margin:'3px 0 0'}}><i className="fa-solid fa-screwdriver-wrench" style={{marginRight:'5px'}}></i>Build {BUILD_DATE}</p>
+          </div>
+          <div style={{borderTop:'1px solid #f1f5f9',paddingTop:'14px',textAlign:'center'}}>
+            <p style={{fontSize:'11px',color:'#9ca3af',margin:'0 0 4px'}}>พัฒนาโดย</p>
+            <p style={{fontSize:'14px',fontWeight:700,color:'#1f2937',margin:0}}>เภสัชกร สิรวิชญ์ เผ่าผา (ภ.47186)</p>
+            <p style={{fontSize:'12px',color:'#6b7280',margin:'3px 0 0'}}>กลุ่มงานเภสัชกรรม โรงพยาบาลปรางค์กู่</p>
+            <a href="mailto:siravitphoapha9928@gmail.com" style={{display:'inline-block',fontSize:'12px',color:'#0d9488',fontWeight:600,margin:'10px 0 0',textDecoration:'none',wordBreak:'break-all'}}>
+              <i className="fa-solid fa-envelope" style={{marginRight:'5px'}}></i>ติดต่อ: siravitphoapha9928@gmail.com
+            </a>
+          </div>
+          <div style={{borderTop:'1px solid #f1f5f9',marginTop:'14px',paddingTop:'14px',textAlign:'center'}}>
+            <p style={{fontSize:'12px',color:'#6b7280',margin:0}}><i className="fa-solid fa-robot" style={{marginRight:'5px',color:'#8b5cf6'}}></i>ช่วยพัฒนาโดย Claude Code + Gemini</p>
+          </div>
+          <div style={{background:'#fffbeb',border:'1px solid #fde68a',borderRadius:'12px',padding:'12px 14px',marginTop:'14px',textAlign:'center'}}>
+            <p style={{fontSize:'13px',color:'#b45309',fontWeight:600,margin:0,fontStyle:'italic',lineHeight:1.5}}>“ เภสัชควรใช้ Claude เขียนโค้ดให้เป็นนะจ๊ะ ”</p>
+          </div>
+          <button onClick={onClose} style={{width:'100%',marginTop:'16px',padding:'11px',borderRadius:'12px',border:'none',background:'#0f766e',color:'#fff',fontWeight:700,fontSize:'14px',cursor:'pointer'}}>ปิด</button>
+          <p style={{fontSize:'10px',color:'#cbd5e1',textAlign:'center',margin:'10px 0 0'}}>© 2026 TB CARE &amp; JOURNEY</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ───── Main Profile Modal ─────
 function UserProfileModal({ onClose }) {
   const [form, setForm]                 = React.useState(null);
@@ -2601,6 +2651,7 @@ function UserProfileModal({ onClose }) {
   const [requestField, setRequestField] = React.useState(null);
   const [saving, setSaving]             = React.useState(false);
   const [warnClose, setWarnClose]       = React.useState(false);
+  const [editErr, setEditErr]           = React.useState('');  // ข้อความเตือนใต้ช่องที่กำลังแก้ (แทน popup)
 
   const handleClose = () => {
     if (editingKey !== null) { setWarnClose(true); return; }
@@ -2684,34 +2735,51 @@ function UserProfileModal({ onClose }) {
 
   const startEdit = (field) => {
     setEditingKey(field.key);
+    setEditErr('');
     setTempValue(form[field.key] === '—' ? '' : form[field.key]);
   };
   const saveEdit = async () => {
+    setEditErr('');
+    // ตรวจ + จัดรูปแบบเบอร์ก่อนส่ง
+    let valueToSave = tempValue;
+    if (editingKey === 'phone') {
+      const chk = window.tbValidatePhone(tempValue);
+      if (!chk.ok) { setEditErr(chk.msg); return; }
+      valueToSave = window.tbFormatPhone(tempValue);
+    }
     setSaving(true);
     try {
       const res = await fetch('/api/profile/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [editingKey]: tempValue }),
+        body: JSON.stringify({ [editingKey]: valueToSave }),
       });
-      if (!res.ok) { const e = await res.json(); alert('บันทึกไม่สำเร็จ: ' + e.error); setSaving(false); return; }
-      setForm(f => ({ ...f, [editingKey]: tempValue || '—' }));
+      if (!res.ok) { const e = await res.json(); setEditErr('บันทึกไม่สำเร็จ: ' + e.error); setSaving(false); return; }
+      setForm(f => ({ ...f, [editingKey]: valueToSave || '—' }));
       setEditingKey(null);
     } catch (e) {
-      alert('เกิดข้อผิดพลาด: ' + e.message);
+      setEditErr('เกิดข้อผิดพลาด: ' + e.message);
     } finally { setSaving(false); }
   };
-  const cancelEdit = () => setEditingKey(null);
+  const cancelEdit = () => { setEditingKey(null); setEditErr(''); };
 
   const saveAdminSelf = async (dbKey) => {
+    setEditErr('');
+    // ตรวจ + จัดรูปแบบเบอร์ก่อนส่ง
+    let valueToSave = tempValue;
+    if (dbKey === 'phone') {
+      const chk = window.tbValidatePhone(tempValue);
+      if (!chk.ok) { setEditErr(chk.msg); return; }
+      valueToSave = window.tbFormatPhone(tempValue);
+    }
     setSaving(true);
     try {
       const res = await fetch('/api/admin/edit-self', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [dbKey]: tempValue }),
+        body: JSON.stringify({ [dbKey]: valueToSave }),
       });
-      if (!res.ok) { const e = await res.json(); alert('บันทึกไม่สำเร็จ: ' + e.error); setSaving(false); return; }
+      if (!res.ok) { const e = await res.json(); setEditErr('บันทึกไม่สำเร็จ: ' + e.error); setSaving(false); return; }
       // map dbKey กลับเป็น form key
       const DB_TO_FORM = {
         first_name:'firstName', last_name:'lastName', phone:'phone',
@@ -2719,10 +2787,10 @@ function UserProfileModal({ onClose }) {
         hospital_type:'hospitalType', license_number:'licenseNumber',
       };
       const formKey = DB_TO_FORM[dbKey] || dbKey;
-      setForm(f => ({ ...f, [formKey]: tempValue || '—' }));
+      setForm(f => ({ ...f, [formKey]: valueToSave || '—' }));
       setEditingKey(null);
     } catch (e) {
-      alert('เกิดข้อผิดพลาด: ' + e.message);
+      setEditErr('เกิดข้อผิดพลาด: ' + e.message);
     } finally { setSaving(false); }
   };
 
@@ -2762,6 +2830,7 @@ function UserProfileModal({ onClose }) {
               </div>
               <p style={{fontWeight:800,fontSize:'18px',color:'#fff',margin:0,lineHeight:1.3}}>{shownTitle} {fullName}</p>
               <p style={{fontSize:'13px',color:'rgba(255,255,255,0.85)',margin:'5px 0 0'}}>{prof.label}</p>
+              {fullLicense && <p style={{fontSize:'12px',color:'rgba(255,255,255,0.7)',margin:'2px 0 0'}}><i className="fa-solid fa-id-card" style={{marginRight:'5px',fontSize:'11px'}}></i>{fullLicense}</p>}
               <span style={{display:'inline-block',marginTop:'12px',background:'rgba(255,255,255,0.2)',color:'#fff',fontSize:'11px',fontWeight:700,padding:'4px 12px',borderRadius:'20px'}}>
                 <i className={"fa-solid " + (form.role === 'Admin' ? 'fa-shield' : 'fa-user')} style={{marginRight:'5px'}}></i>{form.role}
               </span>
@@ -2833,12 +2902,17 @@ function UserProfileModal({ onClose }) {
                           </button>
                         )}>
                       {editingKey === field.key
-                        ? (field.type === 'select'
+                        ? (<>
+                            {field.type === 'select'
                             ? <select value={tempValue} onChange={e=>setTempValue(e.target.value)} autoFocus
                                 style={{width:'100%',fontSize:'13px',fontWeight:600,color:'#1f2937',border:'none',borderBottom:'1.5px solid #d97706',outline:'none',background:'transparent',padding:'2px 0',cursor:'pointer'}}>
                                 <option value="">— เลือก —</option>
                                 {(field.options||[]).map(o=><option key={o} value={o}>{o}</option>)}
                               </select>
+                            : field.key === 'phone'
+                              ? <input value={tempValue} onChange={e=>setTempValue(window.tbFormatPhone(e.target.value))} autoFocus
+                                  placeholder="08x-xxx-xxxx"
+                                  style={{width:'100%',fontSize:'13px',fontWeight:600,color:'#1f2937',border:'none',borderBottom:'1.5px solid #d97706',outline:'none',background:'transparent',padding:'2px 0'}}/>
                             : field.key === 'licenseNumber'
                               ? <div style={{display:'flex',alignItems:'center',gap:'6px',borderBottom:'1.5px solid #d97706'}}>
                                   {prof.prefix && <span style={{fontSize:'13px',fontWeight:700,color:'#0d9488',flexShrink:0}}>{prof.prefix}</span>}
@@ -2847,7 +2921,9 @@ function UserProfileModal({ onClose }) {
                                     style={{width:'100%',fontSize:'13px',fontWeight:600,color:'#1f2937',border:'none',outline:'none',background:'transparent',padding:'2px 0'}}/>
                                 </div>
                               : <input value={tempValue} onChange={e=>setTempValue(e.target.value)} autoFocus
-                                  style={{width:'100%',fontSize:'13px',fontWeight:600,color:'#1f2937',border:'none',borderBottom:'1.5px solid #d97706',outline:'none',background:'transparent',padding:'2px 0'}}/>)
+                                  style={{width:'100%',fontSize:'13px',fontWeight:600,color:'#1f2937',border:'none',borderBottom:'1.5px solid #d97706',outline:'none',background:'transparent',padding:'2px 0'}}/>}
+                            {editErr && <p style={{fontSize:'11px',color:'#ef4444',margin:'4px 0 0'}}>{editErr}</p>}
+                          </>)
                         : <p style={{fontSize:'13px',fontWeight:600,color:'#1f2937',margin:0}}>{field.key === 'licenseNumber' ? (((prof.prefix||'') + (form.licenseNumber||'')) || '—') : (form[field.key] || '—')}</p>
                       }
                     </RowShell>
@@ -2878,13 +2954,20 @@ function UserProfileModal({ onClose }) {
                           </button>
                         )}>
                       {editingKey === field.key
-                        ? (field.type === 'select'
+                        ? (<>
+                            {field.type === 'select'
                             ? <select value={tempValue} onChange={e=>setTempValue(e.target.value)} autoFocus
                                 style={{width:'100%',fontSize:'13px',fontWeight:600,color:'#1f2937',border:'none',borderBottom:'1.5px solid #14b8a6',outline:'none',background:'transparent',padding:'2px 0',cursor:'pointer'}}>
                                 {field.options.map(o=><option key={o} value={o}>{o}</option>)}
                               </select>
+                            : field.key === 'phone'
+                              ? <input value={tempValue} onChange={e=>setTempValue(window.tbFormatPhone(e.target.value))} autoFocus
+                                  placeholder="08x-xxx-xxxx"
+                                  style={{width:'100%',fontSize:'13px',fontWeight:600,color:'#1f2937',border:'none',borderBottom:'1.5px solid #14b8a6',outline:'none',background:'transparent',padding:'2px 0'}}/>
                             : <input value={tempValue} onChange={e=>setTempValue(e.target.value)} autoFocus
-                                style={{width:'100%',fontSize:'13px',fontWeight:600,color:'#1f2937',border:'none',borderBottom:'1.5px solid #14b8a6',outline:'none',background:'transparent',padding:'2px 0'}}/>)
+                                style={{width:'100%',fontSize:'13px',fontWeight:600,color:'#1f2937',border:'none',borderBottom:'1.5px solid #14b8a6',outline:'none',background:'transparent',padding:'2px 0'}}/>}
+                            {editErr && <p style={{fontSize:'11px',color:'#ef4444',margin:'4px 0 0'}}>{editErr}</p>}
+                          </>)
                         : <p style={{fontSize:'13px',fontWeight:600,color:'#1f2937',margin:0}}>{form[field.key]}</p>
                       }
                     </RowShell>

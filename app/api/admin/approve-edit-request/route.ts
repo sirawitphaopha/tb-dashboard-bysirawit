@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase-admin'
 import { getResend, EMAIL_FROM } from '@/lib/resend'
 import { userEditRequestApprovedEmail, userEditRequestRejectedEmail } from '@/lib/email-templates'
 import { professionKeyFromLabel, professionLabel, buildLicense } from '@/lib/professions'
+import { validatePhone, formatPhone } from '@/lib/phone'
 
 // field ที่อนุญาตให้แก้ผ่านระบบคำขอ (whitelist กันแก้ field นอกรายการ)
 const ALLOWED_FIELDS = [
@@ -140,6 +141,13 @@ export async function POST(req: NextRequest) {
       writeVal = buildLicense(cur.profession, afterRaw)
       beforeDisplay = beforeRaw          // ค่าเดิมใน DB (มีคำนำหน้าอยู่แล้ว)
       afterDisplay = writeVal            // แสดงค่าเต็มหลังเติมคำนำหน้า
+    } else if (field === 'phone') {
+      // ตรวจ + จัดรูปแบบเบอร์ก่อนบันทึก (กันเบอร์ผิดหลุดผ่านคำขอ)
+      const chk = validatePhone(afterRaw)
+      if (!chk.ok) return NextResponse.json({ error: 'เบอร์ในคำขอไม่ถูกต้อง: ' + chk.msg }, { status: 400 })
+      writeVal = formatPhone(afterRaw)
+      beforeDisplay = beforeRaw
+      afterDisplay = writeVal
     } else {
       writeVal = afterRaw
       beforeDisplay = beforeRaw

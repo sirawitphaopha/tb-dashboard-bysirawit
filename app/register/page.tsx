@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import PasswordEye from '@/components/PasswordEye'
 import { PROFESSIONS, NAME_PREFIXES, displayTitle } from '@/lib/professions'
+import { validatePhone, formatPhone } from '@/lib/phone'
 
 const HOSPITAL_TYPES = [
   'โรงพยาบาลศูนย์ (ระดับ A)',
@@ -41,80 +42,6 @@ function getStrength(checks: ReturnType<typeof checkPassword>) {
   if (passed <= 3) return { label: 'พอใช้',       color: '#f59e0b', width: '50%' }
   if (passed === 4) return { label: 'ดี',          color: '#3b82f6', width: '75%' }
   return               { label: 'แข็งแกร่ง',    color: '#22c55e', width: '100%' }
-}
-
-function formatPhone(val: string) {
-  const d = val.replace(/\D/g, '').slice(0, 10)
-  if (d.length <= 3) return d
-  if (d.length <= 6) return `${d.slice(0, 3)}-${d.slice(3)}`
-  return `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`
-}
-
-// ─────────────────────────────────────────────────────
-// Validate เบอร์โทร (เข้มสุด: มือถือ 06/08/09 + เบอร์บ้าน 02)
-// + บล็อกเลขซ้ำทั้งหมด / เลขเรียงต่อกัน
-// คืนค่า { ok, msg } — ok=true ผ่าน, false=ไม่ผ่าน พร้อมเหตุผลเฉพาะ
-// ─────────────────────────────────────────────────────
-function validatePhone(phone: string): { ok: boolean; msg: string } {
-  const d = phone.replace(/\D/g, '')
-  if (d.length === 0) return { ok: false, msg: 'กรุณากรอกเบอร์โทรศัพท์' }
-  if (d.length !== 10) return { ok: false, msg: 'เบอร์โทรต้องมี 10 หลัก (เช่น 081-234-5678)' }
-
-  // ต้องขึ้นต้นด้วย 02 (เบอร์บ้าน กทม.) หรือ 06/08/09 (มือถือ)
-  const prefix2 = d.slice(0, 2)
-  const validPrefixes = ['02', '06', '08', '09']
-  if (!validPrefixes.includes(prefix2)) {
-    // แยก error เฉพาะเคส — บอกผู้ใช้ให้เข้าใจว่าทำไมถูกปฏิเสธ
-    const provincialLandline: Record<string, string> = {
-      '03': 'ภาคกลาง/ตะวันออก',
-      '04': 'ภาคอีสาน',
-      '05': 'ภาคเหนือ',
-      '07': 'ภาคใต้',
-    }
-    if (provincialLandline[prefix2]) {
-      return {
-        ok: false,
-        msg: `เบอร์ ${prefix2} เป็นเบอร์บ้านต่างจังหวัด (${provincialLandline[prefix2]}) — ระบบไม่รองรับ กรุณาใช้เบอร์มือถือ (06/08/09) หรือเบอร์บ้านกรุงเทพ (02)`,
-      }
-    }
-    if (prefix2 === '00' || prefix2.startsWith('1')) {
-      return { ok: false, msg: 'เบอร์ที่กรอกไม่ถูกต้อง กรุณากรอกเบอร์มือถือ (06/08/09) หรือเบอร์บ้าน กทม. (02)' }
-    }
-    if (prefix2 === '01') {
-      return { ok: false, msg: 'รหัส 01 เป็นเบอร์บริการพิเศษ (ไม่ใช่เบอร์ส่วนตัว) — กรุณาใช้เบอร์มือถือ (06/08/09)' }
-    }
-    return { ok: false, msg: 'เบอร์ต้องขึ้นต้นด้วย 02 (กทม.), 06, 08 หรือ 09 (มือถือ)' }
-  }
-
-  // บล็อกเลขซ้ำกันทั้งหมด — เช่น 0000000000, 0888888888
-  if (/^(\d)\1{9}$/.test(d)) {
-    return { ok: false, msg: 'เบอร์ที่กรอกเป็นเลขซ้ำกันทั้งหมด กรุณากรอกเบอร์จริง' }
-  }
-
-  // บล็อก 8 หลักหลังเป็นเลขซ้ำ — เช่น 0811111111, 0900000000, 0288888888
-  const last8 = d.slice(2)
-  if (/^(\d)\1{7}$/.test(last8)) {
-    return { ok: false, msg: 'เบอร์ที่กรอกมีรูปแบบผิดปกติ กรุณากรอกเบอร์จริง' }
-  }
-
-  // บล็อกเลขเรียงต่อกัน (ขึ้น/ลง) ทั้ง 10 หลัก — เช่น 0123456789, 0987654321
-  const isAscending = (s: string) => {
-    for (let i = 1; i < s.length; i++) {
-      if (parseInt(s[i]) !== (parseInt(s[i - 1]) + 1) % 10) return false
-    }
-    return true
-  }
-  const isDescending = (s: string) => {
-    for (let i = 1; i < s.length; i++) {
-      if (parseInt(s[i]) !== (parseInt(s[i - 1]) - 1 + 10) % 10) return false
-    }
-    return true
-  }
-  if (isAscending(d) || isDescending(d) || isAscending(last8) || isDescending(last8)) {
-    return { ok: false, msg: 'เบอร์ที่กรอกเป็นเลขเรียงต่อกัน กรุณากรอกเบอร์จริง' }
-  }
-
-  return { ok: true, msg: '' }
 }
 
 const inp: React.CSSProperties = {

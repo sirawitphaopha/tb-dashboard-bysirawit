@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { buildLicense } from '@/lib/professions'
+import { validatePhone, formatPhone } from '@/lib/phone'
 
 const ALLOWED_FIELDS = ['title', 'first_name', 'last_name', 'hospital_name', 'hospital_type', 'profession', 'license_number', 'department', 'department_other', 'phone'] as const
 type AllowedField = typeof ALLOWED_FIELDS[number]
@@ -42,6 +43,13 @@ export async function POST(req: NextRequest) {
       .single()
     if (fetchErr || !current) {
       return NextResponse.json({ error: 'profile not found' }, { status: 404 })
+    }
+
+    // ตรวจ + จัดรูปแบบเบอร์โทรก่อนบันทึก
+    if ('phone' in body) {
+      const chk = validatePhone(body.phone)
+      if (!chk.ok) return NextResponse.json({ error: chk.msg }, { status: 400 })
+      body.phone = formatPhone(body.phone)
     }
 
     // เลขใบประกอบ: ให้เซิร์ฟเวอร์เติมคำนำหน้าตามวิชาชีพเสมอ (รับพิมพ์เลขเปล่าหรือเต็มก็ได้)

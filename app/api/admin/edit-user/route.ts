@@ -4,8 +4,9 @@ import { createAdminClient } from '@/lib/supabase-admin'
 import { getResend, EMAIL_FROM } from '@/lib/resend'
 import { userProfileEditedEmail } from '@/lib/email-templates'
 import { buildLicense, professionLabel } from '@/lib/professions'
+import { validatePhone, formatPhone } from '@/lib/phone'
 
-const ALLOWED_FIELDS = ['title', 'first_name', 'last_name', 'hospital_name', 'hospital_type', 'profession', 'license_number', 'department', 'department_other'] as const
+const ALLOWED_FIELDS = ['title', 'first_name', 'last_name', 'hospital_name', 'hospital_type', 'profession', 'license_number', 'department', 'department_other', 'phone'] as const
 type AllowedField = typeof ALLOWED_FIELDS[number]
 
 export async function POST(req: NextRequest) {
@@ -41,11 +42,22 @@ export async function POST(req: NextRequest) {
     // ดึงข้อมูลเดิมก่อนแก้ไข
     const { data: current, error: fetchErr } = await admin
       .from('profiles')
-      .select('first_name, last_name, hospital_name, hospital_type, profession, license_number, department, department_other')
+      .select('title, first_name, last_name, hospital_name, hospital_type, profession, license_number, department, department_other, phone')
       .eq('id', userId)
       .single()
     if (fetchErr || !current) {
       return NextResponse.json({ error: 'user not found' }, { status: 404 })
+    }
+
+    // ตรวจ + จัดรูปแบบเบอร์โทรก่อนบันทึก (เฉพาะถ้ากรอก — เว้นว่างได้ ไม่แตะ)
+    if ('phone' in updates) {
+      if (updates.phone) {
+        const chk = validatePhone(updates.phone)
+        if (!chk.ok) return NextResponse.json({ error: chk.msg }, { status: 400 })
+        updates.phone = formatPhone(updates.phone)
+      } else {
+        delete updates.phone
+      }
     }
 
     // เลขใบประกอบ: ให้เซิร์ฟเวอร์เติมคำนำหน้าตามวิชาชีพเสมอ (รับ admin พิมพ์เลขเปล่าหรือเต็มก็ได้)
@@ -107,7 +119,7 @@ export async function POST(req: NextRequest) {
           first_name: 'ชื่อ', last_name: 'นามสกุล',
           hospital_name: 'ชื่อโรงพยาบาล', hospital_type: 'ประเภทโรงพยาบาล',
           profession: 'วิชาชีพ', license_number: 'เลขใบประกอบวิชาชีพ',
-          department: 'แผนก', department_other: 'แผนก (ระบุ)',
+          department: 'แผนก', department_other: 'แผนก (ระบุ)', phone: 'เบอร์โทรศัพท์',
         }
         const changeList = Object.entries(changes).map(([field, val]) => {
           const v = val as any

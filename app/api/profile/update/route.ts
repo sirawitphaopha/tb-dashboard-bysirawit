@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { createAdminClient } from '@/lib/supabase-admin'
+import { validatePhone, formatPhone } from '@/lib/phone'
 
 // ฟิลด์ที่ user แก้เองได้ (self-editable)
 const SELF_EDITABLE = ['phone', 'department', 'department_other'] as const
@@ -28,6 +29,13 @@ export async function POST(req: NextRequest) {
     }
     if (Object.keys(patch).length === 0) {
       return NextResponse.json({ error: 'no editable fields provided' }, { status: 400 })
+    }
+
+    // ตรวจ + จัดรูปแบบเบอร์โทรก่อนบันทึก
+    if ('phone' in patch) {
+      const chk = validatePhone(patch.phone)
+      if (!chk.ok) return NextResponse.json({ error: chk.msg }, { status: 400 })
+      patch.phone = formatPhone(patch.phone)
     }
 
     const admin = createAdminClient()

@@ -47,6 +47,37 @@ window.tbDisplayTitle = (key, namePrefix) => {
   return namePrefix || '';
 };
 
+// ════════ เบอร์โทร (ฝั่งหน้าเว็บ) — ต้องตรงกับ lib/phone.ts ฝั่งเซิร์ฟเวอร์ ════════
+// จัดรูปแบบใส่ขีด: 0812345678 → 081-234-5678
+window.tbFormatPhone = (val) => {
+  var d = (val || '').replace(/\D/g, '').slice(0, 10);
+  if (d.length <= 3) return d;
+  if (d.length <= 6) return d.slice(0, 3) + '-' + d.slice(3);
+  return d.slice(0, 3) + '-' + d.slice(3, 6) + '-' + d.slice(6);
+};
+// ตรวจเบอร์ (เข้มสุด): มือถือ 06/08/09 + เบอร์บ้าน กทม. 02 + บล็อกเลขซ้ำ/เรียง
+window.tbValidatePhone = (phone) => {
+  var d = (phone || '').replace(/\D/g, '');
+  if (d.length === 0) return { ok: false, msg: 'กรุณากรอกเบอร์โทรศัพท์' };
+  if (d.length !== 10) return { ok: false, msg: 'เบอร์โทรต้องมี 10 หลัก (เช่น 081-234-5678)' };
+  var prefix2 = d.slice(0, 2);
+  var validPrefixes = ['02', '06', '08', '09'];
+  if (validPrefixes.indexOf(prefix2) === -1) {
+    var provincial = { '03': 'ภาคกลาง/ตะวันออก', '04': 'ภาคอีสาน', '05': 'ภาคเหนือ', '07': 'ภาคใต้' };
+    if (provincial[prefix2]) return { ok: false, msg: 'เบอร์ ' + prefix2 + ' เป็นเบอร์บ้านต่างจังหวัด (' + provincial[prefix2] + ') — ระบบไม่รองรับ กรุณาใช้เบอร์มือถือ (06/08/09) หรือเบอร์บ้านกรุงเทพ (02)' };
+    if (prefix2 === '00' || prefix2.charAt(0) === '1') return { ok: false, msg: 'เบอร์ที่กรอกไม่ถูกต้อง กรุณากรอกเบอร์มือถือ (06/08/09) หรือเบอร์บ้าน กทม. (02)' };
+    if (prefix2 === '01') return { ok: false, msg: 'รหัส 01 เป็นเบอร์บริการพิเศษ (ไม่ใช่เบอร์ส่วนตัว) — กรุณาใช้เบอร์มือถือ (06/08/09)' };
+    return { ok: false, msg: 'เบอร์ต้องขึ้นต้นด้วย 02 (กทม.), 06, 08 หรือ 09 (มือถือ)' };
+  }
+  if (/^(\d)\1{9}$/.test(d)) return { ok: false, msg: 'เบอร์ที่กรอกเป็นเลขซ้ำกันทั้งหมด กรุณากรอกเบอร์จริง' };
+  var last8 = d.slice(2);
+  if (/^(\d)\1{7}$/.test(last8)) return { ok: false, msg: 'เบอร์ที่กรอกมีรูปแบบผิดปกติ กรุณากรอกเบอร์จริง' };
+  var asc = function (s) { for (var i = 1; i < s.length; i++) { if (parseInt(s[i]) !== (parseInt(s[i - 1]) + 1) % 10) return false; } return true; };
+  var desc = function (s) { for (var i = 1; i < s.length; i++) { if (parseInt(s[i]) !== (parseInt(s[i - 1]) - 1 + 10) % 10) return false; } return true; };
+  if (asc(d) || desc(d) || asc(last8) || desc(last8)) return { ok: false, msg: 'เบอร์ที่กรอกเป็นเลขเรียงต่อกัน กรุณากรอกเบอร์จริง' };
+  return { ok: true, msg: '' };
+};
+
 window.OUTCOME_TYPES = [
   { value:'Cured',          label:'รักษาหาย (Cured)',                color:'text-green-700 bg-green-100'   },
   { value:'Completed',      label:'ครบการรักษา (Treatment Completed)',color:'text-teal-700 bg-teal-100'     },

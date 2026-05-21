@@ -3372,6 +3372,7 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
       profession: p.profession || '',
       // เก็บเฉพาะตัวเลขในช่องกรอก — เซิร์ฟเวอร์จะเติมคำนำหน้าตามวิชาชีพให้เอง
       license_number: window.tbLicenseDigits(p.license_number),
+      phone: window.tbFormatPhone(p.phone),
     });
     setEditError('');
   };
@@ -3380,6 +3381,11 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
     if (!editingUser) return;
     if (!editForm.first_name.trim() || !editForm.last_name.trim()) {
       setEditError('กรุณากรอกชื่อและนามสกุล'); return;
+    }
+    // ตรวจเบอร์ก่อนส่ง (เฉพาะถ้ากรอก)
+    if (editForm.phone && editForm.phone.trim()) {
+      const chk = window.tbValidatePhone(editForm.phone);
+      if (!chk.ok) { setEditError(chk.msg); return; }
     }
     setEditBusy(true); setEditError('');
     const res = await fetch('/api/admin/edit-user', {
@@ -3943,6 +3949,11 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-amber-400 bg-white"/>
                 </div>
                 <p className="text-xs mt-1 text-gray-400">กรอกเฉพาะตัวเลข ระบบจะเติมคำนำหน้าตามวิชาชีพให้อัตโนมัติ</p>
+              </EditRow>
+              <EditRow label="เบอร์โทรศัพท์" original={editingUser.phone} changed={editForm.phone !== window.tbFormatPhone(editingUser.phone)}>
+                <input value={editForm.phone} onChange={e=>setEditForm(f=>({...f,phone:window.tbFormatPhone(e.target.value)}))}
+                  placeholder="08x-xxx-xxxx"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-amber-400 bg-white"/>
               </EditRow>
             </div>
             {editError && <p className="mt-3 text-xs text-center font-semibold text-red-500">{editError}</p>}
