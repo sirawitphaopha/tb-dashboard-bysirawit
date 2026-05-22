@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     const admin = createAdminClient()
     const { data: caller } = await admin
       .from('profiles')
-      .select('role')
+      .select('role, first_name, last_name')
       .eq('id', user.id)
       .single()
 
@@ -66,10 +66,23 @@ export async function POST(req: NextRequest) {
       .from('profiles')
       .update({ status: 'approved', approved_at: new Date().toISOString(), rejected_reason: null })
       .eq('id', userId)
-      .select('first_name, last_name')
+      .select('*')
       .single()
 
     if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 })
+
+    // จดลงสมุดบันทึก: ใครอนุมัติใคร เมื่อไหร่ (+ สำเนาโปรไฟล์ทั้งใบ)
+    await admin.from('tb_user_action_log').insert({
+      user_id: userId,
+      action: 'approve',
+      reason: 'อนุมัติคำขอสมัครสมาชิก',
+      performed_by: user.id,
+      first_name_at_action: target?.first_name,
+      last_name_at_action: target?.last_name,
+      email_at_action: target?.email,
+      profile_snapshot: target,
+      performer_name_at_action: `${caller?.first_name || ''} ${caller?.last_name || ''}`.trim() || null,
+    })
 
     // หา email ของ user เพื่อส่งเมล
     const { data: authData } = await admin.auth.admin.getUserById(userId)

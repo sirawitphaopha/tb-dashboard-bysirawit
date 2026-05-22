@@ -3089,6 +3089,8 @@ function ActionHistoryTable({ logs, loading }) {
           ? { icon:'fa-user-slash', color:'#c2410c', bg:'#fff7ed', border:'#fed7aa', label:'ปิดบัญชี' }
           : l.action === 'restore'
           ? { icon:'fa-rotate-left', color:'#0f766e', bg:'#f0fdfa', border:'#99f6e4', label:'กู้คืนบัญชี' }
+          : l.action === 'approve'
+          ? { icon:'fa-check-circle', color:'#0d9488', bg:'#ccfbf1', border:'#99f6e4', label:'อนุมัติ' }
           : { icon:'fa-fire', color:'#dc2626', bg:'#fee2e2', border:'#fecaca', label:'ลบบัญชีถาวร' };
         return (
           <div key={l.id} className="px-4 py-3 flex items-start gap-3 hover:bg-gray-50/60 transition-colors">
@@ -3283,10 +3285,13 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
   const [restoreUserTarget, setRestoreUserTarget] = useState(null);
   const [restoreUserReason, setRestoreUserReason] = useState('');
   const [restoreUserError, setRestoreUserError] = useState('');
+  const [approveUserTarget, setApproveUserTarget] = useState(null);
   const [rejectLogs, setRejectLogs] = useState([]);
   const [logLoading, setLogLoading] = useState(false);
   const [actionLogs, setActionLogs] = useState([]);
   const [actionLogLoading, setActionLogLoading] = useState(false);
+  const [historyTab, setHistoryTab] = useState('approve');  // sub-tab ในแท็บประวัติ: approve/reject/updown/delete
+  const [historySearch, setHistorySearch] = useState('');   // ค้นหาในหน้าประวัติ
   const [expandedLogId, setExpandedLogId] = useState(null);
   const [toast, setToast] = useState(null);  // {kind:'success'|'error'|'info', title?, message}
   const [editingUser, setEditingUser] = useState(null);
@@ -3376,18 +3381,22 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
   useEffect(() => { loadRejectLog(false); loadActionLog(false); }, []);
   // รีเฟรชอีกครั้งเมื่อ user สลับมาที่แท็บนี้
   useEffect(() => {
-    if (filter === 'reject-history') loadRejectLog(true);
-    if (filter === 'action-history') loadActionLog(true);
+    if (filter === 'history') { loadRejectLog(true); loadActionLog(true); }
   }, [filter]);
 
-  const handleApprove = async (userId) => {
+  // กดปุ่มอนุมัติ → เปิด popup ยืนยัน (ไม่ทำทันที)
+  const handleApprove = (p) => setApproveUserTarget(p);
+
+  // กดยืนยันใน popup → อนุมัติจริง
+  const doApproveUser = async () => {
+    if (!approveUserTarget) return;
     setBusy(true);
     const res = await fetch('/api/admin/approve', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId }),
+      body: JSON.stringify({ userId: approveUserTarget.id }),
     });
     setBusy(false);
-    if (res.ok) { setToast({ kind:'success', title:'อนุมัติเรียบร้อย', message:'ส่งเมลแจ้งผู้ใช้แล้ว ✉️' }); load(); }
+    if (res.ok) { setToast({ kind:'success', title:'อนุมัติเรียบร้อย', message:'ส่งเมลแจ้งผู้ใช้แล้ว ✉️' }); setApproveUserTarget(null); load(); loadActionLog(false); }
     else { const e = await res.json(); setToast({ kind:'error', title:'เกิดข้อผิดพลาด', message: e.error }); }
   };
 
@@ -3575,15 +3584,30 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
   const counts = {
     pending: profiles.filter(p => p.status === 'pending').length,
     approved: profiles.filter(p => p.status === 'approved').length,
-    rejected: profiles.filter(p => p.status === 'rejected').length,
+    // ปฏิเสธ = ปฏิเสธคำขอสมัคร (ไม่มี deactivated_at) | ถูกปิดบัญชี = เคย approved แล้วถูกปิด (มี deactivated_at)
+    rejected: profiles.filter(p => p.status === 'rejected' && !p.deactivated_at).length,
+    deactivated: profiles.filter(p => p.status === 'rejected' && p.deactivated_at).length,
   };
   const searchLower = search.trim().toLowerCase();
-  const filtered = (filter === 'all' ? profiles : profiles.filter(p => p.status === filter))
+  const filtered = (
+    filter === 'all' ? profiles
+    : filter === 'rejected' ? profiles.filter(p => p.status === 'rejected' && !p.deactivated_at)
+    : filter === 'deactivated' ? profiles.filter(p => p.status === 'rejected' && p.deactivated_at)
+    : profiles.filter(p => p.status === filter)
+  )
     .filter(p => {
       if (!searchLower) return true;
       const hay = `${p.first_name||''} ${p.last_name||''} ${p.username||''} ${p.email||''} ${p.hospital_name||''} ${p.license_number||''}`.toLowerCase();
       return hay.includes(searchLower);
     });
+
+  // ค้นหาในหน้าประวัติ — กรอง log ตามชื่อ/username/email ของผู้ถูกกระทำ
+  const hsLower = historySearch.trim().toLowerCase();
+  const matchHist = (l) => {
+    if (!hsLower) return true;
+    const u = l.user || {};
+    return `${u.first_name||''} ${u.last_name||''} ${u.username||''} ${u.email||''}`.toLowerCase().includes(hsLower);
+  };
 
   return (
     <div className="space-y-4 tb-fade">
@@ -3602,42 +3626,51 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
 
       {/* Filter cards — compact, hover-state, ข้อความตรงกลาง
            Roadmap: ในอนาคตเพิ่ม view mode (list/grid/timeline) ดูที่ pending master ข้อ 30 */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-        {[
-          { key:'pending',  label:'รออนุมัติ',  count:counts.pending,  color:'#f59e0b', bg:'#fef3c7', hover:'#fde68a', icon:'fa-clock' },
-          { key:'approved', label:'อนุมัติแล้ว', count:counts.approved, color:'#0d9488', bg:'#ccfbf1', hover:'#99f6e4', icon:'fa-check-circle' },
-          { key:'rejected', label:'ปฏิเสธ',     count:counts.rejected, color:'#ef4444', bg:'#fee2e2', hover:'#fecaca', icon:'fa-circle-xmark' },
-          { key:'all',      label:'ทั้งหมด',     count:profiles.length, color:'#0f766e', bg:'#f0fdfa', hover:'#ccfbf1', icon:'fa-layer-group' },
-          { key:'reject-history', label:'ประวัติการปฏิเสธ', count:rejectLogs.length, color:'#7c3aed', bg:'#ede9fe', hover:'#ddd6fe', icon:'fa-clock-rotate-left' },
-          { key:'action-history', label:'ประวัติเปิด-ปิดบัญชี', count:actionLogs.filter(l=>l.action!=='delete').length, color:'#4f46e5', bg:'#e0e7ff', hover:'#c7d2fe', icon:'fa-user-clock' },
-          { key:'delete-history', label:'ประวัติการลบบัญชี', count:actionLogs.filter(l=>l.action==='delete').length, color:'#dc2626', bg:'#fee2e2', hover:'#fecaca', icon:'fa-user-xmark' },
-        ].map(c => {
+      {(() => {
+        const renderTab = (c) => {
           const active = filter === c.key;
           return (
             <button key={c.key} type="button" onClick={()=>setFilter(c.key)}
               className="rounded-xl px-3 py-2.5 transition-all border"
-              style={{
-                background: active ? c.color : '#fff',
-                borderColor: active ? c.color : '#e5e7eb',
-                boxShadow: active ? '0 4px 12px '+c.color+'40' : 'none',
-              }}
+              style={{ background: active ? c.color : '#fff', borderColor: active ? c.color : '#e5e7eb', boxShadow: active ? '0 4px 12px '+c.color+'40' : 'none' }}
               onMouseEnter={e=>{ if(!active) e.currentTarget.style.background = c.hover; }}
               onMouseLeave={e=>{ if(!active) e.currentTarget.style.background = '#fff'; }}>
               <div className="flex items-center justify-center gap-2">
                 <i className={'fa-solid '+c.icon} style={{ fontSize:'13px', color: active ? '#fff' : c.color }}></i>
                 <span className="text-sm font-bold" style={{ color: active ? '#fff' : '#374151' }}>{c.label}</span>
-                <span className="text-sm font-bold px-1.5 rounded-md"
-                      style={{ background: active ? 'rgba(255,255,255,0.25)' : c.bg, color: active ? '#fff' : c.color }}>
-                  {c.count}
-                </span>
+                <span className="text-sm font-bold px-1.5 rounded-md" style={{ background: active ? 'rgba(255,255,255,0.25)' : c.bg, color: active ? '#fff' : c.color }}>{c.count}</span>
               </div>
             </button>
           );
-        })}
-      </div>
+        };
+        return (<>
+          {/* แถว 1: การพิจารณาสมัคร */}
+          <div>
+            <p className="text-xs font-bold text-gray-400 mb-1.5 ml-1"><i className="fa-solid fa-clipboard-check mr-1"></i>การพิจารณาสมัคร</p>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { key:'pending',  label:'รออนุมัติ',  count:counts.pending,  color:'#f59e0b', bg:'#fef3c7', hover:'#fde68a', icon:'fa-clock' },
+                { key:'approved', label:'อนุมัติแล้ว', count:counts.approved, color:'#0d9488', bg:'#ccfbf1', hover:'#99f6e4', icon:'fa-check-circle' },
+                { key:'rejected', label:'ปฏิเสธ',     count:counts.rejected, color:'#ef4444', bg:'#fee2e2', hover:'#fecaca', icon:'fa-circle-xmark' },
+              ].map(renderTab)}
+            </div>
+          </div>
+          {/* แถว 2: การจัดการผู้ใช้ */}
+          <div>
+            <p className="text-xs font-bold text-gray-400 mb-1.5 ml-1"><i className="fa-solid fa-users-gear mr-1"></i>การจัดการผู้ใช้</p>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+              {[
+                { key:'all',         label:'ผู้ใช้ทั้งหมด',  count:profiles.length,    color:'#0f766e', bg:'#f0fdfa', hover:'#ccfbf1', icon:'fa-layer-group' },
+                { key:'deactivated', label:'ถูกปิดบัญชี',   count:counts.deactivated, color:'#ea580c', bg:'#fff7ed', hover:'#fed7aa', icon:'fa-user-slash' },
+                { key:'history',     label:'ประวัติ',       count:rejectLogs.length + actionLogs.length, color:'#7c3aed', bg:'#ede9fe', hover:'#ddd6fe', icon:'fa-clock-rotate-left' },
+              ].map(renderTab)}
+            </div>
+          </div>
+        </>);
+      })()}
 
       {/* Search + view mode toggle */}
-      {filter !== 'reject-history' && filter !== 'action-history' && filter !== 'delete-history' && (
+      {filter !== 'history' && (
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[220px]">
           <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
@@ -3662,17 +3695,42 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
       )}
 
       {/* ประวัติเปิด-ปิดบัญชี — รายการเรียงเวลา */}
-      {filter === 'action-history' ? (
-        <ActionHistoryTable logs={actionLogs.filter(l=>l.action!=='delete')} loading={actionLogLoading} />
-      ) : filter === 'delete-history' ? (
-        <ActionHistoryTable logs={actionLogs.filter(l=>l.action==='delete')} loading={actionLogLoading} />
-      ) : filter === 'reject-history' ? (
-        <RejectHistoryTable
-          logs={rejectLogs}
-          loading={logLoading}
-          expandedId={expandedLogId}
-          onToggle={(id) => setExpandedLogId(prev => prev === id ? null : id)}
-        />
+      {filter === 'history' ? (
+        <div>
+          {/* sub-tab: อนุมัติ / ปฏิเสธ / เปิด-ปิด / ลบ + ช่องค้นหา */}
+          <div className="flex gap-2 mb-3 flex-wrap items-center">
+            {[
+              { key:'approve', label:'อนุมัติเข้าระบบ',  icon:'fa-check-circle', color:'#0d9488' },
+              { key:'reject',  label:'ปฏิเสธคำขอสมัคร',  icon:'fa-circle-xmark', color:'#ef4444' },
+              { key:'updown',  label:'ปิด-กู้คืนบัญชี',   icon:'fa-user-clock',   color:'#4f46e5' },
+              { key:'delete',  label:'ลบบัญชีถาวร',      icon:'fa-user-xmark',   color:'#dc2626' },
+            ].map(s => {
+              const act = historyTab === s.key;
+              return (
+                <button key={s.key} type="button" onClick={()=>setHistoryTab(s.key)}
+                  className="px-3 py-1.5 rounded-lg text-sm font-bold border transition-colors"
+                  style={{ background: act?s.color:'#fff', color: act?'#fff':s.color, borderColor: act?s.color:'#e5e7eb' }}>
+                  <i className={'fa-solid '+s.icon+' mr-1'}></i>{s.label}
+                </button>
+              );
+            })}
+            <div className="relative flex-1 min-w-[200px]">
+              <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+              <input type="text" value={historySearch} onChange={e=>setHistorySearch(e.target.value)}
+                placeholder="ค้นหาในประวัติ (ชื่อ / username / email)"
+                className="w-full pl-9 pr-3 py-1.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-purple-400 bg-white"/>
+            </div>
+          </div>
+          {historyTab === 'reject' ? (
+            <RejectHistoryTable logs={rejectLogs.filter(matchHist)} loading={logLoading} expandedId={expandedLogId} onToggle={(id) => setExpandedLogId(prev => prev === id ? null : id)} />
+          ) : historyTab === 'approve' ? (
+            <ActionHistoryTable logs={actionLogs.filter(l=>l.action==='approve' && matchHist(l))} loading={actionLogLoading} />
+          ) : historyTab === 'updown' ? (
+            <ActionHistoryTable logs={actionLogs.filter(l=>(l.action==='deactivate'||l.action==='restore') && matchHist(l))} loading={actionLogLoading} />
+          ) : (
+            <ActionHistoryTable logs={actionLogs.filter(l=>l.action==='delete' && matchHist(l))} loading={actionLogLoading} />
+          )}
+        </div>
       ) : loading ? (
         <div className="text-center py-16 text-gray-400">
           <i className="fa-solid fa-spinner fa-spin text-3xl mb-2 block text-teal-500"></i>
@@ -3728,7 +3786,7 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
                     )}
                     {p.status === 'pending' && (
                       <>
-                        <button type="button" onClick={()=>handleApprove(p.id)} disabled={busy}
+                        <button type="button" onClick={()=>handleApprove(p)} disabled={busy}
                           className="px-2.5 py-1 rounded-lg font-bold text-white text-xs bg-teal-600 hover:bg-teal-700 disabled:opacity-50" title="อนุมัติ">
                           <i className="fa-solid fa-check"></i>
                         </button>
@@ -3810,7 +3868,7 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
                     )}
                     {p.status === 'pending' && (
                       <>
-                        <button type="button" onClick={() => handleApprove(p.id)} disabled={busy}
+                        <button type="button" onClick={() => handleApprove(p)} disabled={busy}
                           className="px-4 py-2 rounded-xl font-bold text-white text-xs bg-teal-600 hover:bg-teal-700 disabled:opacity-50">
                           <i className="fa-solid fa-check mr-1"></i>อนุมัติ
                         </button>
@@ -3937,6 +3995,32 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
                 {busy ? <><i className="fa-solid fa-spinner fa-spin mr-1"></i>กำลังดำเนินการ...</> : 'ยืนยัน ปิดบัญชี'}
               </button>
               <button type="button" onClick={()=>{ setDeactivateTarget(null); setDeactivateReason(''); setDeactivateError(''); }} disabled={busy}
+                className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold">
+                ยกเลิก
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Dialog อนุมัติผู้ใช้ — ยืนยัน (ไม่ต้องกรอกเหตุผล) ── */}
+      {approveUserTarget && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <h3 className="text-lg font-bold text-teal-700 mb-2">
+              <i className="fa-solid fa-circle-check mr-2"></i>อนุมัติ "{approveUserTarget.first_name} {approveUserTarget.last_name}"
+            </h3>
+            <div className="bg-teal-50 border border-teal-200 rounded-xl p-3 mb-5 text-xs text-teal-900">
+              <p className="font-bold mb-1"><i className="fa-solid fa-circle-info mr-1"></i>รายละเอียด</p>
+              <p>• ผู้ใช้จะเข้าสู่ระบบได้ทันที</p>
+              <p>• ระบบจะส่งอีเมลแจ้งผู้ใช้ว่าได้รับอนุมัติ</p>
+            </div>
+            <div className="flex gap-2">
+              <button type="button" onClick={doApproveUser} disabled={busy}
+                className="flex-1 px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:bg-gray-300 text-white rounded-xl text-sm font-bold">
+                {busy ? <><i className="fa-solid fa-spinner fa-spin mr-1"></i>กำลังดำเนินการ...</> : 'ยืนยัน อนุมัติ'}
+              </button>
+              <button type="button" onClick={()=>setApproveUserTarget(null)} disabled={busy}
                 className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold">
                 ยกเลิก
               </button>

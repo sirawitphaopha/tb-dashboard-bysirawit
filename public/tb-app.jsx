@@ -2611,7 +2611,7 @@ function RequestEditModal({ field, currentValue, onClose }) {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.11.4';
+const APP_VERSION = '0.7.11.5';
 const BUILD_DATE = '22 พ.ค. 2569';
 function AboutModal({ onClose }) {
   return (
