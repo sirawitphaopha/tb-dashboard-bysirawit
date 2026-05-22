@@ -288,13 +288,17 @@ export function deleteRequestRestoredEmail(firstName: string, patientName: strin
 // ═════════════════════════════════════════════════════════
 // 11) User Account Deactivated — admin ปิดบัญชีชั่วคราว (30 วัน)
 // ═════════════════════════════════════════════════════════
-export function userDeactivatedEmail(firstName: string, adminEmail: string, deletionDate: string) {
+export function userDeactivatedEmail(firstName: string, adminEmail: string, deletionDate: string, reason?: string) {
   const subject = 'แจ้งการปิดบัญชีชั่วคราว — TB JOURNEY & CARE'
   const body = `
     <h2 style="margin:0 0 16px;color:${BRAND_TEAL_DARK};font-size:18px;">เรียน คุณ${firstName}</h2>
     <p style="margin:0 0 16px;font-size:14px;color:#4b5563;line-height:1.7;">
       ขอเรียนแจ้งให้ทราบว่า ผู้ดูแลระบบได้ทำการ<strong>ปิดบัญชีชั่วคราว</strong>ของท่าน ท่านจะไม่สามารถเข้าสู่ระบบได้ในขณะนี้
     </p>
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:16px;margin:20px 0;">
+      <p style="margin:0 0 6px;font-size:12px;color:#991b1b;font-weight:700;">เหตุผลในการปิดบัญชี</p>
+      <p style="margin:0;font-size:14px;color:#7f1d1d;line-height:1.6;">${reason || '(ไม่ระบุเหตุผล)'}</p>
+    </div>
     <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:16px;margin:20px 0;">
       <p style="margin:0 0 6px;font-size:12px;color:#9a3412;font-weight:700;">⏳ กำหนดลบบัญชีอัตโนมัติ</p>
       <p style="margin:0;font-size:14px;color:#7c2d12;line-height:1.6;">
@@ -316,7 +320,7 @@ export function userDeactivatedEmail(firstName: string, adminEmail: string, dele
 // ═════════════════════════════════════════════════════════
 // 12) User Account Restored — admin กู้คืนบัญชี
 // ═════════════════════════════════════════════════════════
-export function userRestoredEmail(firstName: string, baseUrl: string) {
+export function userRestoredEmail(firstName: string, baseUrl: string, reason?: string) {
   const subject = 'บัญชีของท่านได้รับการกู้คืนแล้ว — TB JOURNEY & CARE'
   const body = `
     <h2 style="margin:0 0 16px;color:${BRAND_TEAL_DARK};font-size:18px;">เรียน คุณ${firstName}</h2>
@@ -324,7 +328,11 @@ export function userRestoredEmail(firstName: string, baseUrl: string) {
       ผู้ดูแลระบบได้ทำการ<strong>กู้คืนบัญชี</strong>ของท่านเรียบร้อยแล้ว ท่านสามารถเข้าใช้งานระบบได้ทันที
     </p>
     <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px;margin:20px 0;">
-      <p style="margin:0;font-size:14px;color:#166534;line-height:1.6;">✅ บัญชีของท่านกลับมาใช้งานได้ตามปกติแล้วค่ะ</p>
+      <p style="margin:0;font-size:14px;color:#166534;line-height:1.6;">✅ บัญชีของท่านกลับมาใช้งานได้ตามปกติแล้ว</p>
+    </div>
+    <div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:10px;padding:16px;margin:20px 0;">
+      <p style="margin:0 0 6px;font-size:12px;color:${BRAND_TEAL_DARK};font-weight:700;">เหตุผลในการกู้คืน</p>
+      <p style="margin:0;font-size:14px;color:${BRAND_TEAL};line-height:1.6;">${reason || '(ไม่ระบุเหตุผล)'}</p>
     </div>
     <table width="100%" cellpadding="0" cellspacing="0">
       <tr><td align="center" style="padding:8px 0 20px;">

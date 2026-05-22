@@ -6,8 +6,12 @@ import { userDeactivatedEmail } from '@/lib/email-templates'
 
 export async function POST(req: NextRequest) {
   try {
-    const { userId } = await req.json()
+    const { userId, reason } = await req.json()
     if (!userId) return NextResponse.json({ error: 'missing userId' }, { status: 400 })
+    if (!reason || !reason.trim()) {
+      return NextResponse.json({ error: 'กรุณาระบุเหตุผลในการปิดบัญชี' }, { status: 400 })
+    }
+    const trimmedReason = reason.trim()
 
     const cookieStore = req.cookies
     const supabase = createServerClient(
@@ -52,12 +56,20 @@ export async function POST(req: NextRequest) {
       .from('profiles')
       .update({
         status: 'rejected',
-        rejected_reason: 'ปิดบัญชีโดย Admin',
+        rejected_reason: trimmedReason,
         deactivated_at: now.toISOString(),
       })
       .eq('id', userId)
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    // จดลงสมุดบันทึก: ใครปิดบัญชีใคร เมื่อไหร่ เพราะอะไร
+    await admin.from('tb_user_action_log').insert({
+      user_id: userId,
+      action: 'deactivate',
+      reason: trimmedReason,
+      performed_by: user.id,
+    })
 
     // ส่งเมลแจ้ง user
     if (target.email) {
@@ -66,7 +78,8 @@ export async function POST(req: NextRequest) {
       const mail = userDeactivatedEmail(
         target.first_name || 'ผู้ใช้',
         ADMIN_EMAILS[0],
-        deletionDate
+        deletionDate,
+        trimmedReason
       )
       try {
         await getResend().emails.send({

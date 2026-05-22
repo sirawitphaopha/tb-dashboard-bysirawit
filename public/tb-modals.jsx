@@ -3055,6 +3055,65 @@ function ToastModal({ toast, onClose }) {
   );
 }
 
+// ประวัติการเปิด-ปิดบัญชี — รายการเรียงเวลา (ใหม่สุดอยู่บน)
+function ActionHistoryTable({ logs, loading }) {
+  const fmt = (iso) => {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return d.toLocaleDateString('th-TH', { year:'numeric', month:'2-digit', day:'2-digit' }) + ' ' +
+           d.toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit' });
+  };
+  const nameOf = (p) => p ? `${p.first_name||''} ${p.last_name||''}`.trim() || p.username || p.email || '—' : '(บัญชีถูกลบแล้ว)';
+
+  if (loading) {
+    return (
+      <div className="text-center py-16 text-gray-400">
+        <i className="fa-solid fa-spinner fa-spin text-3xl mb-2 block text-teal-500"></i>
+        <p className="text-sm">กำลังโหลดประวัติ...</p>
+      </div>
+    );
+  }
+  if (!logs.length) {
+    return (
+      <div className="bg-white rounded-2xl p-16 text-center border border-gray-100">
+        <i className="fa-solid fa-user-clock text-5xl text-gray-300 mb-3 block"></i>
+        <p className="text-sm text-gray-400">ยังไม่มีประวัติการเปิด-ปิดบัญชี</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden divide-y divide-gray-100">
+      {logs.map(l => {
+        const isDeact = l.action === 'deactivate';
+        const cfg = isDeact
+          ? { icon:'fa-user-slash', color:'#c2410c', bg:'#fff7ed', border:'#fed7aa', label:'ปิดบัญชี' }
+          : { icon:'fa-rotate-left', color:'#0f766e', bg:'#f0fdfa', border:'#99f6e4', label:'กู้คืนบัญชี' };
+        return (
+          <div key={l.id} className="px-4 py-3 flex items-start gap-3 hover:bg-gray-50/60 transition-colors">
+            <div className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center" style={{ background:cfg.bg, border:'1px solid '+cfg.border }}>
+              <i className={'fa-solid '+cfg.icon+' text-sm'} style={{ color:cfg.color }}></i>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background:cfg.bg, color:cfg.color }}>{cfg.label}</span>
+                <span className="font-bold text-gray-800 text-sm truncate">{nameOf(l.user)}</span>
+                {l.user?.email && <span className="text-xs text-gray-400 truncate">{l.user.email}</span>}
+              </div>
+              <p className="text-sm text-gray-700 mt-1"><span className="text-gray-400">เหตุผล:</span> {l.reason || '—'}</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                <i className="fa-solid fa-user-shield mr-1 text-gray-400"></i>โดย {nameOf(l.performer)}
+                <span className="mx-1.5">·</span>
+                <i className="fa-regular fa-clock mr-1 text-gray-400"></i>{fmt(l.performed_at)}
+              </p>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function RejectHistoryTable({ logs, loading, expandedId, onToggle }) {
   const fmt = (iso) => {
     if (!iso) return { date:'—', time:'—' };
@@ -3207,8 +3266,15 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
   const [hardDelTarget, setHardDelTarget] = useState(null);
   const [confirmText, setConfirmText] = useState('');
   const [deactivateTarget, setDeactivateTarget] = useState(null);
+  const [deactivateReason, setDeactivateReason] = useState('');
+  const [deactivateError, setDeactivateError] = useState('');
+  const [restoreUserTarget, setRestoreUserTarget] = useState(null);
+  const [restoreUserReason, setRestoreUserReason] = useState('');
+  const [restoreUserError, setRestoreUserError] = useState('');
   const [rejectLogs, setRejectLogs] = useState([]);
   const [logLoading, setLogLoading] = useState(false);
+  const [actionLogs, setActionLogs] = useState([]);
+  const [actionLogLoading, setActionLogLoading] = useState(false);
   const [expandedLogId, setExpandedLogId] = useState(null);
   const [toast, setToast] = useState(null);  // {kind:'success'|'error'|'info', title?, message}
   const [editingUser, setEditingUser] = useState(null);
@@ -3288,11 +3354,18 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
     setRejectLogs(data || []);
     if (showSpinner) setLogLoading(false);
   };
+  const loadActionLog = async (showSpinner = true) => {
+    if (showSpinner) setActionLogLoading(true);
+    const data = await window.loadUserActionLog();
+    setActionLogs(data || []);
+    if (showSpinner) setActionLogLoading(false);
+  };
   // โหลดทันทีตั้งแต่เปิดหน้า (เพื่อให้ badge แสดงเลขถูก) — ไม่แสดง spinner เพราะ user ยังไม่เห็นแท็บนั้น
-  useEffect(() => { loadRejectLog(false); }, []);
+  useEffect(() => { loadRejectLog(false); loadActionLog(false); }, []);
   // รีเฟรชอีกครั้งเมื่อ user สลับมาที่แท็บนี้
   useEffect(() => {
     if (filter === 'reject-history') loadRejectLog(true);
+    if (filter === 'action-history') loadActionLog(true);
   }, [filter]);
 
   const handleApprove = async (userId) => {
@@ -3336,27 +3409,38 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
     else load();
   };
 
-  const handleRestoreUser = async (p) => {
+  // กดปุ่มกู้คืน → เปิด popup ยืนยัน + กรอกเหตุผล (ไม่ทำทันที)
+  const handleRestoreUser = (p) => {
+    setRestoreUserTarget(p);
+    setRestoreUserReason('');
+    setRestoreUserError('');
+  };
+
+  // กดยืนยันใน popup → กู้คืนจริง
+  const doRestoreUser = async () => {
+    if (!restoreUserTarget) return;
+    if (!restoreUserReason.trim()) { setRestoreUserError('กรุณาระบุเหตุผลในการกู้คืน'); return; }
     setBusy(true);
     const res = await fetch('/api/admin/restore-user', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: p.id }),
+      body: JSON.stringify({ userId: restoreUserTarget.id, reason: restoreUserReason.trim() }),
     });
     setBusy(false);
-    if (!res.ok) { const e = await res.json(); setToast({ kind:'error', title:'เกิดข้อผิดพลาด', message: e.error }); }
-    else load();
+    if (!res.ok) { const e = await res.json(); setRestoreUserError(e.error || 'กู้คืนไม่สำเร็จ'); }
+    else { setRestoreUserTarget(null); setRestoreUserReason(''); setRestoreUserError(''); load(); }
   };
 
   const doDeactivateUser = async () => {
     if (!deactivateTarget) return;
+    if (!deactivateReason.trim()) { setDeactivateError('กรุณาระบุเหตุผลในการปิดบัญชี'); return; }
     setBusy(true);
     const res = await fetch('/api/admin/deactivate-user', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: deactivateTarget.id }),
+      body: JSON.stringify({ userId: deactivateTarget.id, reason: deactivateReason.trim() }),
     });
     setBusy(false);
-    if (res.ok) { setDeactivateTarget(null); load(); }
-    else { const e = await res.json(); setToast({ kind:'error', title:'เกิดข้อผิดพลาด', message: e.error }); }
+    if (res.ok) { setDeactivateTarget(null); setDeactivateReason(''); setDeactivateError(''); load(); }
+    else { const e = await res.json(); setDeactivateError(e.error || 'ปิดบัญชีไม่สำเร็จ'); }
   };
 
   const openEdit = (p) => {
@@ -3506,13 +3590,14 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
 
       {/* Filter cards — compact, hover-state, ข้อความตรงกลาง
            Roadmap: ในอนาคตเพิ่ม view mode (list/grid/timeline) ดูที่ pending master ข้อ 30 */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
         {[
           { key:'pending',  label:'รออนุมัติ',  count:counts.pending,  color:'#f59e0b', bg:'#fef3c7', hover:'#fde68a', icon:'fa-clock' },
           { key:'approved', label:'อนุมัติแล้ว', count:counts.approved, color:'#0d9488', bg:'#ccfbf1', hover:'#99f6e4', icon:'fa-check-circle' },
           { key:'rejected', label:'ปฏิเสธ',     count:counts.rejected, color:'#ef4444', bg:'#fee2e2', hover:'#fecaca', icon:'fa-circle-xmark' },
           { key:'all',      label:'ทั้งหมด',     count:profiles.length, color:'#0f766e', bg:'#f0fdfa', hover:'#ccfbf1', icon:'fa-layer-group' },
           { key:'reject-history', label:'ประวัติการปฏิเสธ', count:rejectLogs.length, color:'#7c3aed', bg:'#ede9fe', hover:'#ddd6fe', icon:'fa-clock-rotate-left' },
+          { key:'action-history', label:'ประวัติเปิด-ปิดบัญชี', count:actionLogs.length, color:'#4f46e5', bg:'#e0e7ff', hover:'#c7d2fe', icon:'fa-user-clock' },
         ].map(c => {
           const active = filter === c.key;
           return (
@@ -3539,7 +3624,7 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
       </div>
 
       {/* Search + view mode toggle */}
-      {filter !== 'reject-history' && (
+      {filter !== 'reject-history' && filter !== 'action-history' && (
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[220px]">
           <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
@@ -3563,8 +3648,10 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
       </div>
       )}
 
-      {/* Reject History Tab — ตารางผสม กดแถวเพื่อขยายดูรายละเอียด */}
-      {filter === 'reject-history' ? (
+      {/* ประวัติเปิด-ปิดบัญชี — รายการเรียงเวลา */}
+      {filter === 'action-history' ? (
+        <ActionHistoryTable logs={actionLogs} loading={actionLogLoading} />
+      ) : filter === 'reject-history' ? (
         <RejectHistoryTable
           logs={rejectLogs}
           loading={logLoading}
@@ -3645,7 +3732,7 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
                     {p.status === 'rejected' && (() => {
                       const ws = p.rejection_week_start ? new Date(p.rejection_week_start) : null;
                       const isBlocked = ws && (new Date() - ws) < 7*24*60*60*1000 && (p.rejection_week_count||0) >= 3;
-                      const isDeactivated = p.rejected_reason === 'ปิดบัญชีโดย Admin';
+                      const isDeactivated = !!p.deactivated_at;
                       return (
                         <>
                           {isDeactivated && (
@@ -3814,18 +3901,54 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
             <h3 className="text-lg font-bold text-orange-600 mb-2">
               <i className="fa-solid fa-user-slash mr-2"></i>ปิดบัญชี "{deactivateTarget.first_name} {deactivateTarget.last_name}"
             </h3>
-            <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 mb-5 text-xs text-orange-900">
+            <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 mb-4 text-xs text-orange-900">
               <p className="font-bold mb-1"><i className="fa-solid fa-circle-info mr-1"></i>รายละเอียด</p>
               <p>• สถานะจะเปลี่ยนเป็น "ปฏิเสธ" — user เข้าระบบไม่ได้ทันที</p>
-              <p>• กู้คืนได้ โดยกดอนุมัติใหม่ภายหลัง</p>
+              <p>• กู้คืนได้ โดยกดปุ่ม "กู้คืนบัญชี" ภายหลัง</p>
               <p>• ข้อมูลผู้ป่วยที่เพิ่มไว้ยังคงอยู่ในระบบ</p>
             </div>
-            <div className="flex gap-2">
+            <label className="block text-xs font-bold text-gray-700 mb-1">เหตุผลในการปิดบัญชี <span className="text-red-500">*</span></label>
+            <textarea value={deactivateReason} onChange={e=>{ setDeactivateReason(e.target.value); setDeactivateError(''); }}
+              rows={3} placeholder="เช่น ลาออก / ย้ายหน่วยงาน / ขอปิดบัญชีชั่วคราว"
+              className="w-full p-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-400 resize-none"/>
+            {deactivateError && <p className="text-xs text-red-600 mt-1.5"><i className="fa-solid fa-circle-exclamation mr-1"></i>{deactivateError}</p>}
+            <div className="flex gap-2 mt-5">
               <button type="button" onClick={doDeactivateUser} disabled={busy}
                 className="flex-1 px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white rounded-xl text-sm font-bold">
                 {busy ? <><i className="fa-solid fa-spinner fa-spin mr-1"></i>กำลังดำเนินการ...</> : 'ยืนยัน ปิดบัญชี'}
               </button>
-              <button type="button" onClick={()=>setDeactivateTarget(null)} disabled={busy}
+              <button type="button" onClick={()=>{ setDeactivateTarget(null); setDeactivateReason(''); setDeactivateError(''); }} disabled={busy}
+                className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold">
+                ยกเลิก
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Dialog กู้คืนบัญชีผู้ใช้ — ยืนยัน + ใส่เหตุผล ── */}
+      {restoreUserTarget && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <h3 className="text-lg font-bold text-teal-700 mb-2">
+              <i className="fa-solid fa-rotate-left mr-2"></i>กู้คืนบัญชี "{restoreUserTarget.first_name} {restoreUserTarget.last_name}"
+            </h3>
+            <div className="bg-teal-50 border border-teal-200 rounded-xl p-3 mb-4 text-xs text-teal-900">
+              <p className="font-bold mb-1"><i className="fa-solid fa-circle-info mr-1"></i>รายละเอียด</p>
+              <p>• สถานะจะกลับเป็น "อนุมัติ" — user เข้าระบบได้ทันที</p>
+              <p>• ระบบจะส่งอีเมลแจ้งผู้ใช้ว่าบัญชีถูกกู้คืนแล้ว</p>
+            </div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">เหตุผลในการกู้คืน <span className="text-red-500">*</span></label>
+            <textarea value={restoreUserReason} onChange={e=>{ setRestoreUserReason(e.target.value); setRestoreUserError(''); }}
+              rows={3} placeholder="เช่น กลับเข้าทำงาน / ปิดบัญชีผิดคน / ผู้ใช้ขอกลับเข้าระบบ"
+              className="w-full p-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-teal-400 resize-none"/>
+            {restoreUserError && <p className="text-xs text-red-600 mt-1.5"><i className="fa-solid fa-circle-exclamation mr-1"></i>{restoreUserError}</p>}
+            <div className="flex gap-2 mt-5">
+              <button type="button" onClick={doRestoreUser} disabled={busy}
+                className="flex-1 px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:bg-gray-300 text-white rounded-xl text-sm font-bold">
+                {busy ? <><i className="fa-solid fa-spinner fa-spin mr-1"></i>กำลังดำเนินการ...</> : 'ยืนยัน กู้คืนบัญชี'}
+              </button>
+              <button type="button" onClick={()=>{ setRestoreUserTarget(null); setRestoreUserReason(''); setRestoreUserError(''); }} disabled={busy}
                 className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold">
                 ยกเลิก
               </button>

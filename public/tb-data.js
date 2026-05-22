@@ -989,3 +989,28 @@ window.loadUserRejectLog = async () => {
     rejecter: byId[l.rejected_by] || null,
   }));
 };
+
+// โหลดประวัติการเปิด-ปิดบัญชี (tb_user_action_log) — admin เท่านั้น (RLS กั้นไว้)
+window.loadUserActionLog = async () => {
+  const { data: logs, error } = await window._sb
+    .from('tb_user_action_log')
+    .select('id, user_id, action, reason, performed_by, performed_at')
+    .order('performed_at', { ascending: false });
+  if (error || !logs) return [];
+
+  // ดึงชื่อ user (คนถูกกระทำ) + performer (admin ที่กด) — FK ชี้ auth.users จึงต้องดึง profiles แยก
+  const ids = Array.from(new Set(logs.flatMap(l => [l.user_id, l.performed_by]).filter(Boolean)));
+  if (!ids.length) return logs;
+
+  const { data: profs } = await window._sb
+    .from('profiles')
+    .select('id, first_name, last_name, username, email, role')
+    .in('id', ids);
+  const byId = Object.fromEntries((profs || []).map(p => [p.id, p]));
+
+  return logs.map(l => ({
+    ...l,
+    user: byId[l.user_id] || null,        // คนที่ถูกปิด/กู้คืน
+    performer: byId[l.performed_by] || null,  // admin ที่กดทำ
+  }));
+};

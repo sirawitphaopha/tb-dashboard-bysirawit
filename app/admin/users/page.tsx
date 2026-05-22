@@ -104,7 +104,7 @@ export default function AdminUsersPage() {
       body: JSON.stringify({ userId }),
     })
     setBusy(false)
-    if (res.ok) { alert('อนุมัติแล้ว ส่งเมลแจ้ง user เรียบร้อยค่ะ'); loadProfiles() }
+    if (res.ok) { alert('อนุมัติแล้ว ส่งเมลแจ้ง user เรียบร้อย'); loadProfiles() }
     else { const e = await res.json(); alert('error: ' + e.error) }
   }
 
@@ -118,7 +118,7 @@ export default function AdminUsersPage() {
       body: JSON.stringify({ userId: rejectingId, reason: rejectReason }),
     })
     setBusy(false)
-    if (res.ok) { alert('ปฏิเสธแล้ว ส่งเมลแจ้ง user เรียบร้อยค่ะ'); closeReject(); loadProfiles() }
+    if (res.ok) { alert('ปฏิเสธแล้ว ส่งเมลแจ้ง user เรียบร้อย'); closeReject(); loadProfiles() }
     else { const e = await res.json(); alert('error: ' + e.error) }
   }
 
