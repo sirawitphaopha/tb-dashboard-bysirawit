@@ -994,23 +994,39 @@ window.loadUserRejectLog = async () => {
 window.loadUserActionLog = async () => {
   const { data: logs, error } = await window._sb
     .from('tb_user_action_log')
-    .select('id, user_id, action, reason, performed_by, performed_at')
+    .select('id, user_id, action, reason, performed_by, performed_at, first_name_at_action, last_name_at_action, email_at_action, profile_snapshot, performer_name_at_action')
     .order('performed_at', { ascending: false });
   if (error || !logs) return [];
 
-  // ดึงชื่อ user (คนถูกกระทำ) + performer (admin ที่กด) — FK ชี้ auth.users จึงต้องดึง profiles แยก
+  // ดึงชื่อปัจจุบันจาก profiles (FK ชี้ auth.users จึงต้องดึงแยก)
   const ids = Array.from(new Set(logs.flatMap(l => [l.user_id, l.performed_by]).filter(Boolean)));
-  if (!ids.length) return logs;
-
-  const { data: profs } = await window._sb
-    .from('profiles')
-    .select('id, first_name, last_name, username, email, role')
-    .in('id', ids);
+  const { data: profs } = ids.length
+    ? await window._sb.from('profiles').select('id, first_name, last_name, username, email, role, profession, license_number, hospital_name, hospital_type, department, department_other').in('id', ids)
+    : { data: [] };
   const byId = Object.fromEntries((profs || []).map(p => [p.id, p]));
 
-  return logs.map(l => ({
-    ...l,
-    user: byId[l.user_id] || null,        // คนที่ถูกปิด/กู้คืน
-    performer: byId[l.performed_by] || null,  // admin ที่กดทำ
-  }));
+  return logs.map(l => {
+    const snap = l.profile_snapshot || {};       // สำเนาโปรไฟล์ทั้งใบ ณ ตอนนั้น
+    const cur = byId[l.user_id] || {};           // profile ปัจจุบัน (ถ้ายังอยู่)
+    return {
+      ...l,
+      // ลำดับ: สำเนาทั้งใบ → field แยกเก่า → profile ปัจจุบัน — กันข้อมูลหายตอนลบ user
+      user: {
+        first_name:       snap.first_name       || l.first_name_at_action || cur.first_name || '',
+        last_name:        snap.last_name        || l.last_name_at_action  || cur.last_name  || '',
+        email:            snap.email            || l.email_at_action      || cur.email      || '',
+        username:         snap.username         || cur.username         || '',
+        profession:       snap.profession       || cur.profession       || '',
+        license_number:   snap.license_number   || cur.license_number   || '',
+        hospital_name:    snap.hospital_name    || cur.hospital_name    || '',
+        hospital_type:    snap.hospital_type    || cur.hospital_type    || '',
+        department:       snap.department       || cur.department       || '',
+        department_other: snap.department_other || cur.department_other || '',
+        isDeleted:        !l.user_id,           // user_id ถูก set null = บัญชีถูกลบถาวรแล้ว
+      },
+      performer: byId[l.performed_by]
+        ? { first_name: byId[l.performed_by].first_name, last_name: byId[l.performed_by].last_name }
+        : (l.performer_name_at_action ? { first_name: l.performer_name_at_action, last_name: '' } : null),
+    };
+  });
 };

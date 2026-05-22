@@ -3085,10 +3085,11 @@ function ActionHistoryTable({ logs, loading }) {
   return (
     <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden divide-y divide-gray-100">
       {logs.map(l => {
-        const isDeact = l.action === 'deactivate';
-        const cfg = isDeact
+        const cfg = l.action === 'deactivate'
           ? { icon:'fa-user-slash', color:'#c2410c', bg:'#fff7ed', border:'#fed7aa', label:'ปิดบัญชี' }
-          : { icon:'fa-rotate-left', color:'#0f766e', bg:'#f0fdfa', border:'#99f6e4', label:'กู้คืนบัญชี' };
+          : l.action === 'restore'
+          ? { icon:'fa-rotate-left', color:'#0f766e', bg:'#f0fdfa', border:'#99f6e4', label:'กู้คืนบัญชี' }
+          : { icon:'fa-fire', color:'#dc2626', bg:'#fee2e2', border:'#fecaca', label:'ลบบัญชีถาวร' };
         return (
           <div key={l.id} className="px-4 py-3 flex items-start gap-3 hover:bg-gray-50/60 transition-colors">
             <div className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center" style={{ background:cfg.bg, border:'1px solid '+cfg.border }}>
@@ -3098,11 +3099,21 @@ function ActionHistoryTable({ logs, loading }) {
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background:cfg.bg, color:cfg.color }}>{cfg.label}</span>
                 <span className="font-bold text-gray-800 text-sm truncate">{nameOf(l.user)}</span>
+                {l.user?.username && <span className="text-xs text-indigo-500 font-mono flex-shrink-0">@{l.user.username}</span>}
+                {l.user?.isDeleted && l.action !== 'delete' && <span className="text-[10px] bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded-full flex-shrink-0">ลบบัญชีแล้ว</span>}
                 {l.user?.email && <span className="text-xs text-gray-400 truncate">{l.user.email}</span>}
               </div>
+              {(l.user?.profession || l.user?.license_number || l.user?.hospital_name) && (
+                <p className="text-xs text-gray-500 mt-1">
+                  {l.user.profession && <span className="text-gray-600 font-medium">{PROFESSION_LABELS_TH[l.user.profession] || l.user.profession}</span>}
+                  {l.user.license_number && <span> · เลขใบ {l.user.license_number}</span>}
+                  {l.user.hospital_name && <span> · {l.user.hospital_name}</span>}
+                  {(l.user.department === 'อื่นๆ' ? l.user.department_other : l.user.department) && <span> · {l.user.department === 'อื่นๆ' ? l.user.department_other : l.user.department}</span>}
+                </p>
+              )}
               <p className="text-sm text-gray-700 mt-1"><span className="text-gray-400">เหตุผล:</span> {l.reason || '—'}</p>
               <p className="text-xs text-gray-500 mt-0.5">
-                <i className="fa-solid fa-user-shield mr-1 text-gray-400"></i>โดย {nameOf(l.performer)}
+                <i className="fa-solid fa-user-shield mr-1 text-gray-400"></i>โดย {l.performer ? nameOf(l.performer) + ' (แอดมิน)' : '—'}
                 <span className="mx-1.5">·</span>
                 <i className="fa-regular fa-clock mr-1 text-gray-400"></i>{fmt(l.performed_at)}
               </p>
@@ -3265,6 +3276,7 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
   const [viewMode, setViewMode] = useState('list');  // 'list' = แถวกะทัดรัด, 'card' = การ์ดละเอียด
   const [hardDelTarget, setHardDelTarget] = useState(null);
   const [confirmText, setConfirmText] = useState('');
+  const [hardDelReason, setHardDelReason] = useState('');
   const [deactivateTarget, setDeactivateTarget] = useState(null);
   const [deactivateReason, setDeactivateReason] = useState('');
   const [deactivateError, setDeactivateError] = useState('');
@@ -3384,14 +3396,14 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
     setBusy(true);
     const res = await fetch('/api/admin/hard-delete-user', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: hardDelTarget.id }),
+      body: JSON.stringify({ userId: hardDelTarget.id, reason: hardDelReason.trim() }),
     });
     setBusy(false);
     if (res.ok) {
       const name = `${hardDelTarget.first_name||''} ${hardDelTarget.last_name||''}`.trim();
       setToast({ kind:'success', title:'ลบบัญชีถาวรเรียบร้อย', message:`${name}\nอีเมลนี้สามารถใช้สมัครใหม่ได้แล้ว` });
-      setHardDelTarget(null); setConfirmText('');
-      load();
+      setHardDelTarget(null); setConfirmText(''); setHardDelReason('');
+      load(); loadActionLog(false);
     } else {
       const e = await res.json();
       setToast({ kind:'error', title:'เกิดข้อผิดพลาด', message: e.error });
@@ -3427,7 +3439,7 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
     });
     setBusy(false);
     if (!res.ok) { const e = await res.json(); setRestoreUserError(e.error || 'กู้คืนไม่สำเร็จ'); }
-    else { setRestoreUserTarget(null); setRestoreUserReason(''); setRestoreUserError(''); load(); }
+    else { setRestoreUserTarget(null); setRestoreUserReason(''); setRestoreUserError(''); load(); loadActionLog(false); }
   };
 
   const doDeactivateUser = async () => {
@@ -3439,7 +3451,7 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
       body: JSON.stringify({ userId: deactivateTarget.id, reason: deactivateReason.trim() }),
     });
     setBusy(false);
-    if (res.ok) { setDeactivateTarget(null); setDeactivateReason(''); setDeactivateError(''); load(); }
+    if (res.ok) { setDeactivateTarget(null); setDeactivateReason(''); setDeactivateError(''); load(); loadActionLog(false); }
     else { const e = await res.json(); setDeactivateError(e.error || 'ปิดบัญชีไม่สำเร็จ'); }
   };
 
@@ -3597,7 +3609,8 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
           { key:'rejected', label:'ปฏิเสธ',     count:counts.rejected, color:'#ef4444', bg:'#fee2e2', hover:'#fecaca', icon:'fa-circle-xmark' },
           { key:'all',      label:'ทั้งหมด',     count:profiles.length, color:'#0f766e', bg:'#f0fdfa', hover:'#ccfbf1', icon:'fa-layer-group' },
           { key:'reject-history', label:'ประวัติการปฏิเสธ', count:rejectLogs.length, color:'#7c3aed', bg:'#ede9fe', hover:'#ddd6fe', icon:'fa-clock-rotate-left' },
-          { key:'action-history', label:'ประวัติเปิด-ปิดบัญชี', count:actionLogs.length, color:'#4f46e5', bg:'#e0e7ff', hover:'#c7d2fe', icon:'fa-user-clock' },
+          { key:'action-history', label:'ประวัติเปิด-ปิดบัญชี', count:actionLogs.filter(l=>l.action!=='delete').length, color:'#4f46e5', bg:'#e0e7ff', hover:'#c7d2fe', icon:'fa-user-clock' },
+          { key:'delete-history', label:'ประวัติการลบบัญชี', count:actionLogs.filter(l=>l.action==='delete').length, color:'#dc2626', bg:'#fee2e2', hover:'#fecaca', icon:'fa-user-xmark' },
         ].map(c => {
           const active = filter === c.key;
           return (
@@ -3624,7 +3637,7 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
       </div>
 
       {/* Search + view mode toggle */}
-      {filter !== 'reject-history' && filter !== 'action-history' && (
+      {filter !== 'reject-history' && filter !== 'action-history' && filter !== 'delete-history' && (
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[220px]">
           <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
@@ -3650,7 +3663,9 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
 
       {/* ประวัติเปิด-ปิดบัญชี — รายการเรียงเวลา */}
       {filter === 'action-history' ? (
-        <ActionHistoryTable logs={actionLogs} loading={actionLogLoading} />
+        <ActionHistoryTable logs={actionLogs.filter(l=>l.action!=='delete')} loading={actionLogLoading} />
+      ) : filter === 'delete-history' ? (
+        <ActionHistoryTable logs={actionLogs.filter(l=>l.action==='delete')} loading={actionLogLoading} />
       ) : filter === 'reject-history' ? (
         <RejectHistoryTable
           logs={rejectLogs}
@@ -3879,13 +3894,17 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
             <input type="text" value={confirmText} onChange={e=>setConfirmText(e.target.value)}
               placeholder="พิมพ์ username ที่นี่"
               className="w-full p-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-red-400 mb-4"/>
+            <label className="block text-xs font-bold text-gray-700 mb-1">เหตุผลในการลบบัญชี <span className="text-red-500">*</span></label>
+            <textarea value={hardDelReason} onChange={e=>setHardDelReason(e.target.value)}
+              rows={2} placeholder="เช่น บัญชีซ้ำ / สมัครผิด / ผู้ใช้ขอลบ"
+              className="w-full p-2.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-red-400 resize-none mb-4"/>
             <div className="flex gap-2">
               <button type="button" onClick={handleHardDeleteUser}
-                disabled={confirmText !== hardDelTarget.username || busy}
+                disabled={confirmText !== hardDelTarget.username || !hardDelReason.trim() || busy}
                 className="flex-1 px-4 py-2 bg-red-500 hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl text-sm font-bold">
                 {busy ? <><i className="fa-solid fa-spinner fa-spin mr-1"></i>กำลังลบ...</> : 'ลบถาวร'}
               </button>
-              <button type="button" onClick={()=>{ setHardDelTarget(null); setConfirmText(''); }} disabled={busy}
+              <button type="button" onClick={()=>{ setHardDelTarget(null); setConfirmText(''); setHardDelReason(''); }} disabled={busy}
                 className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold">
                 ยกเลิก
               </button>

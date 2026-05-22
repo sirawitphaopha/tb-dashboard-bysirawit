@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     const admin = createAdminClient()
     const { data: caller } = await admin
       .from('profiles')
-      .select('role')
+      .select('role, first_name, last_name')
       .eq('id', user.id)
       .single()
     if (caller?.role !== 'admin') {
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     // ปิดบัญชีได้เฉพาะ approved เท่านั้น — กันแก้ admin โดยไม่ตั้งใจ
     const { data: target } = await admin
       .from('profiles')
-      .select('status, role, email, first_name')
+      .select('*')
       .eq('id', userId)
       .single()
     if (!target) return NextResponse.json({ error: 'user not found' }, { status: 404 })
@@ -63,12 +63,17 @@ export async function POST(req: NextRequest) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-    // จดลงสมุดบันทึก: ใครปิดบัญชีใคร เมื่อไหร่ เพราะอะไร
+    // จดลงสมุดบันทึก: ใครปิดบัญชีใคร เมื่อไหร่ เพราะอะไร (+ snapshot ชื่อ กันหายตอนลบ user)
     await admin.from('tb_user_action_log').insert({
       user_id: userId,
       action: 'deactivate',
       reason: trimmedReason,
       performed_by: user.id,
+      first_name_at_action: target.first_name,
+      last_name_at_action: target.last_name,
+      email_at_action: target.email,
+      profile_snapshot: target,
+      performer_name_at_action: `${caller.first_name || ''} ${caller.last_name || ''}`.trim() || null,
     })
 
     // ส่งเมลแจ้ง user
