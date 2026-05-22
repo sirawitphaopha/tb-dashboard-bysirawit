@@ -50,7 +50,8 @@ function wrap(title: string, body: string): string {
 // 1) Admin Notify — มีคนสมัครใหม่ ต้องอนุมัติ
 // ═════════════════════════════════════════════════════════
 export function adminNotifyEmail(p: ProfileSummary, baseUrl: string) {
-  const approveUrl = `${baseUrl}/admin/users`
+  // ชี้ไปหน้าแรก (login → dashboard) — admin กดเมนู "จัดการผู้ใช้" ที่มี badge แดงนำทาง
+  const approveUrl = baseUrl
   const subject = `🔔 มีผู้ใช้ใหม่รออนุมัติ: ${p.firstName} ${p.lastName}`
   const body = `
     <h2 style="margin:0 0 16px;color:${BRAND_TEAL_DARK};font-size:18px;">คำขอสมัครสมาชิกใหม่</h2>
