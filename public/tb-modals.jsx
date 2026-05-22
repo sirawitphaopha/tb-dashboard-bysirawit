@@ -3127,6 +3127,91 @@ function ActionHistoryTable({ logs, loading }) {
   );
 }
 
+// ประวัติปิด-กู้คืน แบบ 2 คอลัมน์ จับคู่ ปิด↔กู้คืน ต่อรอบ (ซ้าย=ปิด, ขวา=กู้คืน)
+function ActionPairTable({ logs, loading }) {
+  const fmt = (iso) => {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return d.toLocaleDateString('th-TH', { year:'numeric', month:'2-digit', day:'2-digit' }) + ' ' +
+           d.toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit' });
+  };
+  const nameOf = (p) => p ? `${p.first_name||''} ${p.last_name||''}`.trim() || p.username || p.email || '(ไม่ทราบชื่อ)' : '—';
+
+  // จับคู่ ปิด→กู้คืน ต่อ user (เรียงเก่า→ใหม่ แล้วจับ deactivate กับ restore ที่ตามมา)
+  const pairs = (() => {
+    const byUser = {};
+    for (const l of logs) {
+      const key = l.user_id || (l.user && l.user.email) || l.id;
+      (byUser[key] = byUser[key] || []).push(l);
+    }
+    const result = [];
+    Object.values(byUser).forEach(evs => {
+      const sorted = evs.slice().sort((a,b)=> new Date(a.performed_at) - new Date(b.performed_at));
+      let pend = null;
+      sorted.forEach(e => {
+        if (e.action === 'deactivate') { if (pend) result.push({ deactivate: pend, restore: null }); pend = e; }
+        else if (e.action === 'restore') { result.push({ deactivate: pend, restore: e }); pend = null; }
+      });
+      if (pend) result.push({ deactivate: pend, restore: null });
+    });
+    // เรียงรอบล่าสุดอยู่บน
+    result.sort((a,b)=> new Date((b.restore||b.deactivate).performed_at) - new Date((a.restore||a.deactivate).performed_at));
+    return result;
+  })();
+
+  if (loading) {
+    return (
+      <div className="text-center py-16 text-gray-400">
+        <i className="fa-solid fa-spinner fa-spin text-3xl mb-2 block text-indigo-500"></i>
+        <p className="text-sm">กำลังโหลดประวัติ...</p>
+      </div>
+    );
+  }
+  if (!pairs.length) {
+    return (
+      <div className="bg-white rounded-2xl p-16 text-center border border-gray-100">
+        <i className="fa-solid fa-user-clock text-5xl text-gray-300 mb-3 block"></i>
+        <p className="text-sm text-gray-400">ยังไม่มีประวัติการปิด-กู้คืนบัญชี</p>
+      </div>
+    );
+  }
+
+  const cell = (e) => e ? (
+    <div className="px-4 py-3">
+      <p className="font-bold text-gray-800 text-sm truncate">
+        {nameOf(e.user)}
+        {e.user?.username && <span className="text-xs text-indigo-500 font-mono ml-1">@{e.user.username}</span>}
+      </p>
+      <p className="text-xs text-gray-600 mt-0.5"><span className="text-gray-400">เหตุผล:</span> {e.reason || '—'}</p>
+      <p className="text-xs text-gray-400 mt-0.5">
+        <i className="fa-solid fa-user-shield mr-1"></i>{e.performer ? nameOf(e.performer) + ' (แอดมิน)' : '—'}
+        <span className="mx-1">·</span><i className="fa-regular fa-clock mr-1"></i>{fmt(e.performed_at)}
+      </p>
+    </div>
+  ) : null;
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+      <div className="grid grid-cols-2 gap-px bg-gray-100">
+        <div className="bg-orange-50 px-4 py-2 text-xs font-bold text-orange-700"><i className="fa-solid fa-user-slash mr-1"></i>ปิดบัญชี</div>
+        <div className="bg-teal-50 px-4 py-2 text-xs font-bold text-teal-700"><i className="fa-solid fa-rotate-left mr-1"></i>กู้คืน</div>
+      </div>
+      <div className="divide-y divide-gray-100">
+        {pairs.map((pr, i) => (
+          <div key={i} className="grid grid-cols-2 gap-px bg-gray-100">
+            <div className="bg-white">{cell(pr.deactivate) || <div className="px-4 py-3 text-xs text-gray-300 italic">—</div>}</div>
+            <div className="bg-white">{pr.restore ? cell(pr.restore) : (
+              pr.deactivate?.user?.isDeleted
+                ? <div className="px-4 py-3 flex items-center"><span className="text-[11px] bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full"><i className="fa-solid fa-fire mr-1"></i>ลบบัญชีแล้ว</span></div>
+                : <div className="px-4 py-3 flex items-center text-xs text-gray-300 italic">— ยังไม่กู้คืน</div>
+            )}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function RejectHistoryTable({ logs, loading, expandedId, onToggle }) {
   const fmt = (iso) => {
     if (!iso) return { date:'—', time:'—' };
@@ -3381,7 +3466,8 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
   useEffect(() => { loadRejectLog(false); loadActionLog(false); }, []);
   // รีเฟรชอีกครั้งเมื่อ user สลับมาที่แท็บนี้
   useEffect(() => {
-    if (filter === 'history') { loadRejectLog(true); loadActionLog(true); }
+    // โหลดเงียบๆ (false) — ข้อมูลโหลดไว้ตั้งแต่เปิดหน้าแล้ว แสดงทันที ไม่ขึ้น spinner
+    if (filter === 'history') { loadRejectLog(false); loadActionLog(false); }
   }, [filter]);
 
   // กดปุ่มอนุมัติ → เปิด popup ยืนยัน (ไม่ทำทันที)
@@ -3606,7 +3692,7 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
   const matchHist = (l) => {
     if (!hsLower) return true;
     const u = l.user || {};
-    return `${u.first_name||''} ${u.last_name||''} ${u.username||''} ${u.email||''}`.toLowerCase().includes(hsLower);
+    return `${u.first_name||''} ${u.last_name||''} ${u.username||''} ${u.email||''} ${u.hospital_name||''} ${u.license_number||''}`.toLowerCase().includes(hsLower);
   };
 
   return (
@@ -3619,7 +3705,7 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
           </div>
           <div>
             <h2 className="font-bold text-lg">จัดการผู้ใช้</h2>
-            <p className="text-xs text-teal-100">อนุมัติหรือปฏิเสธคำขอสมัครสมาชิก · มองเห็นเฉพาะ Admin</p>
+            <p className="text-xs text-teal-100">ระบบจัดการสมาชิกและบัญชีผู้ใช้ · เฉพาะ Admin</p>
           </div>
         </div>
       </div>
@@ -3717,7 +3803,7 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
             <div className="relative flex-1 min-w-[200px]">
               <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
               <input type="text" value={historySearch} onChange={e=>setHistorySearch(e.target.value)}
-                placeholder="ค้นหาในประวัติ (ชื่อ / username / email)"
+                placeholder="ค้นหาชื่อ / username / email / รพ. / เลขใบประกอบ"
                 className="w-full pl-9 pr-3 py-1.5 border border-gray-200 rounded-lg text-sm outline-none focus:border-purple-400 bg-white"/>
             </div>
           </div>
@@ -3726,7 +3812,7 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
           ) : historyTab === 'approve' ? (
             <ActionHistoryTable logs={actionLogs.filter(l=>l.action==='approve' && matchHist(l))} loading={actionLogLoading} />
           ) : historyTab === 'updown' ? (
-            <ActionHistoryTable logs={actionLogs.filter(l=>(l.action==='deactivate'||l.action==='restore') && matchHist(l))} loading={actionLogLoading} />
+            <ActionPairTable logs={actionLogs.filter(l=>(l.action==='deactivate'||l.action==='restore') && matchHist(l))} loading={actionLogLoading} />
           ) : (
             <ActionHistoryTable logs={actionLogs.filter(l=>l.action==='delete' && matchHist(l))} loading={actionLogLoading} />
           )}
