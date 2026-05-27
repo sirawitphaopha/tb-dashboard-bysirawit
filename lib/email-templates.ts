@@ -578,3 +578,42 @@ export function userEditRequestRejectedEmail(
   `
   return { subject, html: wrap(subject, body) }
 }
+
+// ═════════════════════════════════════════════════════════
+// แจ้งเตือนเมื่อรหัสผ่านถูกเปลี่ยน — security alert
+// ═════════════════════════════════════════════════════════
+export function passwordChangedEmail(firstName: string, when: string, baseUrl: string) {
+  const subject = '🔐 รหัสผ่านบัญชีของท่านถูกเปลี่ยน'
+  const body = `
+    <h2 style="margin:0 0 16px;color:${BRAND_TEAL_DARK};font-size:18px;">เรียน คุณ${firstName}</h2>
+    <p style="margin:0 0 16px;font-size:14px;color:#4b5563;line-height:1.7;">
+      ระบบขอแจ้งให้ทราบว่า รหัสผ่านบัญชีของท่านได้รับการเปลี่ยนแปลงเรียบร้อยแล้ว
+    </p>
+
+    <div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:10px;padding:16px;margin:20px 0;">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr><td style="padding:5px 0;font-size:12px;color:#0f766e;font-weight:700;width:40%;">เวลาที่เปลี่ยน</td>
+            <td style="padding:5px 0;font-size:14px;color:#134e4a;">${when}</td></tr>
+      </table>
+    </div>
+
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:16px;margin:20px 0;">
+      <p style="margin:0 0 8px;font-size:13px;color:#991b1b;font-weight:700;">⚠️ หากท่านไม่ได้เป็นผู้เปลี่ยนรหัสผ่านนี้</p>
+      <p style="margin:0;font-size:13px;color:#7f1d1d;line-height:1.6;">
+        กรุณารีบเข้าสู่ระบบเพื่อเปลี่ยนรหัสผ่านอีกครั้งทันที และติดต่อผู้ดูแลระบบเพื่อตรวจสอบความปลอดภัยของบัญชี
+      </p>
+    </div>
+
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr><td align="center" style="padding:8px 0 20px;">
+        <a href="${baseUrl}/login" style="display:inline-block;padding:14px 36px;background:${BRAND_TEAL};color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px;">
+          เข้าสู่ระบบ
+        </a>
+      </td></tr>
+    </table>
+
+    <p style="margin:0 0 8px;font-size:13px;color:#6b7280;">หากท่านเป็นผู้เปลี่ยนรหัสผ่านเอง สามารถละเลยอีเมลฉบับนี้ได้</p>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB JOURNEY &amp; CARE</p>
+  `
+  return { subject, html: wrap(subject, body) }
+}
