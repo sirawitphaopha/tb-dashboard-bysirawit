@@ -2,12 +2,10 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase-browser'
 import PasswordEye from '@/components/PasswordEye'
 
 export default function LoginPage() {
   const router = useRouter()
-  const supabase = createClient()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -20,37 +18,27 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
-    // ถ้าไม่มี @ ใน input → ถือว่าเป็น username → lookup email ก่อน
-    let loginEmail = email
-    if (!email.includes('@')) {
-      try {
-        const res = await fetch('/api/login-lookup', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: email }),
-        })
-        const data = await res.json()
-        if (!data.email) {
-          setError('อีเมลหรือรหัสผ่านไม่ถูกต้อง')
-          setLoading(false)
-          return
-        }
-        loginEmail = data.email
-      } catch {
-        setError('เกิดข้อผิดพลาด กรุณาลองใหม่')
+    try {
+      // เรียก API ฝั่ง server (มี rate limit + audit log + ตั้ง cookie ให้)
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier: email, password }),
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        setError(data.error || 'อีเมลหรือรหัสผ่านไม่ถูกต้อง')
         setLoading(false)
         return
       }
-    }
 
-    const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password })
-
-    if (error) {
-      setError('อีเมลหรือรหัสผ่านไม่ถูกต้อง')
-      setLoading(false)
-    } else {
+      // Cookie ถูกตั้งจากฝั่ง server แล้ว — แค่ refresh ให้ middleware/component อ่านใหม่
       router.push('/')
       router.refresh()
+    } catch {
+      setError('เกิดข้อผิดพลาด กรุณาลองใหม่')
+      setLoading(false)
     }
   }
 
@@ -133,7 +121,7 @@ export default function LoginPage() {
         <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #f3f4f6' }}>
           <p style={{ fontSize: '11px', color: '#9ca3af', margin: '0 0 2px 0' }}>พัฒนาโดย เภสัชกร สิรวิชญ์ เผ่าผา</p>
           <p style={{ fontSize: '11px', color: '#9ca3af', margin: '0 0 4px 0' }}>โรงพยาบาลปรางค์กู่</p>
-          <p style={{ fontSize: '11px', color: '#d1d5db', margin: 0 }}>Version 0.7.12.1 · <span style={{ color: '#fbbf24', fontWeight: 600 }}>ยังไม่เผยแพร่</span></p>
+          <p style={{ fontSize: '11px', color: '#d1d5db', margin: 0 }}>Version 0.7.12.2 · <span style={{ color: '#fbbf24', fontWeight: 600 }}>ยังไม่เผยแพร่</span></p>
         </div>
       </div>
     </div>
