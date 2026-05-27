@@ -46,13 +46,30 @@ export async function POST(req: NextRequest) {
     }
 
     const admin = createAdminClient()
+    const ip = req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null
+    const ua = req.headers.get('user-agent') || null
 
-    // ─── 2. Rate limit: นับการเปลี่ยนใน 24 ชม. ที่ผ่านมา ─────
+    // helper: log attempt (สำเร็จ/พลาด)
+    const logAttempt = async (success: boolean, failureReason: string | null) => {
+      await admin.from('tb_password_change_log').insert({
+        user_id: user.id,
+        action: 'change',
+        success,
+        failure_reason: failureReason,
+        ip_address: ip,
+        user_agent: ua,
+      })
+    }
+
+    // ─── 2. Rate limit: นับเฉพาะ "success" ใน 24 ชม. ที่ผ่านมา ───
+    // ไม่นับ failed attempts (ไม่งั้น user ที่พิมพ์ผิดจะโดน lock)
     const windowStart = new Date(Date.now() - WINDOW_HOURS * 3600 * 1000).toISOString()
     const { data: recentLogs, error: countErr } = await admin
       .from('tb_password_change_log')
       .select('changed_at')
       .eq('user_id', user.id)
+      .eq('action', 'change')
+      .eq('success', true)
       .gte('changed_at', windowStart)
       .order('changed_at', { ascending: true })
 
@@ -62,13 +79,13 @@ export async function POST(req: NextRequest) {
     }
 
     if (recentLogs && recentLogs.length >= MAX_CHANGES_PER_DAY) {
-      // เวลาที่สามารถลองใหม่ได้ = เวลาที่เปลี่ยนครั้งแรกใน window + 24 ชม.
       const earliest = new Date(recentLogs[0].changed_at)
       const nextAvailable = new Date(earliest.getTime() + WINDOW_HOURS * 3600 * 1000)
       const nextStr = nextAvailable.toLocaleString('th-TH', {
         timeZone: 'Asia/Bangkok',
         day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
       })
+      await logAttempt(false, 'rate_limited')
       return NextResponse.json(
         { error: `คุณเปลี่ยนรหัสผ่านครบ ${MAX_CHANGES_PER_DAY} ครั้งใน ${WINDOW_HOURS} ชั่วโมงแล้ว กรุณาลองอีกครั้งหลัง ${nextStr} น.` },
         { status: 429 }
@@ -86,6 +103,7 @@ export async function POST(req: NextRequest) {
       password: oldPassword,
     })
     if (verifyErr) {
+      await logAttempt(false, 'wrong_old_password')
       return NextResponse.json({ error: 'รหัสผ่านเดิมไม่ถูกต้อง' }, { status: 400 })
     }
 
@@ -94,17 +112,12 @@ export async function POST(req: NextRequest) {
       password: newPassword,
     })
     if (updateErr) {
+      await logAttempt(false, 'update_failed')
       return NextResponse.json({ error: 'เกิดข้อผิดพลาด: ' + updateErr.message }, { status: 500 })
     }
 
-    // ─── 5. Insert log ─────────────────────────────────────
-    const ip = req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null
-    const ua = req.headers.get('user-agent') || null
-    await admin.from('tb_password_change_log').insert({
-      user_id: user.id,
-      ip_address: ip,
-      user_agent: ua,
-    })
+    // ─── 5. Insert log (success) ───────────────────────────
+    await logAttempt(true, null)
 
     // ─── 6. ส่งเมลแจ้งเตือน (ไม่ throw ถ้า fail) ─────────────
     try {

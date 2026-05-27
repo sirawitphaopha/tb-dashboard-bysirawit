@@ -580,6 +580,51 @@ export function userEditRequestRejectedEmail(
 }
 
 // ═════════════════════════════════════════════════════════
+// ลิงก์รีเซ็ตรหัสผ่าน (ลืมรหัสผ่าน)
+// ═════════════════════════════════════════════════════════
+export function passwordResetEmail(firstName: string, resetLink: string) {
+  const subject = '🔓 รีเซ็ตรหัสผ่าน TB JOURNEY & CARE'
+  const body = `
+    <h2 style="margin:0 0 16px;color:${BRAND_TEAL_DARK};font-size:18px;">เรียน คุณ${firstName}</h2>
+    <p style="margin:0 0 16px;font-size:14px;color:#4b5563;line-height:1.7;">
+      ระบบได้รับคำขอรีเซ็ตรหัสผ่านบัญชีของท่าน กรุณากดปุ่มด้านล่างเพื่อตั้งรหัสผ่านใหม่
+    </p>
+
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr><td align="center" style="padding:8px 0 20px;">
+        <a href="${resetLink}" style="display:inline-block;padding:14px 36px;background:${BRAND_TEAL};color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px;">
+          รีเซ็ตรหัสผ่าน
+        </a>
+      </td></tr>
+    </table>
+
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:14px 16px;margin:20px 0;">
+      <p style="margin:0 0 4px;font-size:13px;color:#92400e;font-weight:700;">⏰ ลิงก์นี้หมดอายุใน 1 ชั่วโมง</p>
+      <p style="margin:0;font-size:12px;color:#78350f;line-height:1.6;">
+        ลิงก์ใช้ได้เพียงครั้งเดียว หากต้องการขอใหม่ กรุณากดลืมรหัสผ่านที่หน้าเข้าสู่ระบบอีกครั้ง
+      </p>
+    </div>
+
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px 16px;margin:20px 0;">
+      <p style="margin:0 0 4px;font-size:13px;color:#991b1b;font-weight:700;">⚠️ หากท่านไม่ได้เป็นผู้ขอรีเซ็ตรหัสผ่าน</p>
+      <p style="margin:0;font-size:12px;color:#7f1d1d;line-height:1.6;">
+        กรุณาละเลยอีเมลฉบับนี้ บัญชีของท่านยังปลอดภัย รหัสผ่านเดิมยังใช้งานได้ตามปกติ
+      </p>
+    </div>
+
+    <p style="margin:16px 0 8px;font-size:12px;color:#6b7280;line-height:1.6;">
+      หากปุ่มด้านบนกดไม่ได้ ให้คัดลอกลิงก์นี้ไปวางในแถบที่อยู่ของเว็บเบราว์เซอร์:
+    </p>
+    <p style="margin:0 0 16px;font-size:11px;color:#0f766e;word-break:break-all;background:#f0fdfa;padding:8px 10px;border-radius:6px;">
+      ${resetLink}
+    </p>
+
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB JOURNEY &amp; CARE</p>
+  `
+  return { subject, html: wrap(subject, body) }
+}
+
+// ═════════════════════════════════════════════════════════
 // แจ้งเตือนเมื่อรหัสผ่านถูกเปลี่ยน — security alert
 // ═════════════════════════════════════════════════════════
 export function passwordChangedEmail(firstName: string, when: string, baseUrl: string) {

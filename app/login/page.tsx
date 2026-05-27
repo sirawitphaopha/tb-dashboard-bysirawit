@@ -94,6 +94,11 @@ export default function LoginPage() {
               />
               <PasswordEye show={showPassword} onClick={() => setShowPassword(v => !v)} />
             </div>
+            <div style={{ textAlign: 'right', marginTop: '6px' }}>
+              <a href="/reset-password" style={{ fontSize: '12px', color: '#0d9488', fontWeight: 600, textDecoration: 'none' }}>
+                ลืมรหัสผ่าน
+              </a>
+            </div>
           </div>
 
           {error && (
@@ -128,7 +133,7 @@ export default function LoginPage() {
         <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #f3f4f6' }}>
           <p style={{ fontSize: '11px', color: '#9ca3af', margin: '0 0 2px 0' }}>พัฒนาโดย เภสัชกร สิรวิชญ์ เผ่าผา</p>
           <p style={{ fontSize: '11px', color: '#9ca3af', margin: '0 0 4px 0' }}>โรงพยาบาลปรางค์กู่</p>
-          <p style={{ fontSize: '11px', color: '#d1d5db', margin: 0 }}>Version 0.7.12.0 · <span style={{ color: '#fbbf24', fontWeight: 600 }}>ยังไม่เผยแพร่</span></p>
+          <p style={{ fontSize: '11px', color: '#d1d5db', margin: 0 }}>Version 0.7.12.1 · <span style={{ color: '#fbbf24', fontWeight: 600 }}>ยังไม่เผยแพร่</span></p>
         </div>
       </div>
     </div>
