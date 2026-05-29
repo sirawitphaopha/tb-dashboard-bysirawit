@@ -22,6 +22,35 @@
       from { opacity: 0; transform: translateY(6px); }
       to   { opacity: 1; transform: translateY(0); }
     }
+    /* ── Modal entrance animations (ลองทีละแบบ A-D) ── */
+    .modal-A { animation: modalFadeScale 0.9s cubic-bezier(0.16,1,0.3,1); }
+    @keyframes modalFadeScale {
+      from { opacity: 0; transform: scale(0.96) translateY(35px); }
+      to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    /* ตอนปิด — ค่อยๆเฟดออก + เลื่อนลง (สมมาตรกับตอนเปิด) */
+    .modal-A-out { animation: modalFadeScaleOut 0.6s cubic-bezier(0.4,0,1,1) forwards; }
+    @keyframes modalFadeScaleOut {
+      from { opacity: 1; transform: scale(1) translateY(0); }
+      to   { opacity: 0; transform: scale(0.96) translateY(35px); }
+    }
+    .modal-overlay-out { animation: ovFadeOut 0.6s ease forwards; }
+    @keyframes ovFadeOut { from { opacity: 1; } to { opacity: 0; } }
+    .modal-B { animation: modalSlideUp 0.34s cubic-bezier(0.34,1.56,0.64,1); }
+    @keyframes modalSlideUp {
+      from { opacity: 0; transform: translateY(40px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .modal-C { animation: modalPop 0.42s cubic-bezier(0.34,1.56,0.64,1); }
+    @keyframes modalPop {
+      from { opacity: 0; transform: scale(0.6); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+    .modal-D { animation: modalFadeOnly 0.3s ease; }
+    @keyframes modalFadeOnly {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
     .notif-modal { animation: notifExpand 0.3s cubic-bezier(0.34,1.56,0.64,1); }
     @keyframes notifExpand {
       from { opacity: 0; transform: scale(0.7) translateY(-20px); }
