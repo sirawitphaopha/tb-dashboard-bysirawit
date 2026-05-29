@@ -4483,24 +4483,26 @@ function ActivityLogTab() {
 
   return (
     <div style={{padding:'16px',maxWidth:'960px',margin:'0 auto'}}>
-      {/* Header */}
-      <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'20px'}}>
-        <div style={{width:'40px',height:'40px',borderRadius:'12px',display:'flex',alignItems:'center',justifyContent:'center',background:'#ccfbf1'}}>
-          <i className="fa-solid fa-wave-square" style={{color:'#0d9488'}}></i>
+      {/* ส่วนหัว + แถบฟิลเตอร์ ตรึงไว้ด้านบน (sticky) ตอนเลื่อนดูรายการ */}
+      <div style={{position:'sticky',top:'-24px',zIndex:20,background:'#f0fdfa',margin:'-16px -16px 8px',padding:'16px 16px 0'}}>
+      {/* Header banner */}
+      <div style={{background:'linear-gradient(135deg,#0f766e 0%,#0d9488 100%)',borderRadius:'16px',padding:'18px 20px',marginBottom:'14px',display:'flex',alignItems:'center',gap:'14px',boxShadow:'0 2px 8px rgba(13,148,136,0.2)'}}>
+        <div style={{width:'48px',height:'48px',borderRadius:'14px',display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(255,255,255,0.2)',flexShrink:0}}>
+          <i className="fa-solid fa-wave-square" style={{color:'#fff',fontSize:'20px'}}></i>
         </div>
-        <div style={{flex:1}}>
-          <h2 style={{fontWeight:700,color:'#1f2937',margin:0,fontSize:'17px'}}>บันทึกกิจกรรม</h2>
-          <p style={{fontSize:'12px',color:'#6b7280',margin:'2px 0 0'}}>ประวัติการเข้า/ออกจากระบบ การเปลี่ยนรหัสผ่าน และกิจกรรมอื่นของผู้ใช้ทุกคน</p>
+        <div style={{flex:1,minWidth:0}}>
+          <h2 style={{fontWeight:700,color:'#fff',margin:0,fontSize:'18px'}}>บันทึกกิจกรรม</h2>
+          <p style={{fontSize:'12px',color:'#ccfbf1',margin:'2px 0 0'}}>ประวัติการเข้า/ออกจากระบบ การเปลี่ยนรหัสผ่าน และกิจกรรมอื่นของผู้ใช้ทุกคน</p>
         </div>
         {!loading && (
-          <span style={{fontSize:'12px',fontWeight:700,padding:'5px 12px',borderRadius:'999px',background:'#ccfbf1',color:'#0f766e'}}>
+          <span style={{fontSize:'12px',fontWeight:700,padding:'5px 13px',borderRadius:'999px',background:'#fff',color:'#0f766e',flexShrink:0,whiteSpace:'nowrap'}}>
             {events.length}{hasMore ? '+' : ''} รายการ
           </span>
         )}
       </div>
 
       {/* Filter panel */}
-      <div style={{background:'linear-gradient(135deg,#f0fdfa 0%,#f8fafc 100%)',border:'1px solid #d1fae5',borderRadius:'14px',padding:'12px',marginBottom:'16px'}}>
+      <div style={{background:'linear-gradient(135deg,#f0fdfa 0%,#f8fafc 100%)',border:'1px solid #d1fae5',borderRadius:'14px',padding:'12px',marginBottom:'0'}}>
         <div style={{display:'flex',flexWrap:'wrap',gap:'8px',alignItems:'center'}}>
           {/* ช่องค้นหาทุกอย่าง — ย่อแคบลงเมื่อมีตัวกรอง active เพื่อให้อยู่แถวเดียว */}
           <div style={{position:'relative',flex: hasActiveFilter ? '1 1 130px' : '1 1 200px',minWidth: hasActiveFilter ? '120px' : '170px',transition:'flex 0.2s'}}>
@@ -4565,6 +4567,7 @@ function ActivityLogTab() {
           </div>
         )}
       </div>
+      </div>{/* /sticky ส่วนหัว+ฟิลเตอร์ */}
 
       {loading ? (
         <div style={{textAlign:'center',padding:'60px 0',color:'#9ca3af',fontSize:'13px'}}>
