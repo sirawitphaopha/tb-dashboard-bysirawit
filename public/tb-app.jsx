@@ -2619,7 +2619,7 @@ function RequestEditModal({ field, currentValue, onClose }) {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.12.5';
+const APP_VERSION = '0.7.12.6';
 const BUILD_DATE = '22 พ.ค. 2569';
 function AboutModal({ onClose }) {
   return (
@@ -2902,7 +2902,7 @@ function relTime(iso) {
   if (!iso) return '';
   const ms = Date.now() - new Date(iso).getTime();
   const m  = Math.floor(ms / 60000);
-  if (m < 1)  return 'เมื่อกี้';
+  if (m < 1)  return 'เมื่อสักครู่';
   if (m < 60) return `${m} นาทีที่แล้ว`;
   const h = Math.floor(m / 60);
   if (h < 24) return `${h} ชั่วโมงที่แล้ว`;
@@ -2912,19 +2912,41 @@ function relTime(iso) {
   if (mo < 12) return `${mo} เดือนที่แล้ว`;
   return new Date(iso).toLocaleDateString('th-TH');
 }
+// FontAwesome 6.0.0 — ใช้ชื่อ icon ที่มีในเวอร์ชันนี้
+// (fa-mobile-screen / fa-tablet-screen-button เพิ่งเพิ่มใน 6.1.0 → ใช้ไม่ได้)
 function deviceIcon(type) {
-  if (type === 'mobile') return 'fa-mobile-screen';
-  if (type === 'tablet') return 'fa-tablet-screen-button';
-  return 'fa-desktop';
+  if (type === 'mobile') return 'fa-mobile';   // มือถือ
+  if (type === 'tablet') return 'fa-tablet';   // แท็บเล็ต / iPad
+  return 'fa-desktop';                          // คอมพิวเตอร์
 }
 function endReasonLabel(reason) {
   switch (reason) {
-    case 'manual':           return { label: 'ออกจากระบบเอง',   color: '#0d9488', bg: '#f0fdfa' };
-    case 'session_expired':  return { label: 'หมดอายุเอง',       color: '#9ca3af', bg: '#f3f4f6' };
-    case 'forced_by_user':   return { label: 'ถูกเตะออก',         color: '#d97706', bg: '#fffbeb' };
-    case 'forced_by_admin':  return { label: 'admin บังคับออก',    color: '#dc2626', bg: '#fef2f2' };
-    default:                 return { label: 'ยังใช้งานอยู่',      color: '#22c55e', bg: '#dcfce7' };
+    case 'manual':           return { label: 'ออกจากระบบเอง',     color: '#0d9488', bg: '#f0fdfa' };
+    case 'session_expired':  return { label: 'หมดอายุการใช้งาน',  color: '#9ca3af', bg: '#f3f4f6' };
+    case 'forced_by_user':   return { label: 'ถูกบังคับออก',       color: '#d97706', bg: '#fffbeb' };
+    case 'forced_by_admin':  return { label: 'ผู้ดูแลระบบบังคับออก', color: '#dc2626', bg: '#fef2f2' };
+    default:                 return { label: 'ยังใช้งานอยู่',       color: '#22c55e', bg: '#dcfce7' };
   }
+}
+// ป้ายสีแถวเดียว (legend) — อธิบายความหมายของแต่ละสถานะ
+function StatusLegend() {
+  const items = [
+    { color: '#22c55e', label: 'ยังใช้งานอยู่' },
+    { color: '#0d9488', label: 'ออกจากระบบเอง' },
+    { color: '#9ca3af', label: 'หมดอายุการใช้งาน' },
+    { color: '#d97706', label: 'ถูกบังคับออก' },
+    { color: '#dc2626', label: 'ผู้ดูแลระบบบังคับออก' },
+  ];
+  return (
+    <div style={{display:'flex',flexWrap:'wrap',gap:'6px 14px',padding:'10px 14px',background:'#f9fafb',borderRadius:'10px',border:'1px solid #f3f4f6'}}>
+      {items.map(it => (
+        <div key={it.label} style={{display:'flex',alignItems:'center',gap:'5px'}}>
+          <span style={{width:'9px',height:'9px',borderRadius:'50%',background:it.color,flexShrink:0}}></span>
+          <span style={{fontSize:'11px',color:'#6b7280',whiteSpace:'nowrap'}}>{it.label}</span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function SessionsPanel({ onBack }) {
@@ -2980,15 +3002,18 @@ function SessionsPanel({ onBack }) {
   if (showHistory) {
     return (
       <div>
-        <div style={{display:'flex',alignItems:'center',gap:'10px',padding:'4px 0 14px',borderBottom:'1px solid #e5e7eb',marginBottom:'18px'}}>
-          <button onClick={()=>setShowHistory(false)} title="กลับไปดูอุปกรณ์ที่กำลังเข้าใช้งาน"
-            style={{background:'#f3f4f6',border:'none',color:'#4b5563',cursor:'pointer',fontSize:'12px',fontWeight:600,padding:'7px 12px',borderRadius:'8px',display:'flex',alignItems:'center',gap:'6px',transition:'background 0.15s, color 0.15s'}}
-            onMouseEnter={e=>{e.currentTarget.style.background='#ccfbf1';e.currentTarget.style.color='#0d9488';}}
-            onMouseLeave={e=>{e.currentTarget.style.background='#f3f4f6';e.currentTarget.style.color='#4b5563';}}>
-            <i className="fa-solid fa-arrow-left"></i>กลับ
-          </button>
-          <i className="fa-solid fa-clock-rotate-left" style={{color:'#0d9488',fontSize:'13px',marginLeft:'4px'}}></i>
-          <p style={{fontSize:'13px',fontWeight:700,color:'#0d9488',margin:0,textTransform:'uppercase',letterSpacing:'0.5px'}}>ประวัติการเข้าใช้งานทั้งหมด</p>
+        <div style={{position:'sticky',top:'-20px',zIndex:5,background:'#fff',margin:'-20px -28px 14px',padding:'20px 28px 0',boxShadow:'0 4px 8px -6px rgba(0,0,0,0.15)'}}>
+          <div style={{display:'flex',alignItems:'center',gap:'10px',padding:'4px 0 14px',borderBottom:'1px solid #e5e7eb',marginBottom:'14px'}}>
+            <button onClick={()=>setShowHistory(false)} title="กลับไปดูอุปกรณ์ที่กำลังเข้าใช้งาน"
+              style={{background:'#f3f4f6',border:'none',color:'#4b5563',cursor:'pointer',fontSize:'12px',fontWeight:600,padding:'7px 12px',borderRadius:'8px',display:'flex',alignItems:'center',gap:'6px',transition:'background 0.15s, color 0.15s'}}
+              onMouseEnter={e=>{e.currentTarget.style.background='#ccfbf1';e.currentTarget.style.color='#0d9488';}}
+              onMouseLeave={e=>{e.currentTarget.style.background='#f3f4f6';e.currentTarget.style.color='#4b5563';}}>
+              <i className="fa-solid fa-arrow-left"></i>กลับ
+            </button>
+            <i className="fa-solid fa-clock-rotate-left" style={{color:'#0d9488',fontSize:'13px',marginLeft:'4px'}}></i>
+            <p style={{fontSize:'13px',fontWeight:700,color:'#0d9488',margin:0,textTransform:'uppercase',letterSpacing:'0.5px'}}>ประวัติการเข้าใช้งานทั้งหมด</p>
+          </div>
+          <StatusLegend/>
         </div>
 
         {historyLoading ? (
@@ -3007,15 +3032,15 @@ function SessionsPanel({ onBack }) {
                   <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'6px'}}>
                     <i className={`fa-solid ${deviceIcon(s.device_type)}`} style={{color:'#0d9488',fontSize:'16px',width:'18px',textAlign:'center'}}></i>
                     <p style={{fontSize:'13px',fontWeight:700,color:'#134e4a',margin:0,flex:1}}>{s.device_label || 'ไม่ทราบอุปกรณ์'}</p>
-                    <span style={{fontSize:'10px',fontWeight:700,padding:'3px 8px',borderRadius:'999px',background:reason.bg,color:reason.color}}>
-                      {isActive ? '🟢 ' + reason.label : reason.label}
+                    <span style={{display:'inline-flex',alignItems:'center',gap:'5px',fontSize:'10px',fontWeight:700,padding:'3px 9px',borderRadius:'999px',background:reason.bg,color:reason.color,whiteSpace:'nowrap'}}>
+                      <span style={{width:'7px',height:'7px',borderRadius:'50%',background:reason.color,flexShrink:0}}></span>{reason.label}
                     </span>
                   </div>
                   <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'4px 16px',fontSize:'11px',color:'#6b7280',marginLeft:'28px'}}>
                     <span><i className="fa-solid fa-globe" style={{marginRight:'5px'}}></i>{s.ip_address || '-'}</span>
                     <span><i className="fa-solid fa-right-to-bracket" style={{marginRight:'5px'}}></i>เข้า {relTime(s.started_at)}</span>
                     {s.ended_at && <span><i className="fa-solid fa-right-from-bracket" style={{marginRight:'5px'}}></i>ออก {relTime(s.ended_at)}</span>}
-                    {!s.ended_at && <span><i className="fa-solid fa-circle" style={{color:'#22c55e',marginRight:'5px',fontSize:'8px'}}></i>ขยับล่าสุด {relTime(s.last_active_at)}</span>}
+                    {!s.ended_at && <span><i className="fa-solid fa-circle" style={{color:'#22c55e',marginRight:'5px',fontSize:'8px'}}></i>ใช้งานล่าสุด {relTime(s.last_active_at)}</span>}
                   </div>
                 </div>
               );
@@ -3066,7 +3091,7 @@ function SessionsPanel({ onBack }) {
                 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'4px 16px',fontSize:'11px',color:'#6b7280',marginLeft:'32px'}}>
                   <span><i className="fa-solid fa-globe" style={{marginRight:'5px'}}></i>IP: {s.ip_address || '-'}</span>
                   <span><i className="fa-solid fa-right-to-bracket" style={{marginRight:'5px'}}></i>เริ่ม {relTime(s.started_at)}</span>
-                  <span style={{gridColumn:'1 / -1'}}><i className="fa-solid fa-circle" style={{color:'#22c55e',marginRight:'5px',fontSize:'8px'}}></i>ขยับล่าสุด {relTime(s.last_active_at)}</span>
+                  <span style={{gridColumn:'1 / -1'}}><i className="fa-solid fa-circle" style={{color:'#22c55e',marginRight:'5px',fontSize:'8px'}}></i>ใช้งานล่าสุด {relTime(s.last_active_at)}</span>
                 </div>
               </div>
             ))}
@@ -3079,9 +3104,9 @@ function SessionsPanel({ onBack }) {
           )}
 
           <button onClick={()=>otherCount>0 && setConfirmOpen(true)} disabled={signingOut || otherCount===0}
-            style={{width:'100%',marginTop:'18px',padding:'13px',borderRadius:'12px',background: otherCount===0?'#e5e7eb':(signingOut?'#fca5a5':'#dc2626'),color: otherCount===0?'#9ca3af':'#fff',fontWeight:700,fontSize:'13px',border:'none',cursor:(signingOut||otherCount===0)?'not-allowed':'pointer',boxShadow:otherCount===0?'none':'0 4px 14px rgba(220,38,38,0.3)',transition:'background 0.2s'}}
-            onMouseEnter={e=>{if(!signingOut && otherCount>0) e.currentTarget.style.background='#b91c1c';}}
-            onMouseLeave={e=>{if(!signingOut && otherCount>0) e.currentTarget.style.background='#dc2626';}}>
+            style={{width:'100%',marginTop:'18px',padding:'13px',borderRadius:'12px',background: otherCount===0?'#e5e7eb':(signingOut?'#fdba74':'#ea580c'),color: otherCount===0?'#9ca3af':'#fff',fontWeight:700,fontSize:'13px',border:'none',cursor:(signingOut||otherCount===0)?'not-allowed':'pointer',boxShadow:otherCount===0?'none':'0 4px 14px rgba(234,88,12,0.3)',transition:'background 0.2s'}}
+            onMouseEnter={e=>{if(!signingOut && otherCount>0) e.currentTarget.style.background='#c2410c';}}
+            onMouseLeave={e=>{if(!signingOut && otherCount>0) e.currentTarget.style.background='#ea580c';}}>
             {signingOut
               ? <><i className="fa-solid fa-spinner fa-spin" style={{marginRight:'6px'}}></i>กำลังออกจากระบบ...</>
               : otherCount===0
@@ -3104,10 +3129,10 @@ function SessionsPanel({ onBack }) {
       {confirmOpen && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999}} onClick={()=>setConfirmOpen(false)}>
           <div style={{background:'#fff',borderRadius:'16px',padding:'28px',maxWidth:'400px',width:'90%',textAlign:'center',boxShadow:'0 25px 60px rgba(0,0,0,0.3)'}} onClick={e=>e.stopPropagation()}>
-            <div style={{width:'56px',height:'56px',borderRadius:'50%',background:'#fef2f2',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 14px'}}>
-              <i className="fa-solid fa-triangle-exclamation" style={{fontSize:'22px',color:'#dc2626'}}></i>
+            <div style={{width:'56px',height:'56px',borderRadius:'50%',background:'#fff7ed',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 14px'}}>
+              <i className="fa-solid fa-triangle-exclamation" style={{fontSize:'22px',color:'#ea580c'}}></i>
             </div>
-            <p style={{fontSize:'15px',fontWeight:700,color:'#134e4a',margin:'0 0 8px'}}>ยืนยันออกจากระบบทุกอุปกรณ์?</p>
+            <p style={{fontSize:'15px',fontWeight:700,color:'#134e4a',margin:'0 0 8px'}}>ยืนยันออกจากระบบทุกอุปกรณ์</p>
             <p style={{fontSize:'12px',color:'#6b7280',margin:'0 0 18px',lineHeight:1.5}}>
               อุปกรณ์อื่นๆ ทั้งหมด ({otherCount} อุปกรณ์) จะถูกออกจากระบบทันที<br/>เครื่องนี้จะยังใช้งานต่อได้ปกติ
             </p>
@@ -3117,7 +3142,7 @@ function SessionsPanel({ onBack }) {
                 ยกเลิก
               </button>
               <button onClick={doSignoutOthers}
-                style={{flex:1,padding:'11px',borderRadius:'10px',background:'#dc2626',color:'#fff',fontWeight:700,fontSize:'13px',border:'none',cursor:'pointer'}}>
+                style={{flex:1,padding:'11px',borderRadius:'10px',background:'#ea580c',color:'#fff',fontWeight:700,fontSize:'13px',border:'none',cursor:'pointer'}}>
                 ยืนยัน
               </button>
             </div>
