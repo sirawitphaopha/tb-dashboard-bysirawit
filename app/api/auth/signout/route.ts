@@ -37,6 +37,17 @@ export async function POST(req: NextRequest) {
   // อ่าน tb_session_id ก่อน signOut เพื่อปิด session row ใน tb_session_log
   const sessionId = req.cookies.get('tb_session_id')?.value || null
 
+  // ดึง device_fp จาก session row (เพื่อเก็บลง logout log)
+  let deviceFp: string | null = null
+  if (sessionId) {
+    const { data: srow } = await admin
+      .from('tb_session_log')
+      .select('device_fp')
+      .eq('id', sessionId)
+      .maybeSingle()
+    deviceFp = srow?.device_fp ?? null
+  }
+
   // signOut เสมอ ไม่ว่ามี session หรือไม่
   await supabase.auth.signOut()
 
@@ -48,6 +59,8 @@ export async function POST(req: NextRequest) {
       logout_type: 'manual',
       ip_address:  ip,
       user_agent:  ua,
+      session_id:  sessionId,
+      device_fp:   deviceFp,
     })
   }
 

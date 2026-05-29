@@ -4381,6 +4381,7 @@ function ActivityLogTab() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [page, setPage]           = useState(0)
   const [hasMore, setHasMore]     = useState(false)
+  const [total, setTotal]         = useState(null)
   const [error, setError]         = useState('')
 
   // filter state (รอบ 2)
@@ -4389,6 +4390,7 @@ function ActivityLogTab() {
   const [fType, setFType]   = useState('')   // login/login_failed/logout/password/easter
   const [fTime, setFTime]   = useState('')   // today/7d/30d/custom
   const [fDevice, setFDevice] = useState('') // desktop/mobile/tablet/unknown
+  const [fDeviceFp, setFDeviceFp] = useState('') // device_fp (แยกเครื่องจริง)
   const [fDateFrom, setFDateFrom] = useState('')   // YYYY-MM-DD (กำหนดเอง)
   const [fDateTo, setFDateTo]     = useState('')
   const [searchInput, setSearchInput] = useState('')  // ช่องพิมพ์ (raw)
@@ -4436,6 +4438,7 @@ function ActivityLogTab() {
       if (since) params.set('since', since)
     }
     if (fDevice)     params.set('device', fDevice)
+    if (fDeviceFp)   params.set('deviceFp', fDeviceFp)
     if (fSearch)     params.set('q', fSearch)
     if (fSuspicious) params.set('suspicious', '1')
     return params
@@ -4451,6 +4454,7 @@ function ActivityLogTab() {
       else {
         setEvents(prev => p === 0 ? data.events : [...prev, ...data.events])
         setHasMore(data.hasMore)
+        if (typeof data.total === 'number') setTotal(data.total)
         setPage(p)
       }
     } catch { setError('เกิดข้อผิดพลาด กรุณาลองใหม่') }
@@ -4458,7 +4462,7 @@ function ActivityLogTab() {
   }
 
   // โหลดใหม่ทุกครั้งที่เปลี่ยนฟิลเตอร์ (รวมตอน mount)
-  useEffect(() => { loadPage(0) }, [fUser, fType, fTime, fDevice, fDateFrom, fDateTo, fSearch, fSuspicious])
+  useEffect(() => { loadPage(0) }, [fUser, fType, fTime, fDevice, fDeviceFp, fDateFrom, fDateTo, fSearch, fSuspicious])
 
   const selStyle = { fontSize:'12px', padding:'7px 10px', borderRadius:'9px', border:'1px solid #e5e7eb', background:'#fff', color:'#374151', outline:'none', cursor:'pointer' }
 
@@ -4467,7 +4471,7 @@ function ActivityLogTab() {
     : '—'
 
   // มีตัวกรอง active ไหม (ใช้ย่อช่องค้นหา + โชว์ปุ่มล้าง)
-  const hasActiveFilter = !!(fUser || fType || fTime || fDevice || fSearch || fSuspicious)
+  const hasActiveFilter = !!(fUser || fType || fTime || fDevice || fDeviceFp || fSearch || fSuspicious)
 
   // แปลง event → ค่า fType สำหรับกรอง (กดที่การกระทำในแถว)
   const eventToFType = (e) => {
@@ -4484,7 +4488,7 @@ function ActivityLogTab() {
   return (
     <div style={{padding:'16px',maxWidth:'960px',margin:'0 auto'}}>
       {/* ส่วนหัว + แถบฟิลเตอร์ ตรึงไว้ด้านบน (sticky) ตอนเลื่อนดูรายการ */}
-      <div style={{position:'sticky',top:'-24px',zIndex:20,background:'#f0fdfa',margin:'-16px -16px 8px',padding:'16px 16px 0'}}>
+      <div style={{position:'sticky',top:'-24px',zIndex:20,background:'#f0fdfa',margin:'-16px -16px 8px',padding:'4px 16px 0'}}>
       {/* Header banner */}
       <div style={{background:'linear-gradient(135deg,#0f766e 0%,#0d9488 100%)',borderRadius:'16px',padding:'18px 20px',marginBottom:'14px',display:'flex',alignItems:'center',gap:'14px',boxShadow:'0 2px 8px rgba(13,148,136,0.2)'}}>
         <div style={{width:'48px',height:'48px',borderRadius:'14px',display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(255,255,255,0.2)',flexShrink:0}}>
@@ -4496,7 +4500,7 @@ function ActivityLogTab() {
         </div>
         {!loading && (
           <span style={{fontSize:'12px',fontWeight:700,padding:'5px 13px',borderRadius:'999px',background:'#fff',color:'#0f766e',flexShrink:0,whiteSpace:'nowrap'}}>
-            {events.length}{hasMore ? '+' : ''} รายการ
+            {total != null ? total : events.length} รายการ
           </span>
         )}
       </div>
@@ -4543,13 +4547,20 @@ function ActivityLogTab() {
             <option value="30d">30 วันล่าสุด</option>
             <option value="custom">กำหนดเอง</option>
           </FilterSelect>
+          {/* chip: กำลังกรองตามเครื่อง (device fingerprint) */}
+          {fDeviceFp && (
+            <span style={{display:'inline-flex',alignItems:'center',gap:'6px',fontSize:'12px',fontWeight:600,padding:'8px 12px',borderRadius:'9px',background:'#f5f3ff',border:'1px solid #ddd6fe',color:'#7c3aed'}}>
+              <i className="fa-solid fa-fingerprint" style={{fontSize:'11px'}}></i>เครื่อง {fDeviceFp.slice(0,8)}
+              <i className="fa-solid fa-xmark" onClick={()=>setFDeviceFp('')} style={{cursor:'pointer',marginLeft:'2px'}}></i>
+            </span>
+          )}
           {/* ปุ่มด่วน: เหตุการณ์น่าสงสัย */}
           <button onClick={()=>setFSuspicious(v=>!v)}
             style={{fontSize:'12px',fontWeight:600,padding:'9px 13px',borderRadius:'9px',border:`1px solid ${fSuspicious?'#dc2626':'#fecaca'}`,background:fSuspicious?'#dc2626':'#fff',color:fSuspicious?'#fff':'#b91c1c',cursor:'pointer',transition:'all 0.15s',boxShadow:fSuspicious?'0 2px 8px rgba(220,38,38,0.3)':'none'}}>
             <i className="fa-solid fa-triangle-exclamation" style={{marginRight:'5px'}}></i>น่าสงสัย
           </button>
           {hasActiveFilter && (
-            <button onClick={()=>{ setFUser(''); setFType(''); setFTime(''); setFDevice(''); setFDateFrom(''); setFDateTo(''); setSearchInput(''); setFSearch(''); setFSuspicious(false); }}
+            <button onClick={()=>{ setFUser(''); setFType(''); setFTime(''); setFDevice(''); setFDeviceFp(''); setFDateFrom(''); setFDateTo(''); setSearchInput(''); setFSearch(''); setFSuspicious(false); }}
               title="ล้างตัวกรองทั้งหมด"
               style={{fontSize:'12px',fontWeight:600,padding:'9px 12px',borderRadius:'9px',border:'1px solid #fcd34d',background:'#fffbeb',color:'#b45309',cursor:'pointer',whiteSpace:'nowrap'}}>
               <i className="fa-solid fa-rotate-left" style={{marginRight:'5px'}}></i>ล้างค่า
@@ -4579,7 +4590,7 @@ function ActivityLogTab() {
         </div>
       ) : events.length === 0 ? (
         <div style={{textAlign:'center',padding:'60px 0',color:'#9ca3af',fontSize:'13px'}}>
-          {(fUser || fType || fTime || fDevice || fSearch || fSuspicious) ? 'ไม่พบรายการตามเงื่อนไขที่กรอง' : 'ยังไม่มีบันทึกกิจกรรม'}
+          {hasActiveFilter ? 'ไม่พบรายการตามเงื่อนไขที่กรอง' : 'ยังไม่มีบันทึกกิจกรรม'}
         </div>
       ) : (
         <>
@@ -4626,6 +4637,17 @@ function ActivityLogTab() {
                         <span onClick={()=>e.device_type && setFDevice(e.device_type)} title={e.user_agent || e.device_label}
                           style={{cursor:'pointer'}}>
                           <i className={`fa-solid ${activityDeviceIcon(e.device_type)}`} style={{marginRight:'4px'}}></i>{e.device_label}
+                        </span>
+                      )}
+                      {e.session_short && (
+                        <span title={`รหัสครั้งการเข้าใช้ (session)\n${e.session_id || ''}`} style={{color:'#9ca3af',cursor:'help'}}>
+                          <i className="fa-solid fa-arrows-rotate" style={{marginRight:'4px'}}></i>session {e.session_short}
+                        </span>
+                      )}
+                      {e.device_fp_short && (
+                        <span onClick={()=>setFDeviceFp(e.device_fp)} title={`รหัสประจำเครื่อง (กดเพื่อกรอง)\n${e.device_fp || ''}`}
+                          style={{cursor:'pointer',color:'#7c3aed',fontWeight:600}}>
+                          <i className="fa-solid fa-fingerprint" style={{marginRight:'4px'}}></i>เครื่อง {e.device_fp_short}
                         </span>
                       )}
                     </div>

@@ -44,7 +44,7 @@ export async function middleware(request: NextRequest) {
       const admin = createAdminClient()
       const { data: row } = await admin
         .from('tb_session_log')
-        .select('user_id, email')
+        .select('user_id, email, device_fp')
         .eq('id', orphanSessionId)
         .is('ended_at', null)
         .maybeSingle()
@@ -68,6 +68,8 @@ export async function middleware(request: NextRequest) {
           logout_type: 'session_expired',
           ip_address:  ip,
           user_agent:  ua,
+          session_id:  orphanSessionId,
+          device_fp:   row.device_fp,
         })
 
         sessionExpired = true

@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     // ─── 1. ดึง session อื่นของ user นี้ที่ยัง active ───
     let query = admin
       .from('tb_session_log')
-      .select('id, email, ip_address, user_agent')
+      .select('id, email, ip_address, user_agent, device_fp')
       .eq('user_id', user.id)
       .is('ended_at', null)
     if (currentSessionId) {
@@ -70,6 +70,8 @@ export async function POST(req: NextRequest) {
       logout_type: 'forced_by_user',
       ip_address:  s.ip_address,
       user_agent:  s.user_agent,
+      session_id:  s.id,
+      device_fp:   s.device_fp,
     }))
     await admin.from('tb_logout_log').insert(logRows)
 

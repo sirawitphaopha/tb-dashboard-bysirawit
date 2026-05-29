@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
   const admin = createAdminClient()
   const ip = req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null
   const ua = req.headers.get('user-agent') || null
+  let deviceFp: string | null = null   // รหัสประจำเครื่อง (อ่านจาก body ด้านล่าง)
 
   // helper: log attempt
   const logAttempt = async (params: {
@@ -38,6 +39,7 @@ export async function POST(req: NextRequest) {
     userId: string | null,
     success: boolean,
     failureReason: string | null,
+    sessionId?: string | null,
   }) => {
     await admin.from('tb_login_log').insert({
       email_attempted:    params.emailAttempted,
@@ -47,11 +49,15 @@ export async function POST(req: NextRequest) {
       failure_reason:     params.failureReason,
       ip_address:         ip,
       user_agent:         ua,
+      session_id:         params.sessionId ?? null,
+      device_fp:          deviceFp,
     })
   }
 
   try {
-    const { identifier, password } = await req.json()
+    const body = await req.json()
+    const { identifier, password } = body
+    if (typeof body.deviceFp === 'string' && body.deviceFp.length <= 100) deviceFp = body.deviceFp
     if (!identifier || !password || typeof identifier !== 'string' || typeof password !== 'string') {
       return NextResponse.json({ error: 'กรุณากรอกอีเมลและรหัสผ่าน' }, { status: 400 })
     }
@@ -174,16 +180,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' }, { status: 401 })
     }
 
-    // ─── 4. Insert log (success) ───────────────────────────
-    await logAttempt({
-      emailAttempted:    loginEmail,
-      usernameAttempted: usernameUsed,
-      userId:            signInData.user.id,
-      success:           true,
-      failureReason:     null,
-    })
-
-    // ─── 4b. Insert session row + ตั้ง cookie tb_session_id ─
+    // ─── 4. Insert session row ก่อน (จะได้ session_id ไปแปะใน login log) ─
     // (Session Activity Log — B1)
     const parsedUA = parseUserAgent(ua)
     const { data: sessionRow } = await admin
@@ -201,9 +198,20 @@ export async function POST(req: NextRequest) {
         device_type:     parsedUA.device_type,
         device_vendor:   parsedUA.device_vendor,
         device_model:    parsedUA.device_model,
+        device_fp:       deviceFp,
       })
       .select('id')
       .single()
+
+    // ─── 4b. Insert log (success) พร้อม session_id ─────────
+    await logAttempt({
+      emailAttempted:    loginEmail,
+      usernameAttempted: usernameUsed,
+      userId:            signInData.user.id,
+      success:           true,
+      failureReason:     null,
+      sessionId:         sessionRow?.id ?? null,
+    })
 
     // ─── 5. ส่ง response พร้อม cookies ─────────────────────
     const response = NextResponse.json({ success: true })

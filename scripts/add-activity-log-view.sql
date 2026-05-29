@@ -10,7 +10,7 @@
 --
 -- คอลัมน์มาตรฐาน:
 --   event_time · user_id · email · category · event_key · success · detail
---   · ip_address · user_agent · device_type
+--   · ip_address · user_agent · device_type · session_id
 --
 -- device_type — แยกจาก user_agent ด้วย regex (สำหรับใช้กรองตามชนิดอุปกรณ์)
 --   desktop / mobile / tablet / unknown
@@ -20,7 +20,11 @@
 --    เข้าถึงได้เฉพาะ service_role (ผ่าน API /api/admin/activity-log)
 -- ═════════════════════════════════════════════════════════════════════════
 
-create or replace view public.tb_activity_log
+-- ลบ view เก่าก่อน (จำเป็นเพราะมีการเพิ่ม/สลับคอลัมน์ — create or replace ทำไม่ได้)
+-- ลบ view ไม่กระทบข้อมูลในตารางจริง
+drop view if exists public.tb_activity_log;
+
+create view public.tb_activity_log
 with (security_invoker = on) as
 select
   base.*,
@@ -43,7 +47,9 @@ from (
     ll.success                                                   as success,
     ll.failure_reason                                            as detail,
     ll.ip_address                                                as ip_address,
-    ll.user_agent                                                as user_agent
+    ll.user_agent                                                as user_agent,
+    ll.session_id                                                as session_id,
+    ll.device_fp                                                 as device_fp
   from public.tb_login_log ll
 
   union all
@@ -58,7 +64,9 @@ from (
     null::boolean,
     lo.logout_type,
     lo.ip_address,
-    lo.user_agent
+    lo.user_agent,
+    lo.session_id,
+    lo.device_fp
   from public.tb_logout_log lo
 
   union all
@@ -73,7 +81,9 @@ from (
     pc.success,
     coalesce(pc.failure_reason, pc.action),
     pc.ip_address,
-    pc.user_agent
+    pc.user_agent,
+    null::uuid,
+    null::text
   from public.tb_password_change_log pc
 
   union all
@@ -88,7 +98,9 @@ from (
     pr.email_sent,
     case when pr.email_sent then 'sent' else coalesce(pr.error_message, 'failed') end,
     pr.ip_address,
-    pr.user_agent
+    pr.user_agent,
+    null::uuid,
+    null::text
   from public.tb_password_reset_log pr
 
   union all
@@ -103,7 +115,9 @@ from (
     null::boolean,
     ee.event_type,
     ee.ip_address,
-    ee.user_agent
+    ee.user_agent,
+    null::uuid,
+    null::text
   from public.tb_easter_egg_log ee
 
 ) base;

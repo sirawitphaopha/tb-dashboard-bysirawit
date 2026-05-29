@@ -54,6 +54,8 @@ export async function GET(req: NextRequest) {
     const fSince      = url.searchParams.get('since')       // ISO — ตั้งแต่
     const fUntil      = url.searchParams.get('until')       // ISO — ถึง (ช่วงวันที่กำหนดเอง)
     const fDevice     = url.searchParams.get('device')      // desktop/mobile/tablet/unknown
+    const fSessionId  = url.searchParams.get('sessionId')   // กรองตาม session (ครั้งเข้าใช้)
+    const fDeviceFp   = url.searchParams.get('deviceFp')    // กรองตามเครื่อง (device fingerprint)
     const fSuspicious = url.searchParams.get('suspicious') === '1'  // เฉพาะเหตุการณ์น่าสงสัย
     // ค้นหาทุกอย่าง (ชื่อ/อีเมล/IP) — ตัดอักขระที่อันตรายต่อ PostgREST or() ออก
     const fSearch = (url.searchParams.get('q') || '').replace(/[(),*%\\]/g, '').trim()
@@ -62,13 +64,15 @@ export async function GET(req: NextRequest) {
     // ดึง pageSize+1 เพื่อรู้ว่ามีหน้าถัดไปไหม (hasMore)
     let query = admin
       .from('tb_activity_log')
-      .select('*')
+      .select('*', { count: 'exact' })
     if (fUserId)     query = query.eq('user_id', fUserId)
     if (fCategory)   query = query.eq('category', fCategory)
     if (fFailedOnly) query = query.eq('success', false)
     if (fSince)      query = query.gte('event_time', fSince)
     if (fUntil)      query = query.lte('event_time', fUntil)
     if (fDevice)     query = query.eq('device_type', fDevice)
+    if (fSessionId)  query = query.eq('session_id', fSessionId)
+    if (fDeviceFp)   query = query.eq('device_fp', fDeviceFp)
 
     // เหตุการณ์น่าสงสัย = ล้มเหลว (success=false) หรือ ผู้ดูแลบังคับออก
     if (fSuspicious) {
@@ -89,7 +93,7 @@ export async function GET(req: NextRequest) {
       query = query.or(orParts.join(','))
     }
 
-    const { data: rows, error } = await query
+    const { data: rows, error, count } = await query
       .order('event_time', { ascending: false })
       .range(from, to + 1)
 
@@ -122,10 +126,12 @@ export async function GET(req: NextRequest) {
         display_name: fullName || e.email || 'ไม่ทราบผู้ใช้',
         role: p?.role || null,
         device_label: e.user_agent ? parseUserAgent(e.user_agent).device_label : null,
+        session_short: e.session_id ? String(e.session_id).slice(0, 8) : null,
+        device_fp_short: e.device_fp ? String(e.device_fp).slice(0, 8) : null,
       }
     })
 
-    return NextResponse.json({ events: enriched, hasMore, page })
+    return NextResponse.json({ events: enriched, hasMore, page, total: count ?? null })
   } catch (e: any) {
     console.error('activity-log API error:', e)
     return NextResponse.json({ error: 'เกิดข้อผิดพลาด กรุณาลองใหม่' }, { status: 500 })

@@ -13,6 +13,19 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // รหัสประจำเครื่อง (device fingerprint) — สุ่มครั้งแรก เก็บถาวรใน localStorage
+  // ไม่เปลี่ยนแม้ logout/login ใหม่ → ใช้แยกเครื่องในหน้าบันทึกกิจกรรม
+  const getDeviceFp = () => {
+    try {
+      let fp = localStorage.getItem('tb_device_fp')
+      if (!fp) {
+        fp = (crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`)
+        localStorage.setItem('tb_device_fp', fp)
+      }
+      return fp
+    } catch { return null }
+  }
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -23,7 +36,7 @@ export default function LoginPage() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier: email, password }),
+        body: JSON.stringify({ identifier: email, password, deviceFp: getDeviceFp() }),
       })
       const data = await res.json()
 
@@ -121,7 +134,8 @@ export default function LoginPage() {
         <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #f3f4f6' }}>
           <p style={{ fontSize: '11px', color: '#9ca3af', margin: '0 0 2px 0' }}>พัฒนาโดย เภสัชกร สิรวิชญ์ เผ่าผา</p>
           <p style={{ fontSize: '11px', color: '#9ca3af', margin: '0 0 4px 0' }}>โรงพยาบาลปรางค์กู่</p>
-          <p style={{ fontSize: '11px', color: '#d1d5db', margin: 0 }}>Version 0.7.13.2 · <span style={{ color: '#fbbf24', fontWeight: 600 }}>ยังไม่เผยแพร่</span></p>
+          <p style={{ fontSize: '11px', color: '#d1d5db', margin: '0 0 4px 0' }}>Version 0.7.13.3 · <span style={{ color: '#fbbf24', fontWeight: 600 }}>ยังไม่เผยแพร่</span></p>
+          <p style={{ fontSize: '11px', color: '#d1d5db', margin: 0 }}>© 2026 TB JOURNEY &amp; CARE</p>
         </div>
       </div>
     </div>
