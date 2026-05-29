@@ -4355,6 +4355,13 @@ function activityReason(detail) {
   };
   return map[detail] || null;
 }
+// ไอคอนตามชนิดอุปกรณ์ (FA 6.0.0)
+function activityDeviceIcon(t) {
+  if (t === 'mobile')  return 'fa-mobile'
+  if (t === 'tablet')  return 'fa-tablet'
+  if (t === 'unknown') return 'fa-circle-question'
+  return 'fa-desktop'
+}
 // dropdown ที่มีไอคอนนำหน้า + ลูกศรเอง (สวย consistent)
 function FilterSelect({ icon, value, onChange, children }) {
   return (
@@ -4459,6 +4466,21 @@ function ActivityLogTab() {
     ? new Date(iso).toLocaleString('th-TH', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })
     : '—'
 
+  // มีตัวกรอง active ไหม (ใช้ย่อช่องค้นหา + โชว์ปุ่มล้าง)
+  const hasActiveFilter = !!(fUser || fType || fTime || fDevice || fSearch || fSuspicious)
+
+  // แปลง event → ค่า fType สำหรับกรอง (กดที่การกระทำในแถว)
+  const eventToFType = (e) => {
+    if (e.category === 'login') return e.success === false ? 'login_failed' : 'login'
+    return e.category  // logout / password / easter
+  }
+  // กดที่วันที่ในแถว → ตั้งช่วงเวลาเป็นวันนั้นทั้งวัน
+  const pickDate = (iso) => {
+    const d = new Date(iso)
+    const ymd = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+    setFTime('custom'); setFDateFrom(ymd); setFDateTo(ymd)
+  }
+
   return (
     <div style={{padding:'16px',maxWidth:'960px',margin:'0 auto'}}>
       {/* Header */}
@@ -4480,8 +4502,8 @@ function ActivityLogTab() {
       {/* Filter panel */}
       <div style={{background:'linear-gradient(135deg,#f0fdfa 0%,#f8fafc 100%)',border:'1px solid #d1fae5',borderRadius:'14px',padding:'12px',marginBottom:'16px'}}>
         <div style={{display:'flex',flexWrap:'wrap',gap:'8px',alignItems:'center'}}>
-          {/* ช่องค้นหาทุกอย่าง */}
-          <div style={{position:'relative',flex:'1 1 200px',minWidth:'170px'}}>
+          {/* ช่องค้นหาทุกอย่าง — ย่อแคบลงเมื่อมีตัวกรอง active เพื่อให้อยู่แถวเดียว */}
+          <div style={{position:'relative',flex: hasActiveFilter ? '1 1 130px' : '1 1 200px',minWidth: hasActiveFilter ? '120px' : '170px',transition:'flex 0.2s'}}>
             <i className="fa-solid fa-magnifying-glass" style={{position:'absolute',left:'12px',top:'50%',transform:'translateY(-50%)',color:'#0d9488',fontSize:'12px'}}></i>
             <input value={searchInput} onChange={e=>setSearchInput(e.target.value)}
               placeholder="ค้นหาชื่อ / อีเมล / IP"
@@ -4498,7 +4520,7 @@ function ActivityLogTab() {
             ))}
           </FilterSelect>
           <FilterSelect icon="fa-tag" value={fType} onChange={e=>setFType(e.target.value)}>
-            <option value="">ทุกประเภท</option>
+            <option value="">ทุกกิจกรรม</option>
             <option value="login">เข้าสู่ระบบ</option>
             <option value="login_failed">เข้าระบบไม่สำเร็จ</option>
             <option value="logout">ออกจากระบบ</option>
@@ -4524,11 +4546,11 @@ function ActivityLogTab() {
             style={{fontSize:'12px',fontWeight:600,padding:'9px 13px',borderRadius:'9px',border:`1px solid ${fSuspicious?'#dc2626':'#fecaca'}`,background:fSuspicious?'#dc2626':'#fff',color:fSuspicious?'#fff':'#b91c1c',cursor:'pointer',transition:'all 0.15s',boxShadow:fSuspicious?'0 2px 8px rgba(220,38,38,0.3)':'none'}}>
             <i className="fa-solid fa-triangle-exclamation" style={{marginRight:'5px'}}></i>น่าสงสัย
           </button>
-          {(fUser || fType || fTime || fDevice || fSearch || fSuspicious) && (
+          {hasActiveFilter && (
             <button onClick={()=>{ setFUser(''); setFType(''); setFTime(''); setFDevice(''); setFDateFrom(''); setFDateTo(''); setSearchInput(''); setFSearch(''); setFSuspicious(false); }}
               title="ล้างตัวกรองทั้งหมด"
-              style={{fontSize:'12px',fontWeight:600,padding:'9px 12px',borderRadius:'9px',border:'1px solid #e5e7eb',background:'#fff',color:'#6b7280',cursor:'pointer'}}>
-              <i className="fa-solid fa-rotate-left" style={{marginRight:'5px'}}></i>ล้าง
+              style={{fontSize:'12px',fontWeight:600,padding:'9px 12px',borderRadius:'9px',border:'1px solid #fcd34d',background:'#fffbeb',color:'#b45309',cursor:'pointer',whiteSpace:'nowrap'}}>
+              <i className="fa-solid fa-rotate-left" style={{marginRight:'5px'}}></i>ล้างค่า
             </button>
           )}
         </div>
@@ -4569,13 +4591,17 @@ function ActivityLogTab() {
                   </div>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap'}}>
-                      <span style={{fontSize:'13px',fontWeight:700,color:'#1f2937'}}>{e.display_name}</span>
+                      {e.user_id
+                        ? <span onClick={()=>setFUser(e.user_id)} title="กรองเฉพาะผู้ใช้คนนี้"
+                            style={{fontSize:'13px',fontWeight:700,color:'#1f2937',cursor:'pointer',textDecorationLine:'underline',textDecorationColor:'#d1d5db',textUnderlineOffset:'2px'}}>{e.display_name}</span>
+                        : <span style={{fontSize:'13px',fontWeight:700,color:'#1f2937'}}>{e.display_name}</span>}
                       {e.role === 'admin'
                         ? <span style={{fontSize:'9px',fontWeight:700,padding:'1px 7px',borderRadius:'999px',background:'#fef3c7',color:'#92400e'}}>ADMIN</span>
                         : e.role === 'user'
                           ? <span style={{fontSize:'9px',fontWeight:700,padding:'1px 7px',borderRadius:'999px',background:'#e0f2fe',color:'#0369a1'}}>ผู้ใช้</span>
                           : null}
-                      <span style={{fontSize:'12px',fontWeight:600,color:m.color}}>{m.label}</span>
+                      <span onClick={()=>setFType(eventToFType(e))} title="กรองเฉพาะกิจกรรมประเภทนี้"
+                        style={{fontSize:'12px',fontWeight:600,color:m.color,cursor:'pointer'}}>{m.label}</span>
                     </div>
                     {reason && (
                       <p style={{fontSize:'11px',color:'#dc2626',margin:'3px 0 0'}}>
@@ -4583,14 +4609,22 @@ function ActivityLogTab() {
                       </p>
                     )}
                     <div style={{display:'flex',flexWrap:'wrap',gap:'4px 14px',fontSize:'11px',color:'#9ca3af',marginTop:'4px'}}>
-                      <span><i className="fa-solid fa-clock" style={{marginRight:'4px'}}></i>{fmtDateTime(e.event_time)}</span>
+                      <span onClick={()=>pickDate(e.event_time)} title="กรองเฉพาะวันนี้"
+                        style={{cursor:'pointer'}}>
+                        <i className="fa-solid fa-clock" style={{marginRight:'4px'}}></i>{fmtDateTime(e.event_time)}
+                      </span>
                       {e.ip_address && (
                         <span onClick={()=>setSearchInput(e.ip_address)} title="กรองดูทุกกิจกรรมจาก IP นี้"
                           style={{cursor:'pointer',color:'#0d9488',fontWeight:600}}>
                           <i className="fa-solid fa-globe" style={{marginRight:'4px'}}></i>{e.ip_address}
                         </span>
                       )}
-                      {e.device_label && <span title={e.user_agent || e.device_label} style={{cursor:'help'}}><i className="fa-solid fa-desktop" style={{marginRight:'4px'}}></i>{e.device_label}</span>}
+                      {e.device_label && (
+                        <span onClick={()=>e.device_type && setFDevice(e.device_type)} title={e.user_agent || e.device_label}
+                          style={{cursor:'pointer'}}>
+                          <i className={`fa-solid ${activityDeviceIcon(e.device_type)}`} style={{marginRight:'4px'}}></i>{e.device_label}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
