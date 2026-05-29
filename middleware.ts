@@ -34,6 +34,49 @@ export async function middleware(request: NextRequest) {
 
   const isAuthed = !!user
 
+  // ─── Session Expired Detection (B2) ──────────────────────
+  // ถ้าไม่มี user แต่ยังมี cookie tb_session_id ที่ชี้ไปแถวยัง active
+  // = session หมดอายุเอง → ปิดแถว + จดใน tb_logout_log + ลบ cookie
+  const orphanSessionId = !isAuthed ? request.cookies.get('tb_session_id')?.value : null
+  let sessionExpired = false
+  if (orphanSessionId) {
+    try {
+      const admin = createAdminClient()
+      const { data: row } = await admin
+        .from('tb_session_log')
+        .select('user_id, email')
+        .eq('id', orphanSessionId)
+        .is('ended_at', null)
+        .maybeSingle()
+
+      if (row) {
+        const now = new Date().toISOString()
+        const ip = request.headers.get('cf-connecting-ip')
+                || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+                || null
+        const ua = request.headers.get('user-agent') || null
+
+        await admin
+          .from('tb_session_log')
+          .update({ ended_at: now, end_reason: 'session_expired' })
+          .eq('id', orphanSessionId)
+          .is('ended_at', null)
+
+        await admin.from('tb_logout_log').insert({
+          user_id:     row.user_id,
+          email:       row.email,
+          logout_type: 'session_expired',
+          ip_address:  ip,
+          user_agent:  ua,
+        })
+
+        sessionExpired = true
+      }
+    } catch {
+      // ไม่ block ถ้า log fail
+    }
+  }
+
   const publicPaths = ['/login', '/register', '/reset-password']
   const isPublic = publicPaths.some(p => pathname.startsWith(p))
                 || pathname.startsWith('/api/auth')
@@ -42,7 +85,13 @@ export async function middleware(request: NextRequest) {
   const isStatusPage = pathname === '/pending-approval' || pathname === '/rejected'
 
   if (!isAuthed && !isPublic) {
-    return NextResponse.redirect(new URL('/login', request.url))
+    const redirectRes = NextResponse.redirect(new URL('/login', request.url))
+    // ลบ cookie tb_session_id ถ้าเจอ session_expired (หรือ orphan)
+    if (orphanSessionId) {
+      redirectRes.cookies.set('tb_session_id', '', { httpOnly: true, path: '/', maxAge: 0 })
+      redirectRes.cookies.set('tb_session_pinged', '', { httpOnly: true, path: '/', maxAge: 0 })
+    }
+    return redirectRes
   }
 
   if (isAuthed && (pathname === '/login' || pathname === '/register')) {
