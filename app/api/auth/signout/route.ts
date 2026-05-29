@@ -1,8 +1,52 @@
+import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
-import { NextResponse } from 'next/server'
+import { createAdminClient } from '@/lib/supabase-admin'
 
-export async function POST() {
+// ─────────────────────────────────────────────────────────────────────────
+// POST /api/auth/signout
+//
+// ออกจากระบบ + บันทึก log
+//   - บันทึก user_id/email/IP/UA ก่อน signOut (ไม่งั้น session หาย)
+//   - signOut จะลบ session ใน Supabase + clear cookies
+//   - logout_type ตอนนี้รองรับแค่ 'manual' (เริ่มต้น)
+//     session_expired จะทำพร้อม Session Activity Log ในข้อ B
+// ─────────────────────────────────────────────────────────────────────────
+
+export async function POST(req: NextRequest) {
   const supabase = await createClient()
+  const admin = createAdminClient()
+
+  const ip = req.headers.get('cf-connecting-ip')
+          || req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+          || null
+  const ua = req.headers.get('user-agent') || null
+
+  // ดึง user ก่อน signOut เพื่อเก็บ id/email
+  let userId: string | null = null
+  let email: string | null = null
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      userId = user.id
+      email = user.email ?? null
+    }
+  } catch {
+    // ไม่มี session ก็ไม่เป็นไร (อาจถูกเรียกซ้ำ)
+  }
+
+  // signOut เสมอ ไม่ว่ามี session หรือไม่
   await supabase.auth.signOut()
+
+  // บันทึก log เฉพาะถ้ามี user (ไม่อยากเก็บ noise)
+  if (userId) {
+    await admin.from('tb_logout_log').insert({
+      user_id:     userId,
+      email,
+      logout_type: 'manual',
+      ip_address:  ip,
+      user_agent:  ua,
+    })
+  }
+
   return NextResponse.json({ success: true })
 }

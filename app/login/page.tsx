@@ -90,9 +90,9 @@ export default function LoginPage() {
           </div>
 
           {error && (
-            <div style={{ fontSize: '13px', padding: '10px 14px', borderRadius: '10px', background: '#fef2f2', color: '#dc2626', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <i className="fa-solid fa-circle-exclamation"></i>
-              {error}
+            <div style={{ fontSize: '13px', padding: '10px 14px', borderRadius: '10px', background: '#fef2f2', color: '#dc2626', display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '8px' }}>
+              <i className="fa-solid fa-circle-exclamation" style={{ marginTop: '3px' }}></i>
+              <span style={{ whiteSpace: 'pre-line', lineHeight: 1.5 }}>{error}</span>
             </div>
           )}
 
@@ -121,7 +121,7 @@ export default function LoginPage() {
         <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #f3f4f6' }}>
           <p style={{ fontSize: '11px', color: '#9ca3af', margin: '0 0 2px 0' }}>พัฒนาโดย เภสัชกร สิรวิชญ์ เผ่าผา</p>
           <p style={{ fontSize: '11px', color: '#9ca3af', margin: '0 0 4px 0' }}>โรงพยาบาลปรางค์กู่</p>
-          <p style={{ fontSize: '11px', color: '#d1d5db', margin: 0 }}>Version 0.7.12.2 · <span style={{ color: '#fbbf24', fontWeight: 600 }}>ยังไม่เผยแพร่</span></p>
+          <p style={{ fontSize: '11px', color: '#d1d5db', margin: 0 }}>Version 0.7.12.3 · <span style={{ color: '#fbbf24', fontWeight: 600 }}>ยังไม่เผยแพร่</span></p>
         </div>
       </div>
     </div>

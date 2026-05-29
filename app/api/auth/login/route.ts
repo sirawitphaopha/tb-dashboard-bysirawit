@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
         failureReason:     'rate_limited_email',
       })
       return NextResponse.json(
-        { error: `บัญชีนี้ถูกระงับการเข้าสู่ระบบชั่วคราว เนื่องจากกรอกรหัสผ่านผิดเกิน ${MAX_FAILS_PER_EMAIL} ครั้ง กรุณาลองอีกครั้งใน ${WINDOW_MINUTES} นาที` },
+        { error: `บัญชีของท่านถูกระงับการเข้าสู่ระบบชั่วคราว\nเนื่องจากกรอกรหัสผ่านผิดเกิน ${MAX_FAILS_PER_EMAIL} ครั้ง\nกรุณาลองใหม่อีกครั้งใน ${WINDOW_MINUTES} นาที` },
         { status: 429 }
       )
     }

@@ -2120,7 +2120,11 @@ function App() {
     const next = logoClicks + 1;
     if (next >= 10) {
       setLogoClicks(0);
-      if (easterRound === 2) { fetch('/api/auth/signout', {method:'POST'}).then(()=>{ window.top.location.href='/login'; }); }
+      if (easterRound === 2) {
+        // 🥚 ซนจริง — โดนเตะออก
+        fetch('/api/easter-egg/log', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({event_type:'kicked_out'})}).catch(()=>{});
+        fetch('/api/auth/signout', {method:'POST'}).then(()=>{ window.top.location.href='/login'; });
+      }
       else setEasterMsgIdx(0);
     } else {
       setLogoClicks(next);
@@ -2129,7 +2133,11 @@ function App() {
   };
   const closeEasterMsg = () => {
     if (easterMsgIdx < EASTER_MSGS.length - 1) setEasterMsgIdx(i => i + 1);
-    else { setEasterMsgIdx(-1); setEasterRound(2); setNav('dashboard'); }
+    else {
+      // 🥚 ปลดล็อก easter egg ครั้งแรก — บันทึกไว้ดูเล่นๆ
+      fetch('/api/easter-egg/log', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({event_type:'discovered'})}).catch(()=>{});
+      setEasterMsgIdx(-1); setEasterRound(2); setNav('dashboard');
+    }
   };
 
   const navItems = [
@@ -2611,7 +2619,7 @@ function RequestEditModal({ field, currentValue, onClose }) {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.12.2';
+const APP_VERSION = '0.7.12.3';
 const BUILD_DATE = '22 พ.ค. 2569';
 function AboutModal({ onClose }) {
   return (
