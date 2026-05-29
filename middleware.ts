@@ -1,5 +1,9 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { createAdminClient } from '@/lib/supabase-admin'
+
+// throttle: ไม่ ping DB ถ้าเพิ่ง ping ภายใน 5 นาที (เก็บใน cookie)
+const PING_THROTTLE_MIN = 5
 
 // หมายเหตุ: ใช้ชื่อ middleware.ts (ไม่ใช่ proxy.ts) เพราะ Cloudflare Pages
 // ยังไม่รองรับ Node.js middleware (proxy.ts บน Next.js 16 บังคับ Node runtime)
@@ -43,6 +47,37 @@ export async function middleware(request: NextRequest) {
 
   if (isAuthed && (pathname === '/login' || pathname === '/register')) {
     return NextResponse.redirect(new URL('/', request.url))
+  }
+
+  // ─── Session Activity ping (B1) ──────────────────────────
+  // อัปเดต last_active_at แบบ throttle 5 นาที (ใช้ cookie ping marker)
+  if (user) {
+    const sessionId = request.cookies.get('tb_session_id')?.value
+    const lastPinged = request.cookies.get('tb_session_pinged')?.value
+    const now = Date.now()
+    const needPing = !lastPinged || (now - parseInt(lastPinged, 10)) > PING_THROTTLE_MIN * 60 * 1000
+
+    if (sessionId && needPing) {
+      // ยิงแบบไม่ await ก็ได้ (fire-and-forget) แต่ Cloudflare Workers อาจ kill ก่อน
+      // → await ไปเลย ปลอดภัยกว่า (ทุก 5 นาทีต่อ user ไม่ใช่ปัญหา)
+      try {
+        const admin = createAdminClient()
+        await admin
+          .from('tb_session_log')
+          .update({ last_active_at: new Date().toISOString() })
+          .eq('id', sessionId)
+          .is('ended_at', null)
+      } catch {
+        // ไม่ block ถ้า ping fail
+      }
+      supabaseResponse.cookies.set('tb_session_pinged', String(now), {
+        httpOnly: true,
+        secure:   process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path:     '/',
+        maxAge:   60 * 60 * 24 * 30,
+      })
+    }
   }
 
   if (user && !isPublic) {

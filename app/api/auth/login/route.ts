@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { createAdminClient } from '@/lib/supabase-admin'
+import { parseUserAgent } from '@/lib/parse-user-agent'
 
 // ─────────────────────────────────────────────────────────────────────────
 // POST /api/auth/login
@@ -182,11 +183,44 @@ export async function POST(req: NextRequest) {
       failureReason:     null,
     })
 
+    // ─── 4b. Insert session row + ตั้ง cookie tb_session_id ─
+    // (Session Activity Log — B1)
+    const parsedUA = parseUserAgent(ua)
+    const { data: sessionRow } = await admin
+      .from('tb_session_log')
+      .insert({
+        user_id:         signInData.user.id,
+        email:           loginEmail,
+        ip_address:      ip,
+        user_agent:      ua,
+        device_label:    parsedUA.device_label,
+        browser_name:    parsedUA.browser_name,
+        browser_version: parsedUA.browser_version,
+        os_name:         parsedUA.os_name,
+        os_version:      parsedUA.os_version,
+        device_type:     parsedUA.device_type,
+        device_vendor:   parsedUA.device_vendor,
+        device_model:    parsedUA.device_model,
+      })
+      .select('id')
+      .single()
+
     // ─── 5. ส่ง response พร้อม cookies ─────────────────────
     const response = NextResponse.json({ success: true })
     cookiesToSet.forEach(({ name, value, options }) => {
       response.cookies.set(name, value, options)
     })
+
+    // ตั้ง cookie tb_session_id (httpOnly) เพื่อให้ middleware/signout อ้างอิงได้
+    if (sessionRow?.id) {
+      response.cookies.set('tb_session_id', sessionRow.id, {
+        httpOnly: true,
+        secure:   process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path:     '/',
+        maxAge:   60 * 60 * 24 * 30,   // 30 วัน
+      })
+    }
     return response
   } catch (e: any) {
     console.error('login API error:', e)

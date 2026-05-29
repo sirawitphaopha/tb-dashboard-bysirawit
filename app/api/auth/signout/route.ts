@@ -34,6 +34,9 @@ export async function POST(req: NextRequest) {
     // ไม่มี session ก็ไม่เป็นไร (อาจถูกเรียกซ้ำ)
   }
 
+  // อ่าน tb_session_id ก่อน signOut เพื่อปิด session row ใน tb_session_log
+  const sessionId = req.cookies.get('tb_session_id')?.value || null
+
   // signOut เสมอ ไม่ว่ามี session หรือไม่
   await supabase.auth.signOut()
 
@@ -48,5 +51,24 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  return NextResponse.json({ success: true })
+  // ปิด session row (Session Activity Log — B1)
+  if (sessionId) {
+    await admin
+      .from('tb_session_log')
+      .update({
+        ended_at:   new Date().toISOString(),
+        end_reason: 'manual',
+      })
+      .eq('id', sessionId)
+      .is('ended_at', null)   // กันเขียนทับ session ที่ปิดไปแล้ว
+  }
+
+  // ลบ cookie tb_session_id
+  const response = NextResponse.json({ success: true })
+  response.cookies.set('tb_session_id', '', {
+    httpOnly: true,
+    path:     '/',
+    maxAge:   0,
+  })
+  return response
 }
