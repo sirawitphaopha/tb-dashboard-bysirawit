@@ -1725,6 +1725,7 @@ function App() {
   const [clinical, setClinical] = useState(null);
   const [showNotifs, setShowNotifs] = useState(false);
   const notifRef = useRef(null);
+  const searchRef = useRef(null);
   const [showFullNotifs, setShowFullNotifs] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [readAlerts, setReadAlerts] = useState(new Set());
@@ -1896,7 +1897,17 @@ function App() {
     return () => document.removeEventListener('mousedown', handler);
   }, [showNotifs]);
 
-  useEffect(() => { setShowNotifs(false); }, [nav]);
+  // ── ปิด popup ค้นหาเมื่อกดที่อื่นนอก popup ──
+  useEffect(() => {
+    if (!showSearchModal) return;
+    const handler = (e) => {
+      if (searchRef.current && !searchRef.current.contains(e.target)) setShowSearchModal(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showSearchModal]);
+
+  useEffect(() => { setShowNotifs(false); setShowSearchModal(false); }, [nav]);
 
   const showDirtyToast = () => {
     if (dirtyToastTimer.current) clearTimeout(dirtyToastTimer.current);
@@ -2186,7 +2197,7 @@ function App() {
         <div style={{display:'flex',alignItems:'center',height:'64px',padding:'0 10px',borderBottom:'1px solid #e5e7eb',flexShrink:0}}>
           <div onClick={handleLogoClick} title="กลับหน้าหลัก" style={{display:'flex',alignItems:'center',flex:1,cursor:'pointer',minWidth:0,height:'100%',borderRadius:'8px',transition:'background 0.15s'}} onMouseEnter={e=>e.currentTarget.style.background='#f0fdfa'} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
             <span style={{width:'36px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-              <i className="fa-solid fa-lungs-virus" style={{color:'#0f766e',fontSize:'18px'}}></i>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512" width="22" height="18" fill="#0f766e"><path d="M320 0c17.7 0 32 14.3 32 32l0 124.2c-8.5-7.6-19.7-12.2-32-12.2s-23.5 4.6-32 12.2L288 32c0-17.7 14.3-32 32-32zM444.5 195.5c-16.4-16.4-41.8-18.5-60.5-6.1l0-24.1C384 127 415 96 453.3 96c21.7 0 42.8 10.2 55.8 28.8c15.4 22.1 44.3 65.4 71 116.9c26.5 50.9 52.4 112.5 59.6 170.3c.2 1.3 .2 2.6 .2 4l0 7c0 49.1-39.8 89-89 89c-7.3 0-14.5-.9-21.6-2.7l-72.7-18.2c-20.9-5.2-38.7-17.1-51.5-32.9c14 1.5 28.5-3 39.2-13.8l-22.6-22.6 22.6 22.6c18.7-18.7 18.7-49.1 0-67.9c-1.1-1.1-1.4-2-1.5-2.5c-.1-.8-.1-1.8 .4-2.9s1.2-1.9 1.8-2.3c.5-.3 1.3-.8 2.9-.8c26.5 0 48-21.5 48-48s-21.5-48-48-48c-1.6 0-2.4-.4-2.9-.8c-.6-.4-1.3-1.2-1.8-2.3s-.5-2.2-.4-2.9c.1-.6 .4-1.4 1.5-2.5c18.7-18.7 18.7-49.1 0-67.9zM421.8 421.8c-6.2 6.2-16.4 6.2-22.6 0C375.9 398.5 336 415 336 448c0 8.8-7.2 16-16 16s-16-7.2-16-16c0-33-39.9-49.5-63.2-26.2c-6.2 6.2-16.4 6.2-22.6 0s-6.2-16.4 0-22.6C241.5 375.9 225 336 192 336c-8.8 0-16-7.2-16-16s7.2-16 16-16c33 0 49.5-39.9 26.2-63.2c-6.2-6.2-6.2-16.4 0-22.6s16.4-6.2 22.6 0C264.1 241.5 304 225 304 192c0-8.8 7.2-16 16-16s16 7.2 16 16c0 33 39.9 49.5 63.2 26.2c6.2-6.2 16.4-6.2 22.6 0s6.2 16.4 0 22.6C398.5 264.1 415 304 448 304c8.8 0 16 7.2 16 16s-7.2 16-16 16c-33 0-49.5 39.9-26.2 63.2c6.2 6.2 6.2 16.4 0 22.6zM183.3 491.2l-72.7 18.2c-7.1 1.8-14.3 2.7-21.6 2.7c-49.1 0-89-39.8-89-89l0-7c0-1.3 .1-2.7 .2-4c7.2-57.9 33.1-119.4 59.6-170.3c26.8-51.5 55.6-94.8 71-116.9c13-18.6 34-28.8 55.8-28.8C225 96 256 127 256 165.3l0 24.1c-18.6-12.4-44-10.3-60.5 6.1c-18.7 18.7-18.7 49.1 0 67.9c1.1 1.1 1.4 2 1.5 2.5c.1 .8 .1 1.8-.4 2.9s-1.2 1.9-1.8 2.3c-.5 .3-1.3 .8-2.9 .8c-26.5 0-48 21.5-48 48s21.5 48 48 48c1.6 0 2.4 .4 2.9 .8c.6 .4 1.3 1.2 1.8 2.3s.5 2.2 .4 2.9c-.1 .6-.4 1.4-1.5 2.5c-18.7 18.7-18.7 49.1 0 67.9c10.7 10.7 25.3 15.3 39.2 13.8c-12.8 15.9-30.6 27.7-51.5 32.9zM296 320a24 24 0 1 0 0-48 24 24 0 1 0 0 48zm72 32a16 16 0 1 0 -32 0 16 16 0 1 0 32 0z"/></svg>
             </span>
             <span style={{overflow:'hidden',whiteSpace:'nowrap',fontWeight:700,fontSize:'15px',color:'#0f766e',flex:1,maxWidth:sidebarOpen?'140px':'0px',opacity:sidebarOpen?1:0,transition:'max-width 0.2s ease,opacity 0.15s ease'}}>TB JOURNEY & CARE</span>
           </div>
@@ -2298,7 +2309,7 @@ function App() {
       </div>
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="h-16 bg-white/90 backdrop-blur-md shadow-sm flex items-center gap-3 px-6 z-10 border-b border-gray-200 flex-shrink-0">
+        <header className="h-16 bg-white/90 backdrop-blur-md shadow-sm flex items-center gap-3 px-6 border-b border-gray-200 flex-shrink-0" style={{position:'relative',zIndex:30}}>
           <h1 className="text-lg font-bold text-teal-700 whitespace-nowrap flex-shrink-0 flex items-center gap-2">
             <i className={`fa-solid ${pageIcons[nav]||'fa-circle'} text-teal-500`}></i>
             {titles[nav]}
@@ -2332,7 +2343,7 @@ function App() {
 
           <div className="relative flex-shrink-0 ml-auto flex items-center gap-0.5">
             {/* Search placeholder button */}
-            <div className="relative">
+            <div className="relative" ref={searchRef}>
               <button
                 onClick={()=>setShowSearchModal(v=>!v)}
                 className="relative p-2 text-teal-700 hover:text-teal-900 transition-colors"
@@ -2342,8 +2353,8 @@ function App() {
               </button>
               {showSearchModal && (
                 <div
-                  className="notif-modal absolute right-0 top-full mt-2 z-50"
-                  style={{width:'340px'}}
+                  className="notif-modal absolute right-0 top-full mt-2"
+                  style={{width:'340px',zIndex:1000}}
                   onClick={e=>e.stopPropagation()}
                 >
                   <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
@@ -2640,7 +2651,7 @@ function RequestEditModal({ field, currentValue, onClose }) {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.14.2';
+const APP_VERSION = '0.7.14.3';
 const BUILD_DATE = '31 พ.ค. 2569';
 function AboutModal({ onClose, onShowChangelog }) {
   const [closing, setClosing] = React.useState(false);
@@ -2655,7 +2666,7 @@ function AboutModal({ onClose, onShowChangelog }) {
         {/* Header */}
         <div style={{background:'linear-gradient(160deg,#0f766e,#14b8a6)',padding:'28px 24px',textAlign:'center'}}>
           <div style={{width:'64px',height:'64px',borderRadius:'18px',background:'rgba(255,255,255,0.2)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 12px'}}>
-            <i className="fa-solid fa-lungs-virus" style={{fontSize:'30px',color:'#fff'}}></i>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512" width="36" height="30" fill="#fff"><path d="M320 0c17.7 0 32 14.3 32 32l0 124.2c-8.5-7.6-19.7-12.2-32-12.2s-23.5 4.6-32 12.2L288 32c0-17.7 14.3-32 32-32zM444.5 195.5c-16.4-16.4-41.8-18.5-60.5-6.1l0-24.1C384 127 415 96 453.3 96c21.7 0 42.8 10.2 55.8 28.8c15.4 22.1 44.3 65.4 71 116.9c26.5 50.9 52.4 112.5 59.6 170.3c.2 1.3 .2 2.6 .2 4l0 7c0 49.1-39.8 89-89 89c-7.3 0-14.5-.9-21.6-2.7l-72.7-18.2c-20.9-5.2-38.7-17.1-51.5-32.9c14 1.5 28.5-3 39.2-13.8l-22.6-22.6 22.6 22.6c18.7-18.7 18.7-49.1 0-67.9c-1.1-1.1-1.4-2-1.5-2.5c-.1-.8-.1-1.8 .4-2.9s1.2-1.9 1.8-2.3c.5-.3 1.3-.8 2.9-.8c26.5 0 48-21.5 48-48s-21.5-48-48-48c-1.6 0-2.4-.4-2.9-.8c-.6-.4-1.3-1.2-1.8-2.3s-.5-2.2-.4-2.9c.1-.6 .4-1.4 1.5-2.5c18.7-18.7 18.7-49.1 0-67.9zM421.8 421.8c-6.2 6.2-16.4 6.2-22.6 0C375.9 398.5 336 415 336 448c0 8.8-7.2 16-16 16s-16-7.2-16-16c0-33-39.9-49.5-63.2-26.2c-6.2 6.2-16.4 6.2-22.6 0s-6.2-16.4 0-22.6C241.5 375.9 225 336 192 336c-8.8 0-16-7.2-16-16s7.2-16 16-16c33 0 49.5-39.9 26.2-63.2c-6.2-6.2-6.2-16.4 0-22.6s16.4-6.2 22.6 0C264.1 241.5 304 225 304 192c0-8.8 7.2-16 16-16s16 7.2 16 16c0 33 39.9 49.5 63.2 26.2c6.2-6.2 16.4-6.2 22.6 0s6.2 16.4 0 22.6C398.5 264.1 415 304 448 304c8.8 0 16 7.2 16 16s-7.2 16-16 16c-33 0-49.5 39.9-26.2 63.2c6.2 6.2 6.2 16.4 0 22.6zM183.3 491.2l-72.7 18.2c-7.1 1.8-14.3 2.7-21.6 2.7c-49.1 0-89-39.8-89-89l0-7c0-1.3 .1-2.7 .2-4c7.2-57.9 33.1-119.4 59.6-170.3c26.8-51.5 55.6-94.8 71-116.9c13-18.6 34-28.8 55.8-28.8C225 96 256 127 256 165.3l0 24.1c-18.6-12.4-44-10.3-60.5 6.1c-18.7 18.7-18.7 49.1 0 67.9c1.1 1.1 1.4 2 1.5 2.5c.1 .8 .1 1.8-.4 2.9s-1.2 1.9-1.8 2.3c-.5 .3-1.3 .8-2.9 .8c-26.5 0-48 21.5-48 48s21.5 48 48 48c1.6 0 2.4 .4 2.9 .8c.6 .4 1.3 1.2 1.8 2.3s.5 2.2 .4 2.9c-.1 .6-.4 1.4-1.5 2.5c-18.7 18.7-18.7 49.1 0 67.9c10.7 10.7 25.3 15.3 39.2 13.8c-12.8 15.9-30.6 27.7-51.5 32.9zM296 320a24 24 0 1 0 0-48 24 24 0 1 0 0 48zm72 32a16 16 0 1 0 -32 0 16 16 0 1 0 32 0z"/></svg>
           </div>
           <p style={{fontWeight:800,fontSize:'18px',color:'#fff',margin:0}}>TB JOURNEY &amp; CARE</p>
           <p style={{fontSize:'12px',color:'rgba(255,255,255,0.85)',margin:'5px 0 0',lineHeight:1.4}}>ระบบเก็บข้อมูลผู้ป่วยวัณโรคและติดตามการรักษา</p>
@@ -2716,30 +2727,35 @@ function ChangelogPage() {
   const [expandedComments, setExpandedComments] = useState(new Set()); // version ที่เปิด comments ใน Timeline view
   const [commentCounts, setCommentCounts] = useState({}); // {version: count}
   const [onlyWithComments, setOnlyWithComments] = useState(false); // filter: เฉพาะมี comment
+  // ── Bulk comments store — fetch รวด 1 ครั้งแทน fetch ต่อ version ──
+  const [allCommentsByVersion, setAllCommentsByVersion] = useState({}); // {version: [comments]}
+  const [commentsMeta, setCommentsMeta] = useState({ currentUserId: null, isAdmin: false });
 
-  // โหลด comment counts ของทุก version ตอน mount + auto-expand ที่มี comment
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const r = await fetch('/api/changelog/comment-counts');
-        const j = await r.json();
-        if (cancelled || !r.ok) return;
-        const counts = j.counts || {};
-        setCommentCounts(counts);
-        // auto-expand version ที่มี comment (user ไม่ต้องกดเอง)
-        const withComments = Object.entries(counts).filter(([,n]) => n > 0).map(([k]) => k);
-        if (withComments.length > 0) {
-          setExpandedComments(prev => {
-            const next = new Set(prev);
-            withComments.forEach(v => next.add(v));
-            return next;
-          });
-        }
-      } catch {/* network fail = ไม่มี count */}
-    })();
-    return () => { cancelled = true; };
+  // โหลด comment ทั้งหมดรวด 1 ครั้ง + auto-expand version ที่มี comment
+  const refreshAllComments = React.useCallback(async () => {
+    try {
+      const r = await fetch('/api/changelog/comments-all');
+      const j = await r.json();
+      if (!r.ok) return;
+      const byVersion = j.byVersion || {};
+      setAllCommentsByVersion(byVersion);
+      setCommentsMeta({ currentUserId: j.current_user_id, isAdmin: !!j.is_admin });
+      // คำนวณ counts จากข้อมูลที่ได้
+      const counts = {};
+      Object.entries(byVersion).forEach(([v, list]) => { counts[v] = list.length; });
+      setCommentCounts(counts);
+      // auto-expand version ที่มี comment
+      const withComments = Object.keys(byVersion);
+      if (withComments.length > 0) {
+        setExpandedComments(prev => {
+          const next = new Set(prev);
+          withComments.forEach(v => next.add(v));
+          return next;
+        });
+      }
+    } catch {/* network fail */}
   }, []);
+  useEffect(() => { refreshAllComments(); }, [refreshAllComments]);
 
   const toggleComments = (version) => {
     setExpandedComments(prev => {
@@ -3059,7 +3075,7 @@ function ChangelogPage() {
         <div style={{position:'relative',flex:'0 0 240px'}}>
           <i className="fa-solid fa-magnifying-glass" style={{position:'absolute',left:'12px',top:'50%',transform:'translateY(-50%)',color:'#9ca3af',fontSize:'12px'}}></i>
           <input type="text" value={search} onChange={e=>setSearch(e.target.value)} placeholder="ค้นหาเวอร์ชัน/หัวเรื่อง/รายละเอียด"
-            style={{width:'100%',padding:'8px 12px 8px 32px',borderRadius:'10px',border:'1px solid #e5e7eb',background:'#f9fafb',fontSize:'12px',outline:'none'}}
+            style={{width:'100%',padding:'8px 12px 8px 32px',borderRadius:'10px',border:'1px solid #e5e7eb',background:'#f9fafb',fontSize:'12px',outline:'none',color:'#1f2937',caretColor:'#0d9488'}}
             onFocus={e=>{e.currentTarget.style.borderColor='#14b8a6';e.currentTarget.style.background='#fff';}}
             onBlur={e=>{e.currentTarget.style.borderColor='#e5e7eb';e.currentTarget.style.background='#f9fafb';}}
           />
@@ -3126,10 +3142,12 @@ function ChangelogPage() {
                         <CommitChip v={v} color={color}/>
                         {isLatest && <span style={{fontSize:'10px',fontWeight:700,color:'#92400e',background:'#fef3c7',padding:'2px 8px',borderRadius:'999px'}}>ล่าสุด</span>}
                         {commentCounts[v.version] > 0 && (
-                          <span title={`มี ${commentCounts[v.version]} ความคิดเห็น`}
-                            style={{display:'inline-flex',alignItems:'center',gap:'3px',fontSize:'10px',fontWeight:700,color:'#92400e',background:'#fef3c7',border:'1px solid #fbbf24',padding:'2px 7px',borderRadius:'999px'}}>
+                          <button type="button" tabIndex={-1} onMouseDown={e=>e.preventDefault()}
+                            onClick={e=>{e.stopPropagation();setOnlyWithComments(v=>!v);}}
+                            title={`มี ${commentCounts[v.version]} ความคิดเห็น — กดเพื่อกรองเฉพาะที่มีคอมเม้น`}
+                            style={{cursor:'pointer',display:'inline-flex',alignItems:'center',gap:'3px',fontSize:'10px',fontWeight:700,color:onlyWithComments?'#fff':'#92400e',background:onlyWithComments?'#d97706':'#fef3c7',border:onlyWithComments?'1px solid #b45309':'1px solid #fbbf24',padding:'2px 7px',borderRadius:'999px',transition:'all 0.15s'}}>
                             <i className="fa-regular fa-comment"></i>{commentCounts[v.version]}
-                          </span>
+                          </button>
                         )}
                         <TagBreakdown changes={v.changes}/>
                       </div>
@@ -3160,6 +3178,10 @@ function ChangelogPage() {
                       {isOpen && (
                         <ChangelogCommentSection key={'cmt-'+v.version} version={v.version}
                           theme={commentCounts[v.version] > 0 ? 'amber' : 'teal'}
+                          initialComments={allCommentsByVersion[v.version] || []}
+                          currentUserId={commentsMeta.currentUserId}
+                          isAdmin={commentsMeta.isAdmin}
+                          onRefresh={refreshAllComments}
                           onCountChange={n=>setCommentCount(v.version, n)}/>
                       )}
                     </div>
@@ -3251,6 +3273,10 @@ function ChangelogPage() {
                                           })()}
                                           <ChangelogCommentSection version={v.version}
                                             theme={commentCounts[v.version] > 0 ? 'amber' : 'teal'}
+                                            initialComments={allCommentsByVersion[v.version] || []}
+                                            currentUserId={commentsMeta.currentUserId}
+                                            isAdmin={commentsMeta.isAdmin}
+                                            onRefresh={refreshAllComments}
                                             onCountChange={n=>setCommentCount(v.version, n)}/>
                                         </div>
                                       )}
@@ -3374,16 +3400,23 @@ const CHANGELOG_STATUS_META = {
   note:       { emoji:'📝', label:'บันทึก',     bg:'#f1f5f9', fg:'#334155', border:'#cbd5e1' },
 };
 
-const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ version, onCountChange, theme }) {
+const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ version, onCountChange, theme, initialComments, currentUserId: propsUserId, isAdmin: propsIsAdmin, onRefresh }) {
   // theme: 'teal' (default) | 'amber' (เมื่อ version มี comment แล้ว — เน้นให้เด่น)
   const T = theme === 'amber'
     ? { bg:'#fffbeb', border:'#f59e0b', accent:'#92400e', accent2:'#d97706', sub:'#b45309', cardBorder:'#fbbf24', formBorder:'#f59e0b' }
     : { bg:'#f0fdfa', border:'#99f6e4', accent:'#0f766e', accent2:'#0d9488', sub:'#5eead4', cardBorder:'#ccfbf1', formBorder:'#5eead4' };
-  const [comments, setComments] = React.useState([]);
-  const [loading, setLoading]   = React.useState(true);
+  // ใช้ initialComments จาก parent ถ้ามี (bulk fetch) — ไม่ต้อง fetch เอง
+  const [comments, setComments] = React.useState(initialComments || []);
+  const [loading, setLoading]   = React.useState(!initialComments);
   const [error, setError]       = React.useState('');
-  const [currentUserId, setCurrentUserId] = React.useState(null);
-  const [isAdmin, setIsAdmin]   = React.useState(false);
+  const [currentUserId, setCurrentUserId] = React.useState(propsUserId || null);
+  const [isAdmin, setIsAdmin]   = React.useState(!!propsIsAdmin);
+  // อัป comments เมื่อ parent ส่งข้อมูลใหม่มา
+  React.useEffect(() => {
+    if (initialComments) { setComments(initialComments); setLoading(false); }
+    if (propsUserId !== undefined) setCurrentUserId(propsUserId);
+    if (propsIsAdmin !== undefined) setIsAdmin(!!propsIsAdmin);
+  }, [initialComments, propsUserId, propsIsAdmin]);
   // draft
   const [draftText, setDraftText]     = React.useState('');
   const [draftStatus, setDraftStatus] = React.useState('feedback');
@@ -3396,11 +3429,19 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
   // delete confirm
   const [confirmDelId, setConfirmDelId] = React.useState(null);
 
-  // เก็บ onCountChange ใน ref → กัน prop callback ที่สร้างใหม่ทุก render trigger fetch loop
+  // เก็บ onCountChange + onRefresh ใน ref → กัน prop callback ที่สร้างใหม่ทุก render trigger fetch loop
   const onCountChangeRef = React.useRef(onCountChange);
-  React.useEffect(() => { onCountChangeRef.current = onCountChange; });
+  const onRefreshRef = React.useRef(onRefresh);
+  React.useEffect(() => {
+    onCountChangeRef.current = onCountChange;
+    onRefreshRef.current = onRefresh;
+  });
 
+  // โหลดเองเฉพาะกรณี parent ไม่ส่ง initialComments มา (fallback) — ปกติใช้ bulk fetch
   const load = React.useCallback(async () => {
+    // ถ้ามี onRefresh จาก parent → ให้ parent โหลดให้ (bulk)
+    if (onRefreshRef.current) { await onRefreshRef.current(); return; }
+    // fallback: fetch ตามเดิม
     setLoading(true); setError('');
     try {
       const r = await fetch(`/api/changelog/comments?version=${encodeURIComponent(version)}`);
@@ -3414,7 +3455,10 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
     finally { setLoading(false); }
   }, [version]);
 
-  React.useEffect(() => { load(); }, [load]);
+  // ถ้า parent ไม่ส่ง initialComments มา → fallback โหลดเอง
+  React.useEffect(() => {
+    if (initialComments === undefined && !onRefresh) load();
+  }, [initialComments, onRefresh, load]);
 
   const handleSubmit = async (e) => {
     e?.preventDefault();
@@ -3568,7 +3612,7 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
                       ))}
                     </select>
                     <textarea value={editText} onChange={e=>setEditText(e.target.value)} rows={3} maxLength={2000}
-                      style={{width:'100%',padding:'8px 10px',borderRadius:'6px',border:'1px solid #d1d5db',fontSize:'13px',outline:'none',fontFamily:'inherit',resize:'vertical'}}/>
+                      style={{width:'100%',padding:'8px 10px',borderRadius:'6px',border:'1px solid #d1d5db',fontSize:'13px',outline:'none',fontFamily:'inherit',resize:'vertical',color:'#1f2937',caretColor:'#0d9488',background:'#fff'}}/>
                     <div style={{display:'flex',gap:'6px',marginTop:'6px',justifyContent:'flex-end'}}>
                       <button type="button" onClick={cancelEdit} disabled={savingEdit}
                         style={{cursor:'pointer',border:'1px solid #e5e7eb',background:'#fff',color:'#6b7280',fontSize:'11px',padding:'5px 12px',borderRadius:'6px',fontWeight:600}}>
@@ -3600,7 +3644,7 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
         </div>
         <textarea value={draftText} onChange={e=>setDraftText(e.target.value)} rows={3} maxLength={2000}
           placeholder="เขียนความคิดเห็น ข้อเสนอแนะ หรือแจ้งบั๊กที่นี่..."
-          style={{width:'100%',padding:'8px 10px',borderRadius:'6px',border:'1px solid #d1d5db',fontSize:'13px',outline:'none',fontFamily:'inherit',resize:'vertical'}}/>
+          style={{width:'100%',padding:'8px 10px',borderRadius:'6px',border:'1px solid #d1d5db',fontSize:'13px',outline:'none',fontFamily:'inherit',resize:'vertical',color:'#1f2937',caretColor:'#0d9488',background:'#fff'}}/>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:'6px'}}>
           <span style={{fontSize:'10px',color:draftText.length>1900?'#dc2626':'#9ca3af'}}>{draftText.length} / 2000</span>
           <button type="submit" disabled={submitting || !draftText.trim()}
@@ -3634,7 +3678,13 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
       )}
     </div>
   );
-}, (prev, next) => prev.version === next.version && prev.theme === next.theme);
+}, (prev, next) =>
+  prev.version === next.version &&
+  prev.theme === next.theme &&
+  prev.initialComments === next.initialComments &&
+  prev.currentUserId === next.currentUserId &&
+  prev.isAdmin === next.isAdmin
+);
 
 // ───── Main Profile Modal ─────
 // ── Password Eye icon (รูปแบบเดียวกับหน้า login) ─────────────────────────────
