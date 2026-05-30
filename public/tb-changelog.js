@@ -25,8 +25,8 @@ window.TB_CHANGELOG = [
       {
         version: "0.7.14.4",
         date: "31 พ.ค. 2569",
-        commit: "pending",
-        commitFull: "pending",
+        commit: "73757b9",
+        commitFull: "73757b97a72e259f29695370a1257fa617b08137",
         title: "Brand visual refresh — icon ปอด+macrophage+Mtb 3 สี, font Manrope + & Plus Jakarta Sans, sidebar ขยาย",
         changes: [
           { tag: "ui", text: "เปลี่ยน icon ปอด-ไวรัสทั้งเว็บเป็น 3 สี — ปอด+หลอดลม teal (#0d9488) + macrophage amber (#fbbf24) + Mtb 2 จุด rose (#e11d48) สื่อ pathophysiology TB จริง (macrophage กลืนเชื้อ + AFB+ บน Ziehl-Neelsen)" },
