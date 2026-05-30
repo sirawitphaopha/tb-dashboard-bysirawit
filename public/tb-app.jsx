@@ -2152,9 +2152,10 @@ function App() {
     { id:'trash', icon:'fa-trash', label:'ถังขยะ', badge: currentUser?.role==='admin' && pendingDeleteRequests.length > 0 ? pendingDeleteRequests.length : undefined, greenBadge: currentUser?.role==='admin' && pendingDeleteRequests.length === 0 && cancelledDeleteCount > 0 },
     ...(currentUser?.role === 'admin' ? [{ id:'activity-log', icon:'fa-wave-square', label:'บันทึกกิจกรรม' }] : []),
     ...(currentUser?.role === 'admin' ? [{ id:'audit-log', icon:'fa-clock-rotate-left', label:'ประวัติลบถาวร' }] : []),
+    { id:'changelog', icon:'fa-scroll', label:'ประวัติเวอร์ชั่น', divider:true },
   ];
-  const titles = { dashboard:'Dashboard', 'patient-list':'ทะเบียนผู้ป่วย Active', 'archive-list':'ทะเบียนจบการรักษา', 'all-patients':'ทะเบียนผู้ป่วยทั้งหมด', 'add-patient':'ลงทะเบียนผู้ป่วยใหม่', 'weekly-prep':'เตรียมเคสรายสัปดาห์', reports:'รายงาน และ สถิติ', knowledge:'คลังความรู้วัณโรค', settings:'ตั้งค่าระบบ', 'admin-users':'จัดการผู้ใช้', trash:'ถังขยะ', 'activity-log':'บันทึกกิจกรรม', 'audit-log':'ประวัติการลบถาวร' };
-  const pageIcons = { dashboard:'fa-chart-pie', 'patient-list':'fa-users', 'archive-list':'fa-box-archive', 'all-patients':'fa-users', 'add-patient':'fa-user-plus', 'weekly-prep':'fa-calendar-check', reports:'fa-file-contract', knowledge:'fa-book-open-reader', settings:'fa-gear', 'admin-users':'fa-user-shield', trash:'fa-trash', 'activity-log':'fa-wave-square', 'audit-log':'fa-clock-rotate-left' };
+  const titles = { dashboard:'Dashboard', 'patient-list':'ทะเบียนผู้ป่วย Active', 'archive-list':'ทะเบียนจบการรักษา', 'all-patients':'ทะเบียนผู้ป่วยทั้งหมด', 'add-patient':'ลงทะเบียนผู้ป่วยใหม่', 'weekly-prep':'เตรียมเคสรายสัปดาห์', reports:'รายงาน และ สถิติ', knowledge:'คลังความรู้วัณโรค', settings:'ตั้งค่าระบบ', 'admin-users':'จัดการผู้ใช้', trash:'ถังขยะ', 'activity-log':'บันทึกกิจกรรม', 'audit-log':'ประวัติการลบถาวร', changelog:'ประวัติเวอร์ชั่น' };
+  const pageIcons = { dashboard:'fa-chart-pie', 'patient-list':'fa-users', 'archive-list':'fa-box-archive', 'all-patients':'fa-users', 'add-patient':'fa-user-plus', 'weekly-prep':'fa-calendar-check', reports:'fa-file-contract', knowledge:'fa-book-open-reader', settings:'fa-gear', 'admin-users':'fa-user-shield', trash:'fa-trash', 'activity-log':'fa-wave-square', 'audit-log':'fa-clock-rotate-left', changelog:'fa-scroll' };
 
   // Clinical view กินทั้งจอ — ซ่อน sidebar + header ทั้งหมด
   if (clinical) {
@@ -2422,6 +2423,7 @@ function App() {
           {!dbLoading && nav==='trash'         && <TrashList currentUser={currentUser} onRestore={restorePatient} onHardDelete={hardDeletePatient} pendingDeleteRequests={pendingDeleteRequests} onApproveDelete={approveDeleteRequest} onRejectDelete={rejectDeleteRequest} onAcknowledgeCancelled={async () => { await window.acknowledgeCancelledRequests(); setCancelledDeleteCount(0); }}/>}
           {!dbLoading && nav==='activity-log'  && <ActivityLogTab/>}
           {!dbLoading && nav==='audit-log'     && <AuditLogTab/>}
+          {!dbLoading && nav==='changelog'     && <ChangelogPage/>}
         </div>
       </main>
 
@@ -2446,7 +2448,7 @@ function App() {
 
       {/* User Profile Modal */}
       {showProfile && <UserProfileModal onClose={()=>setShowProfile(false)}/>}
-      {showAbout && <AboutModal onClose={()=>setShowAbout(false)}/>}
+      {showAbout && <AboutModal onClose={()=>setShowAbout(false)} onShowChangelog={()=>{setShowAbout(false);setNav('changelog');}}/>}
       {/* Notification Full Modal */}
       {showFullNotifs && <NotificationFullModal
         alerts={alerts} patients={patients} readAlerts={readAlerts}
@@ -2622,11 +2624,15 @@ function RequestEditModal({ field, currentValue, onClose }) {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.13.5';
+const APP_VERSION = '0.7.14.0';
 const BUILD_DATE = '30 พ.ค. 2569';
-function AboutModal({ onClose }) {
+function AboutModal({ onClose, onShowChangelog }) {
   const [closing, setClosing] = React.useState(false);
   const handleClose = () => { if (closing) return; setClosing(true); setTimeout(onClose, 580); };
+  const openChangelog = () => {
+    if (closing) return;
+    if (onShowChangelog) onShowChangelog();
+  };
   return (
     <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.45)',backdropFilter:'blur(2px)',zIndex:60,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} className={closing?'modal-overlay-out':''} onClick={handleClose}>
       <div onClick={e=>e.stopPropagation()} className={closing?'modal-A-out':'modal-A'} style={{background:'#fff',borderRadius:'20px',width:'100%',maxWidth:'380px',boxShadow:'0 20px 60px rgba(0,0,0,0.25)',overflow:'hidden'}}>
@@ -2643,7 +2649,8 @@ function AboutModal({ onClose }) {
           <div style={{textAlign:'center',marginBottom:'16px'}}>
             <p style={{fontSize:'14px',fontWeight:700,color:'#0f766e',margin:0}}>เวอร์ชัน {APP_VERSION}</p>
             <p style={{fontSize:'12px',color:'#f59e0b',fontWeight:600,margin:'3px 0 0'}}>ยังไม่เผยแพร่ (อยู่ระหว่างพัฒนา)</p>
-            <p style={{fontSize:'11px',color:'#9ca3af',margin:'3px 0 0'}}><i className="fa-solid fa-screwdriver-wrench" style={{marginRight:'5px'}}></i>Build {BUILD_DATE}</p>
+            <p onClick={openChangelog} style={{fontSize:'11px',color:'#9ca3af',margin:'3px 0 0',cursor:'pointer',display:'inline-block',padding:'2px 8px',borderRadius:'6px',transition:'background 0.15s'}} onMouseEnter={e=>{e.currentTarget.style.background='#f0fdfa';e.currentTarget.style.color='#0d9488';}} onMouseLeave={e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='#9ca3af';}} title="ดูประวัติเวอร์ชัน"><i className="fa-solid fa-screwdriver-wrench" style={{marginRight:'5px'}}></i>Build {BUILD_DATE}</p>
+            <p onClick={openChangelog} style={{fontSize:'11px',color:'#0d9488',margin:'6px 0 0',cursor:'pointer',fontWeight:600}} title="ดูประวัติเวอร์ชัน"><i className="fa-solid fa-clock-rotate-left" style={{marginRight:'5px'}}></i>ดูประวัติเวอร์ชัน</p>
           </div>
           <div style={{borderTop:'1px solid #f1f5f9',paddingTop:'14px',textAlign:'center'}}>
             <p style={{fontSize:'11px',color:'#9ca3af',margin:'0 0 4px'}}>พัฒนาโดย</p>
@@ -2668,6 +2675,335 @@ function AboutModal({ onClose }) {
           <button onClick={handleClose} style={{width:'100%',marginTop:'16px',padding:'11px',borderRadius:'12px',border:'none',background:'#0f766e',color:'#fff',fontWeight:700,fontSize:'14px',cursor:'pointer'}}>ปิด</button>
           <p style={{fontSize:'10px',color:'#cbd5e1',textAlign:'center',margin:'10px 0 0'}}>© 2026 TB JOURNEY &amp; CARE</p>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ChangelogPage — หน้าประวัติเวอร์ชัน (mini-wiki ในเว็บ)
+// data จาก window.TB_CHANGELOG + window.TB_TAGS ใน public/tb-changelog.js
+// ═══════════════════════════════════════════════════════════════════════════
+function ChangelogPage() {
+  // เป็น tab page (ไม่ใช่ modal) — render ภายใต้ main content area เหมือน AdminUsersTab/ActivityLog
+  const [view, setView] = useState('timeline'); // 'timeline' | 'grouped'
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [selectedTags, setSelectedTags] = useState(new Set());
+  const [expandedMajors, setExpandedMajors] = useState(new Set([window.TB_CHANGELOG[0]?.major]));
+  const [expandedMinors, setExpandedMinors] = useState(new Set());
+  const [expandedVersions, setExpandedVersions] = useState(new Set());
+
+  // debounce search 300ms
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim().toLowerCase()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const TAGS = window.TB_TAGS || {};
+  const CHANGELOG = window.TB_CHANGELOG || [];
+
+  // นับ stats รวม
+  const stats = React.useMemo(() => {
+    let totalVersions = 0;
+    const byTag = {};
+    CHANGELOG.forEach(major => {
+      major.versions.forEach(v => {
+        totalVersions++;
+        v.changes.forEach(c => { byTag[c.tag] = (byTag[c.tag] || 0) + 1; });
+      });
+    });
+    return { totalVersions, byTag };
+  }, [CHANGELOG]);
+
+  // ฟิลเตอร์ version ตาม search + tag
+  const matchesFilters = (v) => {
+    if (selectedTags.size > 0) {
+      const hasTag = v.changes.some(c => selectedTags.has(c.tag));
+      if (!hasTag) return false;
+    }
+    if (debouncedSearch) {
+      const hay = (v.version + ' ' + v.title + ' ' + v.changes.map(c=>c.text).join(' ')).toLowerCase();
+      if (!hay.includes(debouncedSearch)) return false;
+    }
+    return true;
+  };
+
+  // ฟิลเตอร์ change list ภายใน version (ถ้ามี tag filter)
+  const filterChanges = (changes) => {
+    if (selectedTags.size === 0) return changes;
+    return changes.filter(c => selectedTags.has(c.tag));
+  };
+
+  const toggleTag = (tag) => {
+    const next = new Set(selectedTags);
+    if (next.has(tag)) next.delete(tag); else next.add(tag);
+    setSelectedTags(next);
+  };
+  const clearFilters = () => { setSearch(''); setSelectedTags(new Set()); };
+
+  const toggleMajor = (major) => {
+    const next = new Set(expandedMajors);
+    if (next.has(major)) next.delete(major); else next.add(major);
+    setExpandedMajors(next);
+  };
+  const toggleMinor = (key) => {
+    const next = new Set(expandedMinors);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    setExpandedMinors(next);
+  };
+  const toggleVersion = (v) => {
+    const next = new Set(expandedVersions);
+    if (next.has(v)) next.delete(v); else next.add(v);
+    setExpandedVersions(next);
+  };
+
+  // ── Group versions by minor (e.g. "0.7.13.5" → group "0.7.13") ──────────
+  const compareVersionDesc = (a, b) => {
+    const pa = a.split('.').map(Number);
+    const pb = b.split('.').map(Number);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+      const x = pa[i] || 0, y = pb[i] || 0;
+      if (x !== y) return y - x;
+    }
+    return 0;
+  };
+  const groupByMinor = (versions) => {
+    const groups = {};
+    versions.forEach(v => {
+      const parts = v.version.split('.');
+      const minorKey = parts.slice(0, 3).join('.');
+      if (!groups[minorKey]) groups[minorKey] = [];
+      groups[minorKey].push(v);
+    });
+    return Object.entries(groups)
+      .map(([minorKey, vs]) => ({
+        minorKey,
+        versions: vs.sort((a,b) => compareVersionDesc(a.version, b.version)),
+      }))
+      .sort((a,b) => compareVersionDesc(a.minorKey, b.minorKey));
+  };
+
+  // ── Tag chip ─────────────────────────────────────────────────────────────
+  const TagChip = ({ tagKey, small }) => {
+    const t = TAGS[tagKey];
+    if (!t) return null;
+    return (
+      <span style={{display:'inline-flex',alignItems:'center',gap:'3px',padding: small?'1px 6px':'2px 8px',borderRadius:'999px',background:t.bg,color:t.fg,border:`1px solid ${t.border}`,fontSize: small?'10px':'11px',fontWeight:600,whiteSpace:'nowrap'}}>
+        <span>{t.emoji}</span>
+        <span>{t.label}</span>
+      </span>
+    );
+  };
+
+  // ── ChangeRow ────────────────────────────────────────────────────────────
+  const ChangeRow = ({ change }) => (
+    <div style={{display:'flex',gap:'8px',padding:'6px 0',alignItems:'flex-start'}}>
+      <TagChip tagKey={change.tag} small />
+      <span style={{fontSize:'13px',color:'#374151',lineHeight:1.6,flex:1}}>{change.text}</span>
+    </div>
+  );
+
+  // ── VersionCard (Timeline) ───────────────────────────────────────────────
+  const VersionCard = ({ v, color, isLatest }) => {
+    const visibleChanges = filterChanges(v.changes);
+    if (visibleChanges.length === 0 && selectedTags.size > 0) return null;
+    return (
+      <div style={{display:'flex',gap:'14px',marginBottom:'14px'}}>
+        {/* Timeline dot + line */}
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',flexShrink:0,paddingTop:'6px'}}>
+          <div style={{width:'12px',height:'12px',borderRadius:'50%',background:color,boxShadow:`0 0 0 3px ${color}22`}}></div>
+          <div style={{width:'2px',flex:1,background:'#e5e7eb',marginTop:'4px'}}></div>
+        </div>
+        {/* Card */}
+        <div style={{flex:1,background:'#fff',border:'1px solid #e5e7eb',borderRadius:'14px',padding:'14px 16px',boxShadow:'0 1px 3px rgba(0,0,0,0.04)'}}>
+          <div style={{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',marginBottom:'6px'}}>
+            <span style={{fontWeight:800,fontSize:'15px',color}}>v{v.version}</span>
+            <span style={{fontSize:'11px',color:'#9ca3af'}}>{v.date}</span>
+            {v.commit && <span style={{fontSize:'10px',color:'#9ca3af',fontFamily:'monospace',background:'#f3f4f6',padding:'1px 6px',borderRadius:'4px'}}>{v.commit}</span>}
+            {isLatest && <span style={{fontSize:'10px',fontWeight:700,color:'#92400e',background:'#fef3c7',padding:'2px 8px',borderRadius:'999px'}}>ล่าสุด</span>}
+          </div>
+          <p style={{fontSize:'14px',fontWeight:700,color:'#1f2937',margin:'0 0 8px'}}>{v.title}</p>
+          {visibleChanges.map((c,i)=><ChangeRow key={i} change={c}/>)}
+        </div>
+      </div>
+    );
+  };
+
+  // ── Flat list สำหรับ Timeline view ───────────────────────────────────────
+  const allVersions = React.useMemo(() => {
+    const list = [];
+    CHANGELOG.forEach(major => {
+      major.versions.forEach(v => {
+        list.push({ ...v, _major: major.major, _color: major.color });
+      });
+    });
+    return list;
+  }, [CHANGELOG]);
+
+  const filteredTimeline = allVersions.filter(matchesFilters);
+  const latestVersion = allVersions[0]?.version;
+
+  const hasActiveFilters = debouncedSearch || selectedTags.size > 0;
+
+  return (
+    <div className="space-y-4 tb-fade">
+      {/* ── Banner Header (เหมือน AdminUsersTab/ActivityLog) ── */}
+      <div className="bg-gradient-to-r from-teal-700 to-teal-600 rounded-2xl p-5 text-white shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center flex-shrink-0">
+            <i className="fa-solid fa-scroll text-2xl"></i>
+          </div>
+          <div className="flex-1 min-w-0">
+            <h2 className="font-bold text-lg">ประวัติเวอร์ชั่น</h2>
+            <p className="text-xs text-teal-100">รวม {stats.totalVersions} เวอร์ชัน · ตั้งแต่ v0.5.0 ถึง v{APP_VERSION}</p>
+          </div>
+          {/* View toggle — อยู่ในแบนเนอร์ */}
+          <div style={{display:'flex',background:'rgba(255,255,255,0.15)',borderRadius:'10px',padding:'3px',gap:'2px',flexShrink:0}}>
+            <button type="button" onClick={()=>setView('timeline')}
+              style={{padding:'6px 12px',borderRadius:'8px',border:'none',background:view==='timeline'?'#fff':'transparent',color:view==='timeline'?'#0f766e':'#fff',fontSize:'12px',fontWeight:700,cursor:'pointer',transition:'all 0.15s'}}>
+              <i className="fa-solid fa-stream" style={{marginRight:'5px'}}></i>Timeline
+            </button>
+            <button type="button" onClick={()=>setView('grouped')}
+              style={{padding:'6px 12px',borderRadius:'8px',border:'none',background:view==='grouped'?'#fff':'transparent',color:view==='grouped'?'#0f766e':'#fff',fontSize:'12px',fontWeight:700,cursor:'pointer',transition:'all 0.15s'}}>
+              <i className="fa-solid fa-layer-group" style={{marginRight:'5px'}}></i>แยกตามเวอร์ชั่น
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Filter bar — เป็น card เหมือนกัน ── */}
+      <div style={{padding:'12px 16px',background:'#fff',borderRadius:'14px',border:'1px solid #e5e7eb',display:'flex',gap:'10px',alignItems:'center',flexWrap:'wrap',boxShadow:'0 1px 3px rgba(0,0,0,0.04)'}}>
+        <div style={{position:'relative',flex:'0 0 240px'}}>
+          <i className="fa-solid fa-magnifying-glass" style={{position:'absolute',left:'12px',top:'50%',transform:'translateY(-50%)',color:'#9ca3af',fontSize:'12px'}}></i>
+          <input type="text" value={search} onChange={e=>setSearch(e.target.value)} placeholder="ค้นหาเวอร์ชัน/หัวเรื่อง/รายละเอียด"
+            style={{width:'100%',padding:'8px 12px 8px 32px',borderRadius:'10px',border:'1px solid #e5e7eb',background:'#f9fafb',fontSize:'12px',outline:'none'}}
+            onFocus={e=>{e.currentTarget.style.borderColor='#14b8a6';e.currentTarget.style.background='#fff';}}
+            onBlur={e=>{e.currentTarget.style.borderColor='#e5e7eb';e.currentTarget.style.background='#f9fafb';}}
+          />
+        </div>
+        <div style={{display:'flex',gap:'6px',flexWrap:'wrap',flex:1}}>
+          {Object.entries(TAGS).map(([key,t])=>{
+            const active = selectedTags.has(key);
+            const count = stats.byTag[key] || 0;
+            return (
+              <button key={key} type="button" onClick={()=>toggleTag(key)}
+                style={{display:'inline-flex',alignItems:'center',gap:'4px',padding:'5px 10px',borderRadius:'999px',border:active?`1.5px solid ${t.fg}`:'1px solid #e5e7eb',background:active?t.bg:'#fff',color:active?t.fg:'#6b7280',fontSize:'11px',fontWeight:600,cursor:'pointer',transition:'all 0.15s'}}>
+                <span>{t.emoji}</span>
+                <span>{t.label}</span>
+                <span style={{fontSize:'10px',opacity:0.7}}>({count})</span>
+              </button>
+            );
+          })}
+        </div>
+        {hasActiveFilters && (
+          <button type="button" onClick={clearFilters}
+            style={{padding:'6px 12px',borderRadius:'8px',border:'1px solid #fbbf24',background:'#fffbeb',color:'#b45309',fontSize:'11px',fontWeight:700,cursor:'pointer'}}>
+            <i className="fa-solid fa-xmark" style={{marginRight:'4px'}}></i>ล้างค่า
+          </button>
+        )}
+      </div>
+
+      {/* ── Body — parent (main content area) จัดการ scroll เอง ── */}
+      <div>
+        {view === 'timeline' ? (
+          // ─── Timeline view ───
+          <div style={{maxWidth:'780px',margin:'0 auto'}}>
+            {filteredTimeline.length === 0 ? (
+              <div style={{textAlign:'center',padding:'60px 20px',color:'#9ca3af'}}>
+                <i className="fa-solid fa-magnifying-glass-minus" style={{fontSize:'32px',marginBottom:'12px',display:'block'}}></i>
+                <p style={{fontSize:'14px',fontWeight:600,margin:0}}>ไม่พบเวอร์ชันที่ตรงกับตัวกรอง</p>
+                <button type="button" onClick={clearFilters} style={{marginTop:'12px',padding:'8px 16px',borderRadius:'8px',border:'1px solid #14b8a6',background:'#fff',color:'#0d9488',fontSize:'12px',fontWeight:700,cursor:'pointer'}}>ล้างตัวกรอง</button>
+              </div>
+            ) : (
+              filteredTimeline.map((v,i) => <VersionCard key={v.version} v={v} color={v._color} isLatest={v.version===latestVersion}/>)
+            )}
+          </div>
+        ) : (
+          // ─── Grouped view ───
+          <div style={{maxWidth:'880px',margin:'0 auto'}}>
+            {CHANGELOG.map(major => {
+              const expanded = expandedMajors.has(major.major);
+              const filteredVersions = major.versions.filter(matchesFilters);
+              if (filteredVersions.length === 0 && hasActiveFilters) return null;
+              return (
+                <div key={major.major} style={{marginBottom:'14px',background:'#fff',border:'1px solid #e5e7eb',borderRadius:'16px',overflow:'hidden',boxShadow:'0 1px 3px rgba(0,0,0,0.04)'}}>
+                  {/* Major header */}
+                  <div onClick={()=>toggleMajor(major.major)}
+                    style={{padding:'16px 20px',background:`linear-gradient(135deg,${major.color}11,${major.color}05)`,borderLeft:`5px solid ${major.color}`,cursor:'pointer',display:'flex',alignItems:'center',gap:'14px',transition:'background 0.15s'}}
+                    onMouseEnter={e=>e.currentTarget.style.background=`linear-gradient(135deg,${major.color}1f,${major.color}0a)`}
+                    onMouseLeave={e=>e.currentTarget.style.background=`linear-gradient(135deg,${major.color}11,${major.color}05)`}>
+                    <div style={{fontSize:'28px'}}>{major.icon}</div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <p style={{fontWeight:800,fontSize:'16px',color:major.color,margin:0}}>รุ่น v{major.major}.x — {major.era}</p>
+                      <p style={{fontSize:'12px',color:'#6b7280',margin:'2px 0 0',lineHeight:1.5}}>{major.description}</p>
+                      <p style={{fontSize:'11px',color:'#9ca3af',margin:'3px 0 0'}}>
+                        <i className="fa-solid fa-calendar" style={{marginRight:'5px'}}></i>{major.period} · {filteredVersions.length} เวอร์ชัน
+                      </p>
+                    </div>
+                    <i className={`fa-solid fa-chevron-${expanded?'up':'down'}`} style={{color:major.color,fontSize:'14px'}}></i>
+                  </div>
+                  {/* Minor groups list (e.g. 0.7.1, 0.7.2, ..., 0.7.13) */}
+                  {expanded && (
+                    <div style={{padding:'4px 20px 16px'}}>
+                      {groupByMinor(filteredVersions).map(({minorKey, versions}) => {
+                        const minorOpen = expandedMinors.has(minorKey);
+                        const hasMultiple = versions.length > 1;
+                        const latestInMinor = versions[0]; // ใหม่สุดในกลุ่ม
+                        return (
+                          <div key={minorKey} style={{borderTop:'1px solid #f1f5f9',padding:'8px 0'}}>
+                            {/* Minor header */}
+                            <div onClick={()=>toggleMinor(minorKey)}
+                              style={{cursor:'pointer',display:'flex',alignItems:'center',gap:'10px',padding:'8px 10px',borderRadius:'10px',transition:'background 0.15s',background:minorOpen?`${major.color}0d`:'transparent'}}
+                              onMouseEnter={e=>{if(!minorOpen)e.currentTarget.style.background='#f9fafb'}}
+                              onMouseLeave={e=>{if(!minorOpen)e.currentTarget.style.background='transparent'}}>
+                              <i className={`fa-solid fa-chevron-${minorOpen?'down':'right'}`} style={{color:major.color,fontSize:'11px',width:'11px'}}></i>
+                              <span style={{fontWeight:800,fontSize:'14px',color:major.color,minWidth:'90px'}}>v{minorKey}</span>
+                              <span style={{fontSize:'12px',color:'#6b7280',flex:1}}>{latestInMinor.title}</span>
+                              {hasMultiple && <span style={{fontSize:'11px',fontWeight:700,color:major.color,background:`${major.color}1a`,padding:'2px 8px',borderRadius:'999px'}}>{versions.length} เวอร์ชันย่อย</span>}
+                              {!hasMultiple && <span style={{fontSize:'11px',color:'#9ca3af'}}>{latestInMinor.date}</span>}
+                            </div>
+                            {/* Patch-level versions inside this minor */}
+                            {minorOpen && (
+                              <div style={{padding:'4px 4px 4px 24px',borderLeft:`2px dashed ${major.color}33`,marginLeft:'9px',marginTop:'4px'}}>
+                                {versions.map(v => {
+                                  const isOpen = expandedVersions.has(v.version);
+                                  const visibleChanges = filterChanges(v.changes);
+                                  const isLatest = v.version === latestVersion;
+                                  return (
+                                    <div key={v.version} style={{padding:'4px 0'}}>
+                                      <div onClick={()=>toggleVersion(v.version)}
+                                        style={{cursor:'pointer',display:'flex',alignItems:'center',gap:'10px',padding:'6px 8px',borderRadius:'8px',transition:'background 0.15s'}}
+                                        onMouseEnter={e=>e.currentTarget.style.background='#f9fafb'}
+                                        onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                                        <i className={`fa-solid fa-chevron-${isOpen?'down':'right'}`} style={{color:'#9ca3af',fontSize:'10px',width:'10px'}}></i>
+                                        <span style={{fontWeight:700,fontSize:'12px',color:major.color,minWidth:'78px'}}>v{v.version}</span>
+                                        <span style={{fontSize:'11px',color:'#9ca3af',minWidth:'90px'}}>{v.date}</span>
+                                        <span style={{fontSize:'12px',color:'#374151',flex:1}}>{v.title}</span>
+                                        {isLatest && <span style={{fontSize:'9px',fontWeight:700,color:'#92400e',background:'#fef3c7',padding:'2px 7px',borderRadius:'999px'}}>ล่าสุด</span>}
+                                        <span style={{fontSize:'11px',color:'#9ca3af'}}>{v.changes.length} รายการ</span>
+                                      </div>
+                                      {isOpen && (
+                                        <div style={{padding:'4px 4px 4px 24px',borderLeft:`2px solid ${major.color}22`,marginLeft:'5px',marginTop:'2px'}}>
+                                          {visibleChanges.map((c,i)=><ChangeRow key={i} change={c}/>)}
+                                          {v.commit && <p style={{fontSize:'10px',color:'#9ca3af',fontFamily:'monospace',margin:'6px 0 0'}}>commit: {v.commit}</p>}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
