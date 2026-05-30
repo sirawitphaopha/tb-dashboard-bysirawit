@@ -23,10 +23,27 @@ window.TB_CHANGELOG = [
     description: "ระบบ login จริง + Audit Log ครบวงจร + Admin Approval + ดีไซน์ใหม่ทั้งหมด",
     versions: [
       {
-        version: "0.7.14.3",
+        version: "0.7.14.4",
         date: "31 พ.ค. 2569",
         commit: "pending",
         commitFull: "pending",
+        title: "Brand visual refresh — icon ปอด+macrophage+Mtb 3 สี, font Manrope + & Plus Jakarta Sans, sidebar ขยาย",
+        changes: [
+          { tag: "ui", text: "เปลี่ยน icon ปอด-ไวรัสทั้งเว็บเป็น 3 สี — ปอด+หลอดลม teal (#0d9488) + macrophage amber (#fbbf24) + Mtb 2 จุด rose (#e11d48) สื่อ pathophysiology TB จริง (macrophage กลืนเชื้อ + AFB+ บน Ziehl-Neelsen)" },
+          { tag: "ui", text: "Icon ใหม่กระจาย 6 จุด — Login (130x104), Sidebar (44x36), About modal header (64x64 กรอบขาว), Email header (44x44 กรอบขาว), Register page, Favicon (browser tab)" },
+          { tag: "ui", text: "เปลี่ยน font ของ \"TB JOURNEY & CARE\" เป็น Manrope (weight 800) + & ใช้ Plus Jakarta Sans — modern premium sans-serif ดูพรีเมียม กระจาย 5 จุด (Login, Sidebar, About, Email, Register)" },
+          { tag: "ui", text: "Login page — icon + h1 ขยาย +30% (icon 100→130, h1 28→35px) + ปอด teal + Mtb สี carbol fuchsin (rose-600 #e11d48)" },
+          { tag: "ui", text: "Sidebar header — icon ใหญ่ขึ้น 2 เท่า (22→44px) + ขยาย sidebar 240→260px ป้องกัน CARE ตก + maxWidth text 170→190px" },
+          { tag: "ui", text: "About modal + Email header — เพิ่มกรอบสี่เหลี่ยมขาว rounded ครอบ icon (64x64 / 44x44) สำหรับ bg teal เข้ม → icon เด่นชัด" },
+          { tag: "remove", text: "ลบ Font Awesome class fa-lungs-virus ในหน้า Register → เปลี่ยนเป็น inline SVG 3 สีตรงกันกับทั้งเว็บ" },
+          { tag: "backend", text: "โหลด Google Fonts เพิ่ม Manrope + Plus Jakarta Sans (ทั้ง app/layout.tsx + public/app.html) → font load ใช้ได้ทั่วระบบ" },
+        ],
+      },
+      {
+        version: "0.7.14.3",
+        date: "31 พ.ค. 2569",
+        commit: "4c8dbc7",
+        commitFull: "4c8dbc72395ce185faa012aced099c5acd276a1a",
         title: "Patch รวม UX/bug fixes — icon ปอด-ไวรัส, เคอร์เซอร์, search popup, bulk fetch comments, click-outside",
         changes: [
           { tag: "ui", text: "เปลี่ยน icon ปอดในเมล + sidebar + About modal เป็น inline SVG ของ fa-lungs-virus จาก FA v6.x latest (เดิม Font Awesome CDN v6.0.0 design เก่ากว่า) — ตอนนี้ icon ตรงกันทั้ง 3 จุด" },
