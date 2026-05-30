@@ -2624,7 +2624,7 @@ function RequestEditModal({ field, currentValue, onClose }) {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.14.0';
+const APP_VERSION = '0.7.14.1';
 const BUILD_DATE = '30 พ.ค. 2569';
 function AboutModal({ onClose, onShowChangelog }) {
   const [closing, setClosing] = React.useState(false);
@@ -2693,6 +2693,71 @@ function ChangelogPage() {
   const [expandedMajors, setExpandedMajors] = useState(new Set([window.TB_CHANGELOG[0]?.major]));
   const [expandedMinors, setExpandedMinors] = useState(new Set());
   const [expandedVersions, setExpandedVersions] = useState(new Set());
+  const [copiedHash, setCopiedHash] = useState(null);
+  const [copiedFull, setCopiedFull] = useState(null); // version string ที่เพิ่ง copy ฉบับเต็ม
+  const [commitDetailEntry, setCommitDetailEntry] = useState(null); // {entry, color}
+  const [localToast, setLocalToast] = useState(null); // {text, type}
+
+  // ── Copy commit hash → clipboard + flash "copied" badge ────────────────
+  const copyHash = (hash) => {
+    if (!hash || hash==='pending') return;
+    if (navigator.clipboard) navigator.clipboard.writeText(hash);
+    setCopiedHash(hash);
+    setTimeout(()=>setCopiedHash(prev => prev===hash ? null : prev), 1500);
+  };
+
+  // ── Copy commit ฉบับเต็ม (title + body + meta) → clipboard + toast ────
+  const copyFullCommit = (entry) => {
+    if (!entry) return;
+    const lines = [
+      `v${entry.version} · ${entry.date}` + (entry.commit && entry.commit!=='pending' ? ` · ${entry.commit}` : ''),
+      entry.title || '',
+      '',
+      entry.body || '(ไม่มี commit body)',
+    ];
+    const text = lines.join('\n');
+    if (navigator.clipboard) navigator.clipboard.writeText(text);
+    setCopiedFull(entry.version);
+    setTimeout(()=>setCopiedFull(prev => prev===entry.version ? null : prev), 1800);
+    setLocalToast({ text: 'คัดลอกฉบับเต็มแล้ว', type: 'success' });
+    setTimeout(()=>setLocalToast(null), 2000);
+  };
+
+  // ── Copy commit ฉบับย่อ (title + version + date + hash + bullets) ────
+  const copyShortCommit = (entry) => {
+    if (!entry) return;
+    const lines = [
+      `v${entry.version} · ${entry.date}` + (entry.commit && entry.commit!=='pending' ? ` · ${entry.commit}` : ''),
+      entry.title || '',
+    ];
+    if (entry.changes && entry.changes.length > 0) {
+      lines.push('');
+      entry.changes.forEach(c => {
+        const tag = TAGS[c.tag];
+        lines.push(`${tag?tag.emoji:'•'} ${c.text}`);
+      });
+    }
+    const text = lines.join('\n');
+    if (navigator.clipboard) navigator.clipboard.writeText(text);
+    setCopiedFull(entry.version);
+    setTimeout(()=>setCopiedFull(prev => prev===entry.version ? null : prev), 1800);
+    setLocalToast({ text: 'คัดลอกฉบับย่อแล้ว', type: 'success' });
+    setTimeout(()=>setLocalToast(null), 2000);
+  };
+
+  // ── Highlight ส่วนที่ค้นหาเจอ (พื้นเหลือง) ──────────────────────────────
+  const highlightMatch = (text) => {
+    const q = debouncedSearch;
+    if (!q || !text) return text;
+    const t = String(text);
+    const idx = t.toLowerCase().indexOf(q);
+    if (idx < 0) return t;
+    return (
+      <>{t.slice(0, idx)}
+        <mark style={{background:'#fef08a',padding:'0 2px',borderRadius:'3px',color:'inherit'}}>{t.slice(idx, idx+q.length)}</mark>
+        {t.slice(idx+q.length)}</>
+    );
+  };
 
   // debounce search 300ms
   useEffect(() => {
@@ -2800,9 +2865,65 @@ function ChangelogPage() {
   const ChangeRow = ({ change }) => (
     <div style={{display:'flex',gap:'8px',padding:'6px 0',alignItems:'flex-start'}}>
       <TagChip tagKey={change.tag} small />
-      <span style={{fontSize:'13px',color:'#374151',lineHeight:1.6,flex:1}}>{change.text}</span>
+      <span style={{fontSize:'13px',color:'#374151',lineHeight:1.6,flex:1}}>{highlightMatch(change.text)}</span>
     </div>
   );
+
+  // ── Tag breakdown ของ version (mini chips กดได้ = filter) ────────────
+  const TagBreakdown = ({ changes, small }) => {
+    const counts = {};
+    (changes || []).forEach(c => { counts[c.tag] = (counts[c.tag] || 0) + 1; });
+    const entries = Object.entries(counts).filter(([k])=>TAGS[k]);
+    if (entries.length === 0) return null;
+    const noFocus = (e) => e.preventDefault();
+    return (
+      <span style={{display:'inline-flex',gap:'3px',flexWrap:'wrap'}} onClick={e=>e.stopPropagation()}>
+        {entries.map(([k,n])=>{
+          const t = TAGS[k];
+          const active = selectedTags.has(k);
+          return (
+            <button key={k} type="button" tabIndex={-1} onMouseDown={noFocus} onClick={e=>{e.stopPropagation();toggleTag(k);}} title={`กรอง ${t.label}`}
+              style={{cursor:'pointer',border:active?`1px solid ${t.fg}`:'1px solid '+t.border,background: active ? t.bg : '#fff',color:t.fg,padding: small?'1px 5px':'2px 6px',borderRadius:'999px',fontSize: small?'9px':'10px',fontWeight:700,lineHeight:1.2,transition:'all 0.15s'}}>
+              {t.emoji}{n}
+            </button>
+          );
+        })}
+      </span>
+    );
+  };
+
+  // ── CommitChip — กดได้, แสดง copied state, กับปุ่ม "บันทึกฉบับเต็ม" ──────
+  const CommitChip = ({ v, color, small }) => {
+    if (!v.commit) return null;
+    const justCopied = copiedHash === v.commit;
+    // กัน event bubbling + กัน focus (browser auto-scroll button เข้าหา viewport ตอนได้ focus)
+    const noFocus = (e) => e.preventDefault();
+    const stop = (fn) => (e) => { e.stopPropagation(); fn(); };
+    return (
+      <span style={{display:'inline-flex',gap:'4px',alignItems:'center'}} onClick={e=>e.stopPropagation()}>
+        <button type="button" tabIndex={-1} onMouseDown={noFocus} onClick={stop(()=>copyHash(v.commit))} title="คลิกเพื่อ copy commit hash"
+          style={{cursor:'pointer',border:'none',fontSize: small?'9px':'10px',fontFamily:'monospace',background:justCopied?'#d1fae5':'#f3f4f6',color:justCopied?'#065f46':'#9ca3af',padding:'2px 7px',borderRadius:'4px',fontWeight:600,transition:'all 0.15s'}}>
+          {justCopied ? '✓ copied' : v.commit}
+        </button>
+        {v.body && (
+          <>
+            <button type="button" tabIndex={-1} onMouseDown={noFocus} onClick={stop(()=>setCommitDetailEntry({entry:v, color}))} title="ดูบันทึก commit ฉบับเต็ม"
+              style={{cursor:'pointer',border:'none',fontSize: small?'9px':'10px',background:'#eff6ff',color:'#1d4ed8',padding:'2px 7px',borderRadius:'4px',fontWeight:700,transition:'all 0.15s'}}
+              onMouseEnter={e=>e.currentTarget.style.background='#dbeafe'}
+              onMouseLeave={e=>e.currentTarget.style.background='#eff6ff'}>
+              <i className="fa-solid fa-file-lines" style={{marginRight:'3px'}}></i>บันทึกฉบับเต็ม
+            </button>
+            <button type="button" tabIndex={-1} onMouseDown={noFocus} onClick={stop(()=>copyShortCommit(v))} title="คัดลอก commit ฉบับย่อ (หัวเรื่อง + รายการแก้ไข)"
+              style={{cursor:'pointer',border:'none',fontSize: small?'9px':'10px',background: copiedFull===v.version ? '#d1fae5' : '#fef3c7',color: copiedFull===v.version ? '#065f46' : '#92400e',padding:'2px 7px',borderRadius:'4px',fontWeight:700,transition:'all 0.15s'}}
+              onMouseEnter={e=>{if(copiedFull!==v.version)e.currentTarget.style.background='#fde68a';}}
+              onMouseLeave={e=>{if(copiedFull!==v.version)e.currentTarget.style.background='#fef3c7';}}>
+              <i className={copiedFull===v.version ? 'fa-solid fa-check' : 'fa-regular fa-copy'}></i>
+            </button>
+          </>
+        )}
+      </span>
+    );
+  };
 
   // ── VersionCard (Timeline) ───────────────────────────────────────────────
   const VersionCard = ({ v, color, isLatest }) => {
@@ -2818,12 +2939,13 @@ function ChangelogPage() {
         {/* Card */}
         <div style={{flex:1,background:'#fff',border:'1px solid #e5e7eb',borderRadius:'14px',padding:'14px 16px',boxShadow:'0 1px 3px rgba(0,0,0,0.04)'}}>
           <div style={{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',marginBottom:'6px'}}>
-            <span style={{fontWeight:800,fontSize:'15px',color}}>v{v.version}</span>
+            <span style={{fontWeight:800,fontSize:'15px',color}}>v{highlightMatch(v.version)}</span>
             <span style={{fontSize:'11px',color:'#9ca3af'}}>{v.date}</span>
-            {v.commit && <span style={{fontSize:'10px',color:'#9ca3af',fontFamily:'monospace',background:'#f3f4f6',padding:'1px 6px',borderRadius:'4px'}}>{v.commit}</span>}
+            <CommitChip v={v} color={color}/>
             {isLatest && <span style={{fontSize:'10px',fontWeight:700,color:'#92400e',background:'#fef3c7',padding:'2px 8px',borderRadius:'999px'}}>ล่าสุด</span>}
+            <TagBreakdown changes={v.changes}/>
           </div>
-          <p style={{fontSize:'14px',fontWeight:700,color:'#1f2937',margin:'0 0 8px'}}>{v.title}</p>
+          <p style={{fontSize:'14px',fontWeight:700,color:'#1f2937',margin:'0 0 8px'}}>{highlightMatch(v.title)}</p>
           {visibleChanges.map((c,i)=><ChangeRow key={i} change={c}/>)}
         </div>
       </div>
@@ -2848,15 +2970,28 @@ function ChangelogPage() {
 
   return (
     <div className="space-y-4 tb-fade">
-      {/* ── Banner Header (เหมือน AdminUsersTab/ActivityLog) ── */}
-      <div className="bg-gradient-to-r from-teal-700 to-teal-600 rounded-2xl p-5 text-white shadow-sm">
+      {/* ── Banner Header (sticky — ตรึงตอน scroll) ── */}
+      <div className="bg-gradient-to-r from-teal-700 to-teal-600 rounded-2xl p-5 text-white shadow-md"
+        style={{position:'sticky',top:'-24px',zIndex:20,marginTop:0}}>
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center flex-shrink-0">
             <i className="fa-solid fa-scroll text-2xl"></i>
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="font-bold text-lg">ประวัติเวอร์ชั่น</h2>
-            <p className="text-xs text-teal-100">รวม {stats.totalVersions} เวอร์ชัน · ตั้งแต่ v0.5.0 ถึง v{APP_VERSION}</p>
+            <p className="text-xs text-teal-100" style={{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap'}}>
+              <span>รวม {stats.totalVersions} เวอร์ชัน</span>
+              {Object.entries(stats.byTag).filter(([k,n])=>n>0 && TAGS[k]).map(([k,n])=>{
+                const active = selectedTags.has(k);
+                return (
+                  <button key={k} type="button" onClick={()=>toggleTag(k)} title={`กรอง ${TAGS[k].label}`}
+                    style={{cursor:'pointer',border:active?'1px solid #fff':'1px solid rgba(255,255,255,0.3)',background: active ? '#fff' : 'rgba(255,255,255,0.15)',color: active ? TAGS[k].fg : '#fff',padding:'2px 8px',borderRadius:'999px',fontSize:'11px',fontWeight:700,transition:'all 0.15s',lineHeight:1.3}}>
+                    {TAGS[k].emoji}{n}
+                  </button>
+                );
+              })}
+            </p>
+            <p className="text-xs text-teal-100/80" style={{marginTop:'2px'}}>ตั้งแต่ v0.5.0 ถึง v{APP_VERSION}</p>
           </div>
           {/* View toggle — อยู่ในแบนเนอร์ */}
           <div style={{display:'flex',background:'rgba(255,255,255,0.15)',borderRadius:'10px',padding:'3px',gap:'2px',flexShrink:0}}>
@@ -2872,8 +3007,8 @@ function ChangelogPage() {
         </div>
       </div>
 
-      {/* ── Filter bar — เป็น card เหมือนกัน ── */}
-      <div style={{padding:'12px 16px',background:'#fff',borderRadius:'14px',border:'1px solid #e5e7eb',display:'flex',gap:'10px',alignItems:'center',flexWrap:'wrap',boxShadow:'0 1px 3px rgba(0,0,0,0.04)'}}>
+      {/* ── Filter bar — sticky ตรึงใต้แบนเนอร์ ── */}
+      <div style={{padding:'12px 16px',background:'#fff',borderRadius:'14px',border:'1px solid #e5e7eb',display:'flex',gap:'10px',alignItems:'center',flexWrap:'wrap',boxShadow:'0 4px 12px rgba(0,0,0,0.06)',position:'sticky',top:'84px',zIndex:19}}>
         <div style={{position:'relative',flex:'0 0 240px'}}>
           <i className="fa-solid fa-magnifying-glass" style={{position:'absolute',left:'12px',top:'50%',transform:'translateY(-50%)',color:'#9ca3af',fontSize:'12px'}}></i>
           <input type="text" value={search} onChange={e=>setSearch(e.target.value)} placeholder="ค้นหาเวอร์ชัน/หัวเรื่อง/รายละเอียด"
@@ -2958,8 +3093,8 @@ function ChangelogPage() {
                               onMouseEnter={e=>{if(!minorOpen)e.currentTarget.style.background='#f9fafb'}}
                               onMouseLeave={e=>{if(!minorOpen)e.currentTarget.style.background='transparent'}}>
                               <i className={`fa-solid fa-chevron-${minorOpen?'down':'right'}`} style={{color:major.color,fontSize:'11px',width:'11px'}}></i>
-                              <span style={{fontWeight:800,fontSize:'14px',color:major.color,minWidth:'90px'}}>v{minorKey}</span>
-                              <span style={{fontSize:'12px',color:'#6b7280',flex:1}}>{latestInMinor.title}</span>
+                              <span style={{fontWeight:800,fontSize:'14px',color:major.color,minWidth:'90px'}}>v{highlightMatch(minorKey)}</span>
+                              <span style={{fontSize:'12px',color:'#6b7280',flex:1}}>{highlightMatch(latestInMinor.title)}</span>
                               {hasMultiple && <span style={{fontSize:'11px',fontWeight:700,color:major.color,background:`${major.color}1a`,padding:'2px 8px',borderRadius:'999px'}}>{versions.length} เวอร์ชันย่อย</span>}
                               {!hasMultiple && <span style={{fontSize:'11px',color:'#9ca3af'}}>{latestInMinor.date}</span>}
                             </div>
@@ -2977,16 +3112,16 @@ function ChangelogPage() {
                                         onMouseEnter={e=>e.currentTarget.style.background='#f9fafb'}
                                         onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
                                         <i className={`fa-solid fa-chevron-${isOpen?'down':'right'}`} style={{color:'#9ca3af',fontSize:'10px',width:'10px'}}></i>
-                                        <span style={{fontWeight:700,fontSize:'12px',color:major.color,minWidth:'78px'}}>v{v.version}</span>
+                                        <span style={{fontWeight:700,fontSize:'12px',color:major.color,minWidth:'78px'}}>v{highlightMatch(v.version)}</span>
                                         <span style={{fontSize:'11px',color:'#9ca3af',minWidth:'90px'}}>{v.date}</span>
-                                        <span style={{fontSize:'12px',color:'#374151',flex:1}}>{v.title}</span>
+                                        <span style={{fontSize:'12px',color:'#374151',flex:1}}>{highlightMatch(v.title)}</span>
                                         {isLatest && <span style={{fontSize:'9px',fontWeight:700,color:'#92400e',background:'#fef3c7',padding:'2px 7px',borderRadius:'999px'}}>ล่าสุด</span>}
-                                        <span style={{fontSize:'11px',color:'#9ca3af'}}>{v.changes.length} รายการ</span>
+                                        <TagBreakdown changes={v.changes} small/>
                                       </div>
                                       {isOpen && (
                                         <div style={{padding:'4px 4px 4px 24px',borderLeft:`2px solid ${major.color}22`,marginLeft:'5px',marginTop:'2px'}}>
                                           {visibleChanges.map((c,i)=><ChangeRow key={i} change={c}/>)}
-                                          {v.commit && <p style={{fontSize:'10px',color:'#9ca3af',fontFamily:'monospace',margin:'6px 0 0'}}>commit: {v.commit}</p>}
+                                          {v.commit && <div style={{margin:'8px 0 0'}}><CommitChip v={v} color={major.color} small/></div>}
                                         </div>
                                       )}
                                     </div>
@@ -3004,6 +3139,93 @@ function ChangelogPage() {
             })}
           </div>
         )}
+      </div>
+
+      {/* Commit detail popup */}
+      {commitDetailEntry && (
+        <CommitDetailModal
+          entry={commitDetailEntry.entry}
+          color={commitDetailEntry.color}
+          copiedHash={copiedHash}
+          copiedFull={copiedFull}
+          onCopy={copyHash}
+          onCopyFull={()=>copyFullCommit(commitDetailEntry.entry)}
+          onClose={()=>setCommitDetailEntry(null)}
+        />
+      )}
+
+      {/* Local toast (มุมขวาล่าง — เด้งแล้วหายเอง 2 วินาที) */}
+      {localToast && (
+        <div style={{position:'fixed',bottom:'24px',right:'24px',zIndex:80,background:'#065f46',color:'#fff',padding:'12px 20px',borderRadius:'10px',fontSize:'13px',fontWeight:600,boxShadow:'0 8px 24px rgba(0,0,0,0.25)',display:'flex',alignItems:'center',gap:'8px'}}
+          className="modal-toast">
+          <i className="fa-solid fa-circle-check" style={{fontSize:'16px'}}></i>
+          {localToast.text}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CommitDetailModal — popup กลางจอ แสดง commit body ฉบับเต็ม
+// ═══════════════════════════════════════════════════════════════════════════
+function CommitDetailModal({ entry, color, copiedHash, copiedFull, onCopy, onCopyFull, onClose }) {
+  const {closing, close, modalCls, overlayCls} = useModalAnim(onClose);
+  const fullHash = entry.commitFull || entry.commit;
+  const justCopiedHash = copiedHash === fullHash;
+  const justCopiedFull = copiedFull === entry.version;
+  const ghUrl = (entry.commitFull || entry.commit) && entry.commit !== 'pending'
+    ? `https://github.com/sirawitphaopha/tb-dashboard-bysirawit/commit/${entry.commitFull || entry.commit}`
+    : null;
+  return (
+    <div className={"fixed inset-0 z-[70] flex items-center justify-center p-4 "+overlayCls}
+      style={{background:'rgba(15,23,42,0.55)',backdropFilter:'blur(3px)'}}
+      onClick={close}>
+      <div className={modalCls} onClick={e=>e.stopPropagation()}
+        style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'760px',maxHeight:'85vh',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'0 24px 60px rgba(0,0,0,0.3)'}}>
+        {/* Header */}
+        <div style={{padding:'18px 22px',background:`linear-gradient(135deg,${color||'#0f766e'},${color||'#0f766e'}dd)`,color:'#fff',flexShrink:0}}>
+          <div style={{display:'flex',alignItems:'flex-start',gap:'12px'}}>
+            <div style={{width:'40px',height:'40px',borderRadius:'10px',background:'rgba(255,255,255,0.2)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+              <i className="fa-solid fa-file-lines" style={{fontSize:'18px'}}></i>
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <p style={{fontWeight:800,fontSize:'15px',margin:0,lineHeight:1.4}}>{entry.title}</p>
+              <p style={{fontSize:'12px',margin:'4px 0 0',opacity:0.9}}>v{entry.version} · {entry.date}</p>
+              <div style={{display:'flex',gap:'6px',marginTop:'8px',flexWrap:'wrap',alignItems:'center'}}>
+                <button type="button" tabIndex={-1} onMouseDown={e=>e.preventDefault()} onClick={()=>onCopy(fullHash)}
+                  title="คลิกเพื่อ copy commit hash (full SHA-1, 40 ตัว)"
+                  style={{cursor:'pointer',border:'none',fontSize:'10px',fontFamily:'monospace',background: justCopiedHash ? '#d1fae5' : 'rgba(255,255,255,0.12)',color: justCopiedHash ? '#065f46' : '#fff',padding:'4px 10px',borderRadius:'6px',fontWeight:600,wordBreak:'break-all',maxWidth:'100%',textAlign:'left',transition:'all 0.15s'}}>
+                  <i className={'fa-solid '+(justCopiedHash?'fa-check':'fa-code-commit')} style={{marginRight:'5px'}}></i>{justCopiedHash ? 'คัดลอกแล้ว' : fullHash}
+                </button>
+                <button type="button" onClick={onCopyFull} title="คัดลอก commit ฉบับเต็ม (รวม body)"
+                  style={{cursor:'pointer',border:'none',fontSize:'11px',background: justCopiedFull ? '#d1fae5' : '#fef3c7',color: justCopiedFull ? '#065f46' : '#92400e',padding:'4px 10px',borderRadius:'6px',fontWeight:700,transition:'all 0.15s'}}>
+                  <i className={(justCopiedFull ? 'fa-solid fa-check' : 'fa-regular fa-copy')} style={{marginRight:'5px'}}></i>{justCopiedFull ? 'คัดลอกแล้ว' : 'คัดลอกทั้งหมด'}
+                </button>
+                {ghUrl && (
+                  <a href={ghUrl} target="_blank" rel="noopener noreferrer"
+                    style={{fontSize:'11px',background:'rgba(255,255,255,0.2)',color:'#fff',padding:'4px 10px',borderRadius:'6px',fontWeight:700,textDecoration:'none'}}>
+                    <i className="fa-brands fa-github" style={{marginRight:'5px'}}></i>เปิดใน GitHub
+                  </a>
+                )}
+              </div>
+            </div>
+            <button type="button" onClick={close}
+              style={{width:'32px',height:'32px',borderRadius:'8px',border:'none',background:'rgba(255,255,255,0.2)',color:'#fff',cursor:'pointer',flexShrink:0}}>
+              <i className="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+        </div>
+        {/* Body — scrollable monospace */}
+        <div style={{flex:1,overflowY:'auto',padding:'20px 24px',background:'#fafafa'}}>
+          {entry.body
+            ? <pre style={{margin:0,fontFamily:'monospace',fontSize:'12.5px',color:'#374151',lineHeight:1.7,whiteSpace:'pre-wrap',wordBreak:'break-word'}}>{entry.body}</pre>
+            : <p style={{fontSize:'13px',color:'#9ca3af',textAlign:'center',padding:'40px 20px'}}>
+                <i className="fa-solid fa-file-circle-question" style={{fontSize:'24px',display:'block',marginBottom:'10px'}}></i>
+                ยังไม่มีรายละเอียด commit body สำหรับเวอร์ชันนี้
+              </p>
+          }
+        </div>
       </div>
     </div>
   );
