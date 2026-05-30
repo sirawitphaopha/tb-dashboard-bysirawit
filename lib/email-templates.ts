@@ -662,3 +662,78 @@ export function passwordChangedEmail(firstName: string, when: string, baseUrl: s
   `
   return { subject, html: wrap(subject, body) }
 }
+
+// ═════════════════════════════════════════════════════════
+// Changelog Comment Notify — มี comment ใหม่ในหน้าประวัติเวอร์ชั่น
+// ═════════════════════════════════════════════════════════
+const CHANGELOG_STATUS: Record<string, { emoji: string; label: string; bg: string; fg: string }> = {
+  feedback:   { emoji: '💬', label: 'ความเห็น',   bg: '#dbeafe', fg: '#1e3a8a' },
+  bug_report: { emoji: '🐛', label: 'แจ้งบั๊ก',   bg: '#fee2e2', fg: '#991b1b' },
+  request:    { emoji: '✨', label: 'ขอฟีเจอร์', bg: '#f3e8ff', fg: '#6b21a8' },
+  note:       { emoji: '📝', label: 'บันทึก',     bg: '#f1f5f9', fg: '#334155' },
+}
+
+// ── format ISO timestamp → "31 พ.ค. 2569 · 14:23" ─────────────────────
+function thaiDateTime(iso?: string): string {
+  const d = iso ? new Date(iso) : new Date()
+  if (isNaN(d.getTime())) return ''
+  const MONTHS = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.']
+  const day = d.getDate()
+  const month = MONTHS[d.getMonth()]
+  const year = d.getFullYear() + 543
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  return `${day} ${month} ${year} · ${hh}:${mm}`
+}
+
+export function changelogCommentNotifyEmail(
+  version: string,
+  status: string,
+  authorName: string,
+  authorRole: string,
+  authorEmail: string,  // เก็บไว้รับ argument เผื่ออนาคต (ตอนนี้ไม่ได้แสดง)
+  commentText: string,
+  baseUrl: string,
+  createdAt?: string,   // ISO timestamp — ถ้าไม่ส่ง ใช้ตอนส่งเมล
+) {
+  const s = CHANGELOG_STATUS[status] || CHANGELOG_STATUS.feedback
+  const subject = `${s.emoji} ความคิดเห็นใหม่ v${version} — ${s.label}`
+  const safe = commentText
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\n/g, '<br>')
+  // ถ้า baseUrl เป็น localhost (ส่งจาก dev) → ใช้ production แทน
+  const link = /localhost|127\.0\.0\.1/.test(baseUrl) ? 'https://tbjourney.care' : baseUrl
+  const body = `
+    <h2 style="margin:0 0 16px;color:${BRAND_TEAL_DARK};font-size:18px;">มีความคิดเห็นใหม่ในระบบ</h2>
+    <p style="margin:0 0 20px;font-size:14px;color:#4b5563;">มีผู้ใช้เขียนความคิดเห็นที่หน้า "ประวัติเวอร์ชั่น" บน TB JOURNEY &amp; CARE</p>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border-radius:10px;padding:16px;margin-bottom:20px;">
+      <tr><td style="padding:6px 0;font-size:12px;color:#6b7280;width:130px;">เวอร์ชั่น</td>
+          <td style="padding:6px 0;font-size:14px;font-weight:700;color:${BRAND_TEAL_DARK};">v${version}</td></tr>
+      <tr><td style="padding:6px 0;font-size:12px;color:#6b7280;">ประเภท</td>
+          <td style="padding:6px 0;">
+            <span style="display:inline-block;padding:3px 10px;border-radius:999px;background:${s.bg};color:${s.fg};font-size:12px;font-weight:700;">${s.emoji} ${s.label}</span>
+          </td></tr>
+      <tr><td style="padding:6px 0;font-size:12px;color:#6b7280;">ผู้เขียน</td>
+          <td style="padding:6px 0;font-size:14px;font-weight:600;color:#1f2937;">${authorName} <span style="font-size:11px;color:#9ca3af;font-weight:400;">(${authorRole})</span></td></tr>
+      <tr><td style="padding:6px 0;font-size:12px;color:#6b7280;">วันที่และเวลา</td>
+          <td style="padding:6px 0;font-size:13px;font-weight:600;color:#1f2937;">${thaiDateTime(createdAt)}</td></tr>
+    </table>
+
+    <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#92400e;">💬 ข้อความ:</p>
+    <div style="background:#fffbeb;border:2px solid #f59e0b;border-radius:12px;padding:16px 20px;margin-bottom:24px;box-shadow:0 2px 6px rgba(245,158,11,0.12);max-width:100%;overflow:hidden;">
+      <p style="margin:0;font-size:15px;color:#1f2937;line-height:1.75;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;font-weight:500;max-width:100%;">${safe}</p>
+    </div>
+
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr><td align="center" style="padding:8px 0;">
+        <a href="${link}" style="display:inline-block;padding:14px 32px;background:${BRAND_TEAL};color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px;">📜 เปิดในระบบ</a>
+      </td></tr>
+    </table>
+
+    <p style="margin:16px 0 0;font-size:11px;color:#9ca3af;text-align:center;">อีเมลฉบับนี้ส่งให้ admin อัตโนมัติเมื่อมีคนเขียน comment ใหม่</p>
+  `
+  return { subject, html: wrap(subject, body) }
+}
