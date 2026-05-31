@@ -25,8 +25,8 @@ window.TB_CHANGELOG = [
       {
         version: "0.7.16.1",
         date: "1 มิ.ย. 2569",
-        commit: "pending",
-        commitFull: "pending",
+        commit: "9ae1eab",
+        commitFull: "9ae1eab266bf0326bcd9887f2c4a3f360846bb83",
         title: "Phase 3 Step 2 — Teal Skeleton Loading (โครง pulse โทนเทล รู้ทันทีว่ากำลังโหลด)",
         changes: [
           { tag: "feature", text: "หน้าโหลดครั้งแรก: เห็น 'โครง skeleton' โทนเทลอ่อนทันที — sidebar ขาว + กล่อง pulse แทนเมนู/KPI/chart/list (จากเดิมจอขาวเปล่า 5-9 วินาที)" },
