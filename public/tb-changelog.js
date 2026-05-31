@@ -25,8 +25,8 @@ window.TB_CHANGELOG = [
       {
         version: "0.7.15.4",
         date: "1 มิ.ย. 2569",
-        commit: "pending",
-        commitFull: "pending",
+        commit: "297dad2",
+        commitFull: "297dad2138a8d3b53288a817e5a3c61609a79960",
         title: "Phase 2 Step 3 — Keep mounted CommentSection (เปิดปิดคอมเม้น instant ครั้งถัดไป)",
         changes: [
           { tag: "ui", text: "ChangelogCommentSection ใช้ Keep mounted pattern — เปิดครั้งแรก mount, ปิดเป็น display:none, เปิดอีกครั้งกลับเป็น display:block · เปิดปิดครั้งถัดไป instant 0ms (เดิม mount/unmount ทุกครั้ง = render delay 50-200ms)" },
