@@ -37,10 +37,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const ctx = await getCallerContext(req)
     if ('error' in ctx) return NextResponse.json({ error: ctx.error }, { status: ctx.status })
 
-    // หา comment เดิม
+    // หา comment เดิม (ดึง field มากขึ้น เพื่อ snapshot edit history)
     const { data: existing } = await ctx.admin
       .from('tb_changelog_comments')
-      .select('id, user_id, deleted_at')
+      .select('id, user_id, deleted_at, comment_text, status')
       .eq('id', id)
       .maybeSingle()
     if (!existing) return NextResponse.json({ error: 'comment not found' }, { status: 404 })
@@ -60,6 +60,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       if (!VALID_STATUS.includes(body.status as Status))
         return NextResponse.json({ error: 'status ไม่ถูกต้อง' }, { status: 400 })
       updates.status = body.status
+    }
+
+    // snapshot ลง edit history ก่อน UPDATE — fire-and-forget (ถ้าเขียน history ไม่ผ่าน ไม่ block update)
+    if (updates.comment_text || updates.status) {
+      try {
+        await ctx.admin.from('tb_changelog_comment_edits').insert({
+          comment_id: id,
+          edited_by: ctx.user.id,
+          old_text: existing.comment_text,
+          old_status: existing.status,
+        })
+      } catch {/* ignore */}
     }
 
     const { data: updated, error: updErr } = await ctx.admin
@@ -87,7 +99,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     const { data: existing } = await ctx.admin
       .from('tb_changelog_comments')
-      .select('id, user_id, deleted_at')
+      .select('id, user_id, deleted_at, parent_comment_id')
       .eq('id', id)
       .maybeSingle()
     if (!existing) return NextResponse.json({ error: 'comment not found' }, { status: 404 })
@@ -97,12 +109,16 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     if (!isOwner && !ctx.isAdmin)
       return NextResponse.json({ error: 'ลบได้เฉพาะ comment ของตัวเอง หรือ admin' }, { status: 403 })
 
+    const nowIso = new Date().toISOString()
     const { error: delErr } = await ctx.admin
       .from('tb_changelog_comments')
-      .update({ deleted_at: new Date().toISOString(), deleted_by: ctx.user.id })
+      .update({ deleted_at: nowIso, deleted_by: ctx.user.id })
       .eq('id', id)
-
     if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 })
+
+    // v0.7.14.5 — ไม่ cascade soft delete reply อีกต่อไป
+    // (parent ที่ลบจะแสดงเป็น tombstone "[ข้อความนี้ถูกลบ]" reply ยังอยู่ใต้ + admin ดูข้อความเดิมได้)
+
     return NextResponse.json({ success: true })
   } catch (e: any) {
     return NextResponse.json({ error: e.message || 'error' }, { status: 500 })

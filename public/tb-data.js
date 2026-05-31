@@ -943,12 +943,14 @@ window.rejectDeleteRequest = async (requestId, reviewedBy, note) => {
   return !error;
 };
 
+// v0.7.14.5 — ดึง notifications ทั้ง read + unread (จำกัด 50 ล่าสุด)
+// ที่อ่านแล้วจะแสดงในกระดิ่งแบบจาง + ไม่นับใน badge unread
 window.loadUserNotifications = async () => {
   const { data } = await window._sb
     .from('tb_notifications')
     .select('*')
-    .eq('is_read', false)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .limit(50);
   return data || [];
 };
 

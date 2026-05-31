@@ -130,7 +130,7 @@ function useNotifHelpers(alerts,patients,readAlerts,onRead,onOpen,onClose,onNavT
   const handleClick=a=>{
     onRead(a.id);
     if(a.patientId&&onOpen){const p=(patients||[]).find(x=>x.id===a.patientId);if(p){onOpen(p);if(onClose)onClose();}}
-    else if(a.navTarget&&onNavTarget){onNavTarget(a.navTarget,a.highlightUser);if(onClose)onClose();}
+    else if(a.navTarget&&onNavTarget){onNavTarget(a.navTarget,a.highlightUser,a);if(onClose)onClose();}
   };
 
   const renderItem=(a,i)=>{

@@ -1,6 +1,6 @@
-// GET — นับจำนวน comment (ที่ไม่ถูก soft delete) ต่อ version ทั้งหมด
-// คืน { counts: { "0.7.14.2": 3, "0.7.14.1": 1, ... } }
-// ใช้สำหรับโชว์ badge + filter "เฉพาะที่มี comment"
+// GET — นับจำนวน comment (ที่ไม่ถูก soft delete) ต่อ version
+// counts: นับทุก comment รวม reply (ตาม decision v0.7.14.5)
+// unresolved_counts: นับเฉพาะ bug/request ที่ยังไม่ปิด (สำหรับ filter chip)
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { createAdminClient } from '@/lib/supabase-admin'
@@ -19,16 +19,23 @@ export async function GET(req: NextRequest) {
     const admin = createAdminClient()
     const { data, error } = await admin
       .from('tb_changelog_comments')
-      .select('version')
+      .select('version, status, resolved_at')
       .is('deleted_at', null)
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
     const counts: Record<string, number> = {}
+    const unresolvedCounts: Record<string, { bug: number; request: number; total: number }> = {}
     for (const r of data || []) {
       counts[r.version] = (counts[r.version] || 0) + 1
+      if (!r.resolved_at && (r.status === 'bug_report' || r.status === 'request')) {
+        if (!unresolvedCounts[r.version]) unresolvedCounts[r.version] = { bug: 0, request: 0, total: 0 }
+        if (r.status === 'bug_report') unresolvedCounts[r.version].bug += 1
+        if (r.status === 'request')    unresolvedCounts[r.version].request += 1
+        unresolvedCounts[r.version].total += 1
+      }
     }
-    return NextResponse.json({ counts })
+    return NextResponse.json({ counts, unresolved_counts: unresolvedCounts })
   } catch (e: any) {
     return NextResponse.json({ error: e.message || 'error' }, { status: 500 })
   }

@@ -1729,6 +1729,12 @@ function App() {
   const [showFullNotifs, setShowFullNotifs] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [readAlerts, setReadAlerts] = useState(new Set());
+  // sync readAlerts จาก DB (notification ที่ is_read=true อยู่แล้ว ต้องนับเป็น read)
+  useEffect(() => {
+    if (!userDbNotifs || userDbNotifs.length === 0) return;
+    const readIds = userDbNotifs.filter(n => n.is_read).map(n => 'user-notif-' + n.id);
+    if (readIds.length > 0) setReadAlerts(prev => new Set([...prev, ...readIds]));
+  }, [userDbNotifs]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sidebarHovered, setSidebarHovered] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -1764,6 +1770,7 @@ function App() {
   // คำขอแก้ไขข้อมูลที่รออนุมัติ (admin) + user ที่จะ highlight เมื่อกดจากกระดิ่ง
   const [pendingEditRequests, setPendingEditRequests] = useState([]);
   const [highlightUserId, setHighlightUserId] = useState(null);
+  const [highlightCommentTarget, setHighlightCommentTarget] = useState(null); // { version, commentId, ts }
   useEffect(() => {
     if (!currentUser?.id) return;
     if (currentUser.role === 'admin') {
@@ -1975,21 +1982,29 @@ function App() {
         })
       : []),
   ];
-  const userNotifAlerts = userDbNotifs.map(n => ({
-    id: 'user-notif-' + n.id,
-    dbNotifId: n.id,
-    type: (n.type === 'delete_rejected' || n.type === 'edit_request_rejected') ? 'warning' : 'info',
-    patient: n.patient_name || null,
-    patientId: (n.type === 'delete_rejected' || n.type === 'delete_restored') ? n.patient_id : null,
-    navTarget: null,
-    msg: n.type === 'delete_approved'         ? `Admin อนุมัติลบ "${n.patient_name}" แล้ว`
-       : n.type === 'delete_rejected'         ? `Admin ไม่อนุมัติลบ "${n.patient_name}"${n.note ? ` — ${n.note}` : ''}`
-       : n.type === 'delete_restored'         ? `Admin กู้คืน "${n.patient_name}" จากถังขยะแล้ว`
-       : n.type === 'edit_request_approved'   ? `Admin อนุมัติคำขอแก้ไข "${n.note}" แล้ว`
-       : n.type === 'edit_request_rejected'   ? `Admin ไม่อนุมัติคำขอแก้ไข${n.note ? ` "${n.note}"` : ''}`
-       : `"${n.patient_name}" ถูกลบถาวรแล้ว`,
-    time: new Date(n.created_at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }),
-  }));
+  const userNotifAlerts = userDbNotifs.map(n => {
+    const isComment = n.type === 'comment_reply' || n.type === 'comment_mention' || n.type === 'comment_resolved';
+    return {
+      id: 'user-notif-' + n.id,
+      dbNotifId: n.id,
+      type: (n.type === 'delete_rejected' || n.type === 'edit_request_rejected') ? 'warning' : 'info',
+      patient: n.patient_name || null,
+      patientId: (n.type === 'delete_rejected' || n.type === 'delete_restored') ? n.patient_id : null,
+      navTarget: isComment ? 'changelog' : null,
+      commentVersion: isComment ? n.comment_version : null,
+      commentId: isComment ? n.comment_id : null,
+      msg: n.type === 'delete_approved'         ? `Admin อนุมัติลบ "${n.patient_name}" แล้ว`
+         : n.type === 'delete_rejected'         ? `Admin ไม่อนุมัติลบ "${n.patient_name}"${n.note ? ` — ${n.note}` : ''}`
+         : n.type === 'delete_restored'         ? `Admin กู้คืน "${n.patient_name}" จากถังขยะแล้ว`
+         : n.type === 'edit_request_approved'   ? `Admin อนุมัติคำขอแก้ไข "${n.note}" แล้ว`
+         : n.type === 'edit_request_rejected'   ? `Admin ไม่อนุมัติคำขอแก้ไข${n.note ? ` "${n.note}"` : ''}`
+         : n.type === 'comment_reply'           ? `${n.note} ตอบกลับความคิดเห็นของคุณใน v${n.comment_version}`
+         : n.type === 'comment_mention'         ? `${n.note} เรียกคุณในความคิดเห็น v${n.comment_version}`
+         : n.type === 'comment_resolved'        ? `${n.note} ปิดประเด็นของคุณใน v${n.comment_version}`
+         : `"${n.patient_name}" ถูกลบถาวรแล้ว`,
+      time: new Date(n.created_at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }),
+    };
+  });
   const alerts = [...adminAlerts, ...userNotifAlerts, ...generateAlerts(patients)];
   const unreadCount = alerts.filter(a => !readAlerts.has(a.id)).length;
   const markRead = id => {
@@ -2427,7 +2442,7 @@ function App() {
                 alerts={alerts} patients={patients} readAlerts={readAlerts}
                 onRead={markRead} onReadAll={markAllRead}
                 onOpen={p=>{openFromNotif(p);setShowNotifs(false);}}
-                onNavTarget={(target, highlight)=>{ setNav(target); if(highlight) setHighlightUserId(highlight); setShowNotifs(false); }}
+                onNavTarget={(target, highlight, alert)=>{ setNav(target); if(highlight) setHighlightUserId(highlight); if(alert?.commentId){ setHighlightCommentTarget({ version: alert.commentVersion, commentId: alert.commentId, ts: Date.now() }); } setShowNotifs(false); }}
                 onClose={()=>setShowNotifs(false)}
                 onExpand={()=>{setShowNotifs(false);setShowFullNotifs(true);}}
               />}
@@ -2450,7 +2465,7 @@ function App() {
           {!dbLoading && nav==='trash'         && <TrashList currentUser={currentUser} onRestore={restorePatient} onHardDelete={hardDeletePatient} pendingDeleteRequests={pendingDeleteRequests} onApproveDelete={approveDeleteRequest} onRejectDelete={rejectDeleteRequest} onAcknowledgeCancelled={async () => { await window.acknowledgeCancelledRequests(); setCancelledDeleteCount(0); }}/>}
           {!dbLoading && nav==='activity-log'  && <ActivityLogTab/>}
           {!dbLoading && nav==='audit-log'     && <AuditLogTab/>}
-          {!dbLoading && nav==='changelog'     && <ChangelogPage/>}
+          {!dbLoading && nav==='changelog'     && <ChangelogPage highlightCommentTarget={highlightCommentTarget} onClearHighlight={()=>setHighlightCommentTarget(null)}/>}
         </div>
       </main>
 
@@ -2481,7 +2496,7 @@ function App() {
         alerts={alerts} patients={patients} readAlerts={readAlerts}
         onRead={markRead} onReadAll={markAllRead}
         onOpen={p=>{openFromNotif(p);}}
-        onNavTarget={(target, highlight)=>{ setNav(target); if(highlight) setHighlightUserId(highlight); setShowFullNotifs(false); }}
+        onNavTarget={(target, highlight, alert)=>{ setNav(target); if(highlight) setHighlightUserId(highlight); if(alert?.commentId){ setHighlightCommentTarget({ version: alert.commentVersion, commentId: alert.commentId, ts: Date.now() }); } setShowFullNotifs(false); }}
         onClose={()=>setShowFullNotifs(false)}
       />}
     </div>
@@ -2651,7 +2666,7 @@ function RequestEditModal({ field, currentValue, onClose }) {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.14.4';
+const APP_VERSION = '0.7.14.5';
 const BUILD_DATE = '31 พ.ค. 2569';
 function AboutModal({ onClose, onShowChangelog }) {
   const [closing, setClosing] = React.useState(false);
@@ -2711,7 +2726,7 @@ function AboutModal({ onClose, onShowChangelog }) {
 // ChangelogPage — หน้าประวัติเวอร์ชัน (mini-wiki ในเว็บ)
 // data จาก window.TB_CHANGELOG + window.TB_TAGS ใน public/tb-changelog.js
 // ═══════════════════════════════════════════════════════════════════════════
-function ChangelogPage() {
+function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
   // เป็น tab page (ไม่ใช่ modal) — render ภายใต้ main content area เหมือน AdminUsersTab/ActivityLog
   const [view, setView] = useState('timeline'); // 'timeline' | 'grouped'
   const [search, setSearch] = useState('');
@@ -2725,7 +2740,8 @@ function ChangelogPage() {
   const [commitDetailEntry, setCommitDetailEntry] = useState(null); // {entry, color}
   const [localToast, setLocalToast] = useState(null); // {text, type}
   const [expandedComments, setExpandedComments] = useState(new Set()); // version ที่เปิด comments ใน Timeline view
-  const [commentCounts, setCommentCounts] = useState({}); // {version: count}
+  const [commentCounts, setCommentCounts] = useState({}); // {version: active count รวม reply}
+  const [commentDeletedCounts, setCommentDeletedCounts] = useState({}); // {version: deleted count รวม reply}
   const [onlyWithComments, setOnlyWithComments] = useState(false); // filter: เฉพาะมี comment
   // ── Bulk comments store — fetch รวด 1 ครั้งแทน fetch ต่อ version ──
   const [allCommentsByVersion, setAllCommentsByVersion] = useState({}); // {version: [comments]}
@@ -2740,10 +2756,20 @@ function ChangelogPage() {
       const byVersion = j.byVersion || {};
       setAllCommentsByVersion(byVersion);
       setCommentsMeta({ currentUserId: j.current_user_id, isAdmin: !!j.is_admin });
-      // คำนวณ counts จากข้อมูลที่ได้
+      // คำนวณ counts จากข้อมูลที่ได้ — รวม reply, แยก active vs deleted
       const counts = {};
-      Object.entries(byVersion).forEach(([v, list]) => { counts[v] = list.length; });
+      const dcounts = {};
+      Object.entries(byVersion).forEach(([v, list]) => {
+        let a = 0, d = 0;
+        for (const c of list) {
+          if (c.deleted_at) d += 1; else a += 1;
+          if (Array.isArray(c.replies)) for (const r of c.replies) { if (r.deleted_at) d += 1; else a += 1; }
+        }
+        counts[v] = a;
+        dcounts[v] = d;
+      });
       setCommentCounts(counts);
+      setCommentDeletedCounts(dcounts);
       // auto-expand version ที่มี comment
       const withComments = Object.keys(byVersion);
       if (withComments.length > 0) {
@@ -2756,6 +2782,49 @@ function ChangelogPage() {
     } catch {/* network fail */}
   }, []);
   useEffect(() => { refreshAllComments(); }, [refreshAllComments]);
+
+  // ── Realtime subscription — comments + likes (v0.7.14.5) ──
+  React.useEffect(() => {
+    if (!window._sb) return;
+    let pending = null;
+    const debounced = () => { clearTimeout(pending); pending = setTimeout(refreshAllComments, 300); };
+    const chC = window._sb.channel('changelog-comments-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tb_changelog_comments' }, debounced)
+      .subscribe();
+    const chL = window._sb.channel('changelog-comment-likes-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tb_changelog_comment_likes' }, debounced)
+      .subscribe();
+    return () => { clearTimeout(pending); try { window._sb.removeChannel(chC); } catch {} try { window._sb.removeChannel(chL); } catch {} };
+  }, [refreshAllComments]);
+
+  // ── Highlight comment เมื่อกดจากกระดิ่ง ──
+  // CommentSection อาจ mount ช้า (รอ Realtime/render) → retry หา element ทุก 100ms นาน 4 วินาที
+  React.useEffect(() => {
+    if (!highlightCommentTarget) return;
+    const { version, commentId } = highlightCommentTarget;
+    if (!version || !commentId) return;
+    setView('timeline');
+    setExpandedComments(prev => { const n = new Set(prev); n.add(version); return n; });
+    let tries = 0;
+    const interval = setInterval(() => {
+      tries += 1;
+      const el = document.getElementById('cmt-' + commentId);
+      if (el) {
+        clearInterval(interval);
+        // อยู่ใน iframe — ใช้ scrollIntoView พร้อม container scroll
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.remove('comment-flash');
+        void el.offsetWidth;  // force reflow
+        el.classList.add('comment-flash');
+        setTimeout(() => { if (onClearHighlight) onClearHighlight(); }, 500);
+      } else if (tries > 40) {  // 4 วินาที
+        clearInterval(interval);
+        console.warn('[ChangelogPage] comment not found:', commentId);
+        if (onClearHighlight) onClearHighlight();
+      }
+    }, 100);
+    return () => clearInterval(interval);
+  }, [highlightCommentTarget, onClearHighlight]);
 
   const toggleComments = (version) => {
     setExpandedComments(prev => {
@@ -3168,7 +3237,15 @@ function ChangelogPage() {
                           <button type="button" tabIndex={-1} onMouseDown={e=>e.preventDefault()}
                             onClick={e=>{e.stopPropagation();toggleComments(v.version);}}
                             style={{cursor:'pointer',width:'100%',marginTop:'10px',padding:'10px 14px',border:'1.5px solid '+border,background:bg,color:fg,fontSize:'13px',borderRadius:'10px',fontWeight:700,display:'flex',alignItems:'center',justifyContent:'space-between',transition:'all 0.15s'}}>
-                            <span><i className="fa-regular fa-comment" style={{marginRight:'8px'}}></i>ความคิดเห็น {hasComments && <span style={{background:badgeBg,color:'#fff',fontSize:'10px',padding:'1px 7px',borderRadius:'999px',marginLeft:'4px'}}>{commentCounts[v.version]}</span>}</span>
+                            <span>
+                              <i className="fa-regular fa-comment" style={{marginRight:'8px'}}></i>ความคิดเห็น
+                              {hasComments && <span style={{background:badgeBg,color:'#fff',fontSize:'10px',padding:'1px 7px',borderRadius:'999px',marginLeft:'4px'}}>{commentCounts[v.version]}</span>}
+                              {commentsMeta.isAdmin && commentDeletedCounts[v.version] > 0 && (
+                                <span style={{marginLeft:'6px',fontSize:'11px',color:'#991b1b',fontWeight:600}}>
+                                  · <i className="fa-solid fa-trash" style={{fontSize:'9px'}}></i> ลบไป {commentDeletedCounts[v.version]}
+                                </span>
+                              )}
+                            </span>
                             <span style={{fontSize:'12px',fontWeight:600,opacity:0.85}}>
                               {isOpen ? 'ซ่อน' : (hasComments ? 'ดูความคิดเห็น' : 'เขียนความคิดเห็น')} <i className={'fa-solid '+(isOpen?'fa-chevron-up':'fa-chevron-down')} style={{marginLeft:'4px',fontSize:'10px'}}></i>
                             </span>
@@ -3401,47 +3478,84 @@ const CHANGELOG_STATUS_META = {
 };
 
 const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ version, onCountChange, theme, initialComments, currentUserId: propsUserId, isAdmin: propsIsAdmin, onRefresh }) {
-  // theme: 'teal' (default) | 'amber' (เมื่อ version มี comment แล้ว — เน้นให้เด่น)
   const T = theme === 'amber'
     ? { bg:'#fffbeb', border:'#f59e0b', accent:'#92400e', accent2:'#d97706', sub:'#b45309', cardBorder:'#fbbf24', formBorder:'#f59e0b' }
     : { bg:'#f0fdfa', border:'#99f6e4', accent:'#0f766e', accent2:'#0d9488', sub:'#5eead4', cardBorder:'#ccfbf1', formBorder:'#5eead4' };
-  // ใช้ initialComments จาก parent ถ้ามี (bulk fetch) — ไม่ต้อง fetch เอง
   const [comments, setComments] = React.useState(initialComments || []);
   const [loading, setLoading]   = React.useState(!initialComments);
   const [error, setError]       = React.useState('');
   const [currentUserId, setCurrentUserId] = React.useState(propsUserId || null);
   const [isAdmin, setIsAdmin]   = React.useState(!!propsIsAdmin);
-  // อัป comments เมื่อ parent ส่งข้อมูลใหม่มา
   React.useEffect(() => {
     if (initialComments) { setComments(initialComments); setLoading(false); }
     if (propsUserId !== undefined) setCurrentUserId(propsUserId);
     if (propsIsAdmin !== undefined) setIsAdmin(!!propsIsAdmin);
   }, [initialComments, propsUserId, propsIsAdmin]);
-  // draft
   const [draftText, setDraftText]     = React.useState('');
   const [draftStatus, setDraftStatus] = React.useState('feedback');
   const [submitting, setSubmitting]   = React.useState(false);
-  // editing
   const [editingId, setEditingId]   = React.useState(null);
   const [editText, setEditText]     = React.useState('');
   const [editStatus, setEditStatus] = React.useState('feedback');
   const [savingEdit, setSavingEdit] = React.useState(false);
-  // delete confirm
   const [confirmDelId, setConfirmDelId] = React.useState(null);
+  // v0.7.14.5 states
+  const [filterMode, setFilterMode] = React.useState('all');
+  const [sortMode, setSortMode]     = React.useState('oldest');
+  const [hideResolved, setHideResolved] = React.useState(false);
+  const [replyingToId, setReplyingToId] = React.useState(null);
+  const [replyText, setReplyText]       = React.useState('');
+  const [replyStatus, setReplyStatus]   = React.useState('feedback');
+  const [savingReply, setSavingReply]   = React.useState(false);
+  const [historyOpenId, setHistoryOpenId] = React.useState(null);
+  const [historyData, setHistoryData]     = React.useState(null);
+  const [historyLoading, setHistoryLoading] = React.useState(false);
+  const [mentionState, setMentionState] = React.useState(null);
+  const [revealDeletedIds, setRevealDeletedIds] = React.useState(new Set());
+  const toggleRevealDeleted = (id) => setRevealDeletedIds(prev => {
+    const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n;
+  });
+  // Tick state — บังคับ re-render ทุก 30s เพื่ออัป relative time ("4 นาทีที่แล้ว")
+  const [, setTick] = React.useState(0);
+  React.useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 30000);
+    return () => clearInterval(id);
+  }, []);
 
-  // เก็บ onCountChange + onRefresh ใน ref → กัน prop callback ที่สร้างใหม่ทุก render trigger fetch loop
   const onCountChangeRef = React.useRef(onCountChange);
   const onRefreshRef = React.useRef(onRefresh);
-  React.useEffect(() => {
-    onCountChangeRef.current = onCountChange;
-    onRefreshRef.current = onRefresh;
-  });
+  React.useEffect(() => { onCountChangeRef.current = onCountChange; onRefreshRef.current = onRefresh; });
 
-  // โหลดเองเฉพาะกรณี parent ไม่ส่ง initialComments มา (fallback) — ปกติใช้ bulk fetch
+  // นับ active + deleted (admin เห็นทั้งคู่)
+  const { activeCount, deletedCount } = React.useMemo(() => {
+    let a = 0, d = 0;
+    for (const c of comments) {
+      if (c.deleted_at) d += 1; else a += 1;
+      if (Array.isArray(c.replies)) for (const r of c.replies) { if (r.deleted_at) d += 1; else a += 1; }
+    }
+    return { activeCount: a, deletedCount: d };
+  }, [comments]);
+  React.useEffect(() => { if (onCountChangeRef.current) onCountChangeRef.current(activeCount); }, [activeCount]);
+
+  // กรอง + เรียง parent (deleted ยังคงแสดงเป็น tombstone — ไม่ filter ออก ยกเว้น status filter)
+  const visibleParents = React.useMemo(() => {
+    let arr = comments.filter(c => !c.parent_comment_id);
+    if (filterMode === 'unresolved_bug')          arr = arr.filter(c => c.status === 'bug_report' && !c.resolved_at && !c.deleted_at);
+    else if (filterMode === 'unresolved_request') arr = arr.filter(c => c.status === 'request' && !c.resolved_at && !c.deleted_at);
+    else if (filterMode === 'bug')      arr = arr.filter(c => c.status === 'bug_report' && !c.deleted_at);
+    else if (filterMode === 'request')  arr = arr.filter(c => c.status === 'request' && !c.deleted_at);
+    else if (filterMode === 'feedback') arr = arr.filter(c => c.status === 'feedback' && !c.deleted_at);
+    else if (filterMode === 'note')     arr = arr.filter(c => c.status === 'note' && !c.deleted_at);
+    if (hideResolved) arr = arr.filter(c => !c.resolved_at);
+    arr = [...arr];
+    if (sortMode === 'newest')    arr.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+    else if (sortMode === 'oldest') arr.sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
+    else if (sortMode === 'most_liked') arr.sort((a,b) => (b.likes_count||0) - (a.likes_count||0));
+    return arr;
+  }, [comments, filterMode, sortMode, hideResolved]);
+
   const load = React.useCallback(async () => {
-    // ถ้ามี onRefresh จาก parent → ให้ parent โหลดให้ (bulk)
     if (onRefreshRef.current) { await onRefreshRef.current(); return; }
-    // fallback: fetch ตามเดิม
     setLoading(true); setError('');
     try {
       const r = await fetch(`/api/changelog/comments?version=${encodeURIComponent(version)}`);
@@ -3450,7 +3564,6 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
       setComments(j.comments || []);
       setCurrentUserId(j.current_user_id);
       setIsAdmin(!!j.is_admin);
-      if (onCountChangeRef.current) onCountChangeRef.current((j.comments || []).length);
     } catch (e) { setError(e.message || 'โหลด comment ล้มเหลว'); }
     finally { setLoading(false); }
   }, [version]);
@@ -3506,13 +3619,127 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
 
   const doDelete = async (id) => {
     setError('');
+    const nowIso = new Date().toISOString();
+    setComments(prev => prev.map(p => {
+      if (p.id === id) return { ...p, deleted_at: nowIso, deleted_by: currentUserId };
+      if (Array.isArray(p.replies)) {
+        let t = false;
+        const nr = p.replies.map(r => { if (r.id === id) { t = true; return { ...r, deleted_at: nowIso, deleted_by: currentUserId }; } return r; });
+        if (t) return { ...p, replies: nr };
+      }
+      return p;
+    }));
+    setConfirmDelId(null);
     try {
       const r = await fetch(`/api/changelog/comment/${id}`, { method: 'DELETE' });
+      if (!r.ok) { const j = await r.json(); setError(j.error || 'ลบล้มเหลว'); await load(); }
+    } catch (e) { setError(e.message || 'ลบล้มเหลว'); await load(); }
+  };
+
+  // v0.7.14.5 handlers
+  const toggleLike = async (c) => {
+    const wasLiked = c.liked_by_me;
+    setComments(prev => prev.map(p => {
+      if (p.id === c.id) return { ...p, liked_by_me: !wasLiked, likes_count: (p.likes_count||0) + (wasLiked ? -1 : 1) };
+      if (Array.isArray(p.replies)) {
+        const nr = p.replies.map(r => r.id === c.id ? { ...r, liked_by_me: !wasLiked, likes_count: (r.likes_count||0) + (wasLiked ? -1 : 1) } : r);
+        if (nr !== p.replies) return { ...p, replies: nr };
+      }
+      return p;
+    }));
+    try { await fetch(`/api/changelog/comment/${c.id}/like`, { method: wasLiked ? 'DELETE' : 'POST' }); } catch {}
+  };
+  const openHistory = async (id) => {
+    setHistoryOpenId(id); setHistoryLoading(true); setHistoryData(null);
+    try { const r = await fetch(`/api/changelog/comment/${id}/history`); const j = await r.json(); if (r.ok) setHistoryData(j); }
+    finally { setHistoryLoading(false); }
+  };
+  const closeHistory = () => { setHistoryOpenId(null); setHistoryData(null); };
+  const startReply = (parentId, defaultStatus) => { setReplyingToId(parentId); setReplyText(''); setReplyStatus(defaultStatus || 'feedback'); };
+  const cancelReply = () => { setReplyingToId(null); setReplyText(''); };
+  const submitReply = async (parentId) => {
+    const t = replyText.trim(); if (!t) return;
+    if (t.length > 2000) { setError('ตอบกลับยาวเกิน 2000 ตัวอักษร'); return; }
+    setSavingReply(true); setError('');
+    try {
+      const r = await fetch(`/api/changelog/comment/${parentId}/reply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ comment_text: t, status: replyStatus }) });
       const j = await r.json();
-      if (!r.ok) throw new Error(j.error || 'delete failed');
-      setConfirmDelId(null);
+      if (!r.ok) throw new Error(j.error || 'reply failed');
+      cancelReply(); await load();
+    } catch (e) { setError(e.message || 'ตอบกลับล้มเหลว'); }
+    finally { setSavingReply(false); }
+  };
+  const toggleResolve = async (c) => {
+    try {
+      const r = await fetch(`/api/changelog/comment/${c.id}/resolve`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ resolved: !c.resolved_at }) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'resolve failed');
       await load();
-    } catch (e) { setError(e.message || 'ลบล้มเหลว'); }
+    } catch (e) { setError(e.message || 'ทำเครื่องหมายล้มเหลว'); }
+  };
+
+  // ── Mention autocomplete + caret position ──
+  const mentionCacheRef = React.useRef({ users: null, fetchedAt: 0 });
+  // Pre-fetch users ตอน mount → ครั้งแรกที่กด @ มาขึ้นทันที (ปุ๊บปับ)
+  React.useEffect(() => {
+    if (mentionCacheRef.current.users) return;
+    (async () => {
+      try {
+        const r = await fetch('/api/changelog/mentionable-users');
+        const j = await r.json();
+        if (r.ok) mentionCacheRef.current = { users: j.users || [], fetchedAt: Date.now() };
+      } catch {/* ignore */}
+    })();
+  }, []);
+  const getCaretPx = (ta) => {
+    try {
+      const div = document.createElement('div');
+      const s = window.getComputedStyle(ta);
+      ['fontFamily','fontSize','fontWeight','lineHeight','letterSpacing','paddingTop','paddingRight','paddingBottom','paddingLeft','borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth','width','boxSizing'].forEach(p => div.style[p] = s[p]);
+      div.style.position='absolute'; div.style.visibility='hidden'; div.style.top='0'; div.style.left='0'; div.style.whiteSpace='pre-wrap'; div.style.wordWrap='break-word';
+      div.textContent = ta.value.substring(0, ta.selectionStart);
+      const sp = document.createElement('span'); sp.textContent='​'; div.appendChild(sp);
+      document.body.appendChild(div);
+      const sr = sp.getBoundingClientRect(); const dr = div.getBoundingClientRect();
+      const top = sr.top - dr.top + parseFloat(s.lineHeight || s.fontSize);
+      const left = sr.left - dr.left;
+      document.body.removeChild(div);
+      return { top, left };
+    } catch { return { top: 24, left: 0 }; }
+  };
+  const checkMention = async (text, caretPos, context, ta) => {
+    const before = text.slice(0, caretPos);
+    const m = before.match(/@([\w.\-ก-๛]*)$/);
+    if (!m) { setMentionState(null); return; }
+    const query = m[1].toLowerCase();
+    const px = ta ? getCaretPx(ta) : { top: 24, left: 0 };
+    setMentionState({ context, query, users: [], idx: 0, caretPos, loading: true, top: px.top, left: px.left });
+    let all = mentionCacheRef.current.users;
+    if (!all || Date.now() - mentionCacheRef.current.fetchedAt > 60000) {
+      try { const r = await fetch('/api/changelog/mentionable-users'); const j = await r.json(); if (r.ok) { all = j.users || []; mentionCacheRef.current = { users: all, fetchedAt: Date.now() }; } else all = []; }
+      catch { all = []; }
+    }
+    const filtered = query ? all.filter(u => (u.username||'').toLowerCase().startsWith(query) || (u.display_name||'').toLowerCase().includes(query)) : all;
+    setMentionState({ context, query, users: filtered.slice(0, 8), idx: 0, caretPos, loading: false, top: px.top, left: px.left });
+  };
+  const applyMention = (u, context) => {
+    const ins = '@' + u.username + ' ';
+    const apply = (text, caret) => {
+      const before = text.slice(0, caret); const after = text.slice(caret);
+      const replaced = before.replace(/@([\w.\-ก-๛]*)$/, ins);
+      return replaced + after;
+    };
+    if (context === 'draft') setDraftText(apply(draftText, mentionState?.caretPos ?? draftText.length));
+    else if (context === 'edit') setEditText(apply(editText, mentionState?.caretPos ?? editText.length));
+    else if (context === 'reply') setReplyText(apply(replyText, mentionState?.caretPos ?? replyText.length));
+    setMentionState(null);
+  };
+  const renderCommentText = (text) => {
+    if (!text) return null;
+    // รองรับ handle ปกติ + email-style username (@xxx@host.tld)
+    return text.split(/(@[\w.\-ก-๛]+(?:@[\w.\-]+\.[A-Za-z]{2,})?)/g).map((p, i) => p && p.startsWith('@')
+      ? <span key={i} style={{background:'#fef3c7',color:'#92400e',fontWeight:700,padding:'0 3px',borderRadius:'3px'}}>{p}</span>
+      : p);
   };
 
   const initials = (name) => {
@@ -3525,13 +3752,43 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
     <div style={{marginTop:'14px',background:T.bg,border:'1px solid '+T.border,borderRadius:'12px',padding:'14px 16px'}}>
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'10px',flexWrap:'wrap',gap:'8px'}}>
         <p style={{fontWeight:700,fontSize:'13px',color:T.accent,margin:0}}>
-          💬 ความคิดเห็น <span style={{color:T.sub,fontWeight:600}}>({comments.length})</span>
+          💬 ความคิดเห็น <span style={{color:T.sub,fontWeight:600}}>({activeCount})</span>
+          {isAdmin && deletedCount > 0 && (
+            <span style={{marginLeft:'8px',fontSize:'11px',color:'#991b1b',fontWeight:600}}>
+              · <i className="fa-solid fa-trash" style={{fontSize:'9px'}}></i> ลบไป {deletedCount}
+            </span>
+          )}
         </p>
         <button type="button" onClick={(e)=>{e.stopPropagation();load();}} tabIndex={-1} onMouseDown={e=>e.preventDefault()}
           style={{cursor:'pointer',border:'1px solid '+T.sub,background:'#fff',color:T.accent2,fontSize:'11px',padding:'4px 10px',borderRadius:'6px',fontWeight:600}}>
           <i className="fa-solid fa-rotate" style={{marginRight:'4px'}}></i>โหลดใหม่
         </button>
       </div>
+
+      {!loading && comments.length > 0 && (
+        <div style={{display:'flex',alignItems:'center',gap:'10px',flexWrap:'wrap',marginBottom:'10px',padding:'8px 10px',background:'#fff',border:'1px solid '+T.cardBorder,borderRadius:'8px'}}>
+          <span style={{fontSize:'11px',color:'#6b7280',fontWeight:600}}>กรอง:</span>
+          <select value={filterMode} onChange={e=>setFilterMode(e.target.value)} style={{fontSize:'11px',padding:'3px 8px',borderRadius:'5px',border:'1px solid #e5e7eb',color:'#1f2937',background:'#fff'}}>
+            <option value="all">ทั้งหมด</option>
+            <option value="unresolved_bug">บั๊กที่ยังไม่จัดการ</option>
+            <option value="unresolved_request">คำขอที่ยังไม่จัดการ</option>
+            <option value="feedback">💬 ความเห็น</option>
+            <option value="bug">🐛 แจ้งบั๊ก</option>
+            <option value="request">✨ ขอฟีเจอร์</option>
+            <option value="note">📝 บันทึก</option>
+          </select>
+          <span style={{fontSize:'11px',color:'#6b7280',fontWeight:600,marginLeft:'4px'}}>เรียง:</span>
+          <select value={sortMode} onChange={e=>setSortMode(e.target.value)} style={{fontSize:'11px',padding:'3px 8px',borderRadius:'5px',border:'1px solid #e5e7eb',color:'#1f2937',background:'#fff'}}>
+            <option value="oldest">ใหม่สุดอยู่ล่าง</option>
+            <option value="newest">ใหม่สุดอยู่บน</option>
+            <option value="most_liked">ถูกใจมากสุด</option>
+          </select>
+          <label style={{display:'inline-flex',alignItems:'center',gap:'4px',fontSize:'11px',color:'#6b7280',fontWeight:600,cursor:'pointer',marginLeft:'auto'}}>
+            <input type="checkbox" checked={hideResolved} onChange={e=>setHideResolved(e.target.checked)} style={{cursor:'pointer'}}/>
+            ซ่อนที่จัดการแล้ว
+          </label>
+        </div>
+      )}
 
       {loading && (
         <div style={{padding:'20px',textAlign:'center',color:'#9ca3af',fontSize:'12px'}}>
@@ -3551,78 +3808,251 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
         </div>
       )}
 
-      {!loading && comments.length > 0 && (
+      {!loading && comments.length > 0 && visibleParents.length === 0 && (
+        <div style={{padding:'14px',textAlign:'center',color:'#9ca3af',fontSize:'12px',background:'#fff',border:'1px dashed #e5e7eb',borderRadius:'8px',marginBottom:'10px'}}>ไม่มีความคิดเห็นตามตัวกรองนี้</div>
+      )}
+
+      {!loading && visibleParents.length > 0 && (
         <div style={{display:'flex',flexDirection:'column',gap:'8px',marginBottom:'12px'}}>
-          {comments.map(c => {
+          {visibleParents.map(c => {
             const meta = CHANGELOG_STATUS_META[c.status] || CHANGELOG_STATUS_META.feedback;
             const isOwner = c.user_id === currentUserId;
             const canDelete = isOwner || isAdmin;
             const editing = editingId === c.id;
+            const canResolve = (isOwner || isAdmin) && !c.parent_comment_id;
+            const isResolved = !!c.resolved_at;
+            const isDeleted = !!c.deleted_at;
+            const resolvedLabel = c.status === 'bug_report' ? 'แก้ไขบั๊กแล้ว' : c.status === 'request' ? 'เพิ่มฟีเจอร์นี้แล้ว' : 'รับทราบ';
+            const cta = c.status === 'bug_report' ? { icon: 'fa-wrench', text: 'แก้ไขบั๊กนี้แล้ว' }
+                      : c.status === 'request'    ? { icon: 'fa-circle-plus', text: 'เพิ่มฟีเจอร์นี้แล้ว' }
+                      : c.status === 'feedback'   ? { icon: 'fa-thumbs-up', text: 'รับทราบ' }
+                                                  : { icon: 'fa-bookmark', text: 'รับทราบ' };
             return (
-              <div key={c.id} style={{background:'#fff',border:'1.5px solid '+T.cardBorder,borderLeft:`3px solid ${meta.fg}`,borderRadius:'8px',padding:'10px 12px',minWidth:0,overflow:'hidden'}}>
-                {/* ── แถวที่ 1: avatar (ตัวย่อวิชาชีพ) + ชื่อ + role + status + (ปุ่ม) + เวลา ── */}
+              <div key={c.id} id={'cmt-'+c.id} style={{background:'#fff',border:'1.5px solid '+T.cardBorder,borderLeft:`3px solid ${meta.fg}`,borderRadius:'8px',padding:'10px 12px',minWidth:0,opacity:isDeleted?0.85:1}}>
                 <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'6px',flexWrap:'wrap'}}>
                   <div style={{minWidth:'34px',height:'26px',padding:'0 8px',borderRadius:'999px',background:meta.bg,color:meta.fg,border:`1px solid ${meta.border}`,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:800,fontSize:'11px',flexShrink:0,lineHeight:1}}>
                     {c.profession_label || initials(c.display_name)}
                   </div>
                   <span style={{fontWeight:700,fontSize:'12px',color:'#1f2937'}}>{c.display_name}</span>
-                  {c.role === 'admin' && (
-                    <span style={{fontSize:'9px',fontWeight:700,color:'#0f766e',background:'#ccfbf1',padding:'1px 6px',borderRadius:'999px'}}>ADMIN</span>
-                  )}
-                  <span style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 8px',borderRadius:'999px',background:meta.bg,color:meta.fg,border:`1px solid ${meta.border}`,fontSize:'10px',fontWeight:700}}>
-                    {meta.emoji} {meta.label}
-                  </span>
-                  <span style={{marginLeft:'auto',display:'inline-flex',alignItems:'center',gap:'8px'}}>
-                    {!editing && isOwner && (
-                      <button type="button" onClick={()=>startEdit(c)} tabIndex={-1} onMouseDown={e=>e.preventDefault()}
-                        style={{cursor:'pointer',border:'none',background:'transparent',color:'#0d9488',fontSize:'11px',padding:'2px 4px',fontWeight:600}}>
+                  {c.role === 'admin' && <span style={{fontSize:'9px',fontWeight:700,color:'#0f766e',background:'#ccfbf1',padding:'1px 6px',borderRadius:'999px'}}>ADMIN</span>}
+                  <span style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 8px',borderRadius:'999px',background:meta.bg,color:meta.fg,border:`1px solid ${meta.border}`,fontSize:'10px',fontWeight:700}}>{meta.emoji} {meta.label}</span>
+                  {isResolved && <span style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 8px',borderRadius:'999px',background:'#d1fae5',color:'#065f46',border:'1px solid #6ee7b7',fontSize:'10px',fontWeight:700}} title={c.resolved_at ? `จัดการเมื่อ ${new Date(c.resolved_at).toLocaleString('th-TH')}` : ''}>✓ {resolvedLabel}</span>}
+                  {isDeleted && <span style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 8px',borderRadius:'999px',background:'#fee2e2',color:'#991b1b',border:'1px solid #fca5a5',fontSize:'10px',fontWeight:700}}><i className="fa-solid fa-trash" style={{fontSize:'8px'}}></i> ลบแล้ว</span>}
+                  <span style={{marginLeft:'auto',display:'inline-flex',alignItems:'center',gap:'8px',flexWrap:'wrap'}}>
+                    {!isDeleted && (
+                      <button type="button" onClick={()=>toggleLike(c)} tabIndex={-1} onMouseDown={e=>e.preventDefault()}
+                        style={{cursor:'pointer',border:'1px solid '+(c.liked_by_me?'#d97706':'#e5e7eb'),background:c.liked_by_me?'#fef3c7':'#fff',color:c.liked_by_me?'#92400e':'#6b7280',fontSize:'11px',padding:'2px 8px',borderRadius:'6px',fontWeight:700}}>
+                        👍 {c.likes_count || 0}
+                      </button>
+                    )}
+                    {canResolve && !isResolved && !editing && !isDeleted && (
+                      <button type="button" onClick={()=>toggleResolve(c)} tabIndex={-1} onMouseDown={e=>e.preventDefault()}
+                        style={{cursor:'pointer',border:'1.5px dashed #0d9488',background:'#fff',color:'#0f766e',fontSize:'10px',padding:'3px 10px',borderRadius:'6px',fontWeight:700}}
+                        title="กดเพื่อบอกว่าจัดการแล้ว">
+                        <i className={`fa-solid ${cta.icon}`} style={{marginRight:'4px',fontSize:'9px'}}></i>{cta.text}
+                      </button>
+                    )}
+                    {canResolve && isResolved && !editing && !isDeleted && (
+                      <button type="button" onClick={()=>toggleResolve(c)} tabIndex={-1} onMouseDown={e=>e.preventDefault()}
+                        style={{cursor:'pointer',border:'1px solid #e5e7eb',background:'#fff',color:'#6b7280',fontSize:'10px',padding:'3px 10px',borderRadius:'6px',fontWeight:700}}>
+                        <i className="fa-solid fa-rotate-left" style={{marginRight:'4px',fontSize:'9px'}}></i>ยกเลิกสถานะ
+                      </button>
+                    )}
+                    {!editing && isOwner && !isDeleted && (
+                      <button type="button" onClick={()=>startEdit(c)} tabIndex={-1} onMouseDown={e=>e.preventDefault()} style={{cursor:'pointer',border:'none',background:'transparent',color:'#0d9488',fontSize:'11px',padding:'2px 4px',fontWeight:600}}>
                         <i className="fa-solid fa-pen" style={{marginRight:'3px',fontSize:'9px'}}></i>แก้ไข
                       </button>
                     )}
-                    {!editing && (isOwner || canDelete) && (
-                      <button type="button" onClick={()=>setConfirmDelId(c.id)} tabIndex={-1} onMouseDown={e=>e.preventDefault()}
-                        style={{cursor:'pointer',border:'none',background:'transparent',color:'#dc2626',fontSize:'11px',padding:'2px 4px',fontWeight:600}}>
+                    {!editing && canDelete && !isDeleted && (
+                      <button type="button" onClick={()=>setConfirmDelId(c.id)} tabIndex={-1} onMouseDown={e=>e.preventDefault()} style={{cursor:'pointer',border:'none',background:'transparent',color:'#dc2626',fontSize:'11px',padding:'2px 4px',fontWeight:600}}>
                         <i className="fa-solid fa-trash" style={{marginRight:'3px',fontSize:'9px'}}></i>ลบ
                       </button>
                     )}
                     <span style={{fontSize:'11px',color:'#9ca3af',whiteSpace:'nowrap'}} title={new Date(c.created_at).toLocaleString('th-TH')}>
                       {(() => {
-                        const d = new Date(c.created_at);
-                        if (isNaN(d.getTime())) return '';
+                        const d = new Date(c.created_at); if (isNaN(d.getTime())) return '';
                         const M = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
                         return `${d.getDate()} ${M[d.getMonth()]} ${d.getFullYear()+543} · ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
                       })()}
                       <span style={{marginLeft:'6px',opacity:0.75}}>({relTime(c.created_at)})</span>
-                      {c.edited && <span style={{marginLeft:'6px',fontStyle:'italic'}}>· แก้ไขแล้ว</span>}
+                      {c.edited && (isOwner || isAdmin) ? (
+                        <button type="button" onClick={()=>openHistory(c.id)} tabIndex={-1} onMouseDown={e=>e.preventDefault()} title="กดเพื่อดูข้อความก่อนแก้ไข (เฉพาะคุณ/admin)"
+                          style={{marginLeft:'6px',cursor:'pointer',border:'none',background:'transparent',color:'#0d9488',fontSize:'11px',padding:'0',fontWeight:600,textDecoration:'underline',fontStyle:'italic'}}>
+                          · แก้ไขแล้ว (ดูประวัติ)
+                        </button>
+                      ) : c.edited && (
+                        <span style={{marginLeft:'6px',fontStyle:'italic'}}>· แก้ไขแล้ว</span>
+                      )}
                     </span>
                   </span>
                 </div>
 
-                {/* ── แถวที่ 2: ข้อความ (หรือฟอร์มแก้ไข) ── */}
-                {!editing && (
-                  <p style={{fontSize:'13px',color:'#374151',margin:'2px 0 0',lineHeight:1.6,whiteSpace:'pre-wrap',wordBreak:'break-word',overflowWrap:'anywhere'}}>{c.comment_text}</p>
+                {!editing && isDeleted && !(isAdmin && revealDeletedIds.has(c.id)) && (
+                  <p style={{fontSize:'13px',color:'#9ca3af',fontStyle:'italic',margin:'2px 0 0',lineHeight:1.6}}>
+                    [ข้อความนี้ถูกลบ]
+                    {isAdmin && (
+                      <button type="button" onClick={()=>toggleRevealDeleted(c.id)}
+                        style={{marginLeft:'8px',cursor:'pointer',border:'1px solid #e5e7eb',background:'#fff',color:'#6b7280',fontSize:'10px',padding:'1px 8px',borderRadius:'5px',fontWeight:600}}>
+                        <i className="fa-regular fa-eye" style={{marginRight:'3px',fontSize:'8px'}}></i>ดูข้อความเดิม (admin)
+                      </button>
+                    )}
+                  </p>
+                )}
+                {!editing && isDeleted && isAdmin && revealDeletedIds.has(c.id) && (
+                  <div style={{margin:'2px 0 0'}}>
+                    <p style={{fontSize:'17px',color:'#7c2d12',fontWeight:500,background:'#fef2f2',border:'1px dashed #fca5a5',borderRadius:'6px',padding:'10px 12px',margin:0,lineHeight:1.55,whiteSpace:'pre-wrap',wordBreak:'break-word',overflowWrap:'anywhere'}}>
+                      {renderCommentText(c.comment_text)}
+                    </p>
+                    <button type="button" onClick={()=>toggleRevealDeleted(c.id)} style={{marginTop:'4px',cursor:'pointer',border:'none',background:'transparent',color:'#9ca3af',fontSize:'10px',padding:'1px 4px',fontWeight:600}}>
+                      <i className="fa-regular fa-eye-slash" style={{marginRight:'3px'}}></i>ซ่อน
+                    </button>
+                  </div>
+                )}
+                {!editing && !isDeleted && (
+                  <p style={{fontSize:'18px',color:'#0f766e',fontWeight:600,margin:'6px 0 0',lineHeight:1.55,whiteSpace:'pre-wrap',wordBreak:'break-word',overflowWrap:'anywhere',letterSpacing:'-0.2px'}}>{renderCommentText(c.comment_text)}</p>
                 )}
 
                 {editing && (
-                  <div style={{marginTop:'4px'}}>
-                    <select value={editStatus} onChange={e=>setEditStatus(e.target.value)}
-                      style={{fontSize:'11px',padding:'3px 6px',borderRadius:'5px',border:'1px solid #e5e7eb',marginBottom:'6px'}}>
-                      {Object.entries(CHANGELOG_STATUS_META).map(([k,m])=>(
-                        <option key={k} value={k}>{m.emoji} {m.label}</option>
-                      ))}
+                  <div style={{marginTop:'4px',position:'relative'}}>
+                    <select value={editStatus} onChange={e=>setEditStatus(e.target.value)} style={{fontSize:'11px',padding:'3px 6px',borderRadius:'5px',border:'1px solid #e5e7eb',marginBottom:'6px'}}>
+                      {Object.entries(CHANGELOG_STATUS_META).map(([k,m])=>(<option key={k} value={k}>{m.emoji} {m.label}</option>))}
                     </select>
-                    <textarea value={editText} onChange={e=>setEditText(e.target.value)} rows={3} maxLength={2000}
+                    <textarea value={editText}
+                      onChange={e=>{ setEditText(e.target.value); checkMention(e.target.value, e.target.selectionStart, 'edit', e.target); }}
+                      onKeyDown={e=>{ if (e.key === 'Escape') setMentionState(null); }}
+                      rows={3} maxLength={2000}
                       style={{width:'100%',padding:'8px 10px',borderRadius:'6px',border:'1px solid #d1d5db',fontSize:'13px',outline:'none',fontFamily:'inherit',resize:'vertical',color:'#1f2937',caretColor:'#0d9488',background:'#fff'}}/>
+                    {mentionState && mentionState.context === 'edit' && (
+                      <div style={{position:'absolute',top:(mentionState.top||24)+'px',left:(mentionState.left||0)+'px',zIndex:9999,background:'#fff',border:'2px solid #0d9488',borderRadius:'8px',padding:'4px',boxShadow:'0 8px 24px rgba(0,0,0,0.18)',minWidth:'260px',maxHeight:'220px',overflowY:'auto'}}>
+                        {mentionState.loading && <div style={{padding:'8px 10px',fontSize:'12px',color:'#6b7280'}}><i className="fa-solid fa-spinner fa-spin" style={{marginRight:'5px'}}></i>กำลังโหลด...</div>}
+                        {!mentionState.loading && mentionState.users.length === 0 && <div style={{padding:'8px 10px',fontSize:'12px',color:'#6b7280',fontStyle:'italic'}}>ไม่พบผู้ใช้</div>}
+                        {!mentionState.loading && mentionState.users.map((u, i) => {
+                          const isAdminUser = u.role === 'admin';
+                          const isActive = i === mentionState.idx;
+                          const rowBg = isActive ? '#5eead4' : (isAdminUser ? '#fef3c7' : 'transparent');
+                          return (
+                            <div key={u.id} onClick={()=>applyMention(u,'edit')} onMouseDown={e=>e.preventDefault()}
+                              onMouseEnter={()=>setMentionState(prev => prev ? {...prev, idx: i} : prev)}
+                              style={{padding:'7px 10px',cursor:'pointer',borderRadius:'5px',fontSize:'13px',color:'#1f2937',background:rowBg,borderBottom:'1px solid #f1f5f9',borderLeft:isAdminUser?'3px solid #d97706':'3px solid transparent',transition:'background 0.12s ease'}}>
+                              <b style={{color:isAdminUser?'#92400e':'#0f766e'}}>@{u.username}</b>
+                              {isAdminUser && <span style={{marginLeft:'5px',fontSize:'9px',fontWeight:800,color:'#fff',background:'#d97706',padding:'1px 6px',borderRadius:'999px'}}>ADMIN</span>}
+                              <span style={{color:'#374151',fontWeight:600,marginLeft:'4px'}}>· {u.display_name}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                     <div style={{display:'flex',gap:'6px',marginTop:'6px',justifyContent:'flex-end'}}>
-                      <button type="button" onClick={cancelEdit} disabled={savingEdit}
-                        style={{cursor:'pointer',border:'1px solid #e5e7eb',background:'#fff',color:'#6b7280',fontSize:'11px',padding:'5px 12px',borderRadius:'6px',fontWeight:600}}>
-                        ยกเลิก
-                      </button>
-                      <button type="button" onClick={()=>saveEdit(c.id)} disabled={savingEdit || !editText.trim()}
-                        style={{cursor:'pointer',border:'none',background:'#0f766e',color:'#fff',fontSize:'11px',padding:'5px 14px',borderRadius:'6px',fontWeight:700,opacity:savingEdit||!editText.trim()?0.5:1}}>
-                        {savingEdit ? 'กำลังบันทึก...' : 'บันทึก'}
-                      </button>
+                      <button type="button" onClick={cancelEdit} disabled={savingEdit} style={{cursor:'pointer',border:'1px solid #e5e7eb',background:'#fff',color:'#6b7280',fontSize:'11px',padding:'5px 12px',borderRadius:'6px',fontWeight:600}}>ยกเลิก</button>
+                      <button type="button" onClick={()=>saveEdit(c.id)} disabled={savingEdit || !editText.trim()} style={{cursor:'pointer',border:'none',background:'#0f766e',color:'#fff',fontSize:'11px',padding:'5px 14px',borderRadius:'6px',fontWeight:700,opacity:savingEdit||!editText.trim()?0.5:1}}>{savingEdit ? 'กำลังบันทึก...' : 'บันทึก'}</button>
                     </div>
+                  </div>
+                )}
+
+                {!editing && !c.parent_comment_id && replyingToId !== c.id && !isDeleted && (
+                  <div style={{marginTop:'6px'}}>
+                    <button type="button" onClick={()=>startReply(c.id, c.status)} tabIndex={-1} onMouseDown={e=>e.preventDefault()} style={{cursor:'pointer',border:'none',background:'transparent',color:T.accent2,fontSize:'11px',padding:'2px 6px',fontWeight:600}}>
+                      <i className="fa-solid fa-reply" style={{marginRight:'4px'}}></i>ตอบกลับ
+                    </button>
+                  </div>
+                )}
+
+                {replyingToId === c.id && (
+                  <div style={{marginTop:'8px',padding:'10px',background:'#f9fafb',borderRadius:'8px',border:'1px dashed '+T.cardBorder,position:'relative'}}>
+                    <p style={{fontSize:'11px',color:'#6b7280',margin:'0 0 6px',fontWeight:600}}>↩ ตอบกลับ {c.display_name}</p>
+                    <select value={replyStatus} onChange={e=>setReplyStatus(e.target.value)} style={{fontSize:'11px',padding:'3px 6px',borderRadius:'5px',border:'1px solid #e5e7eb',marginBottom:'6px'}}>
+                      {Object.entries(CHANGELOG_STATUS_META).map(([k,m])=>(<option key={k} value={k}>{m.emoji} {m.label}</option>))}
+                    </select>
+                    <textarea value={replyText}
+                      onChange={e=>{ setReplyText(e.target.value); checkMention(e.target.value, e.target.selectionStart, 'reply', e.target); }}
+                      onKeyDown={e=>{ if (e.key === 'Escape') setMentionState(null); }}
+                      rows={2} maxLength={2000} placeholder="พิมพ์ตอบกลับ... (พิมพ์ @ เพื่อเรียกผู้ใช้)"
+                      style={{width:'100%',padding:'8px 10px',borderRadius:'6px',border:'1px solid #d1d5db',fontSize:'13px',outline:'none',fontFamily:'inherit',resize:'vertical',color:'#1f2937',caretColor:'#0d9488',background:'#fff'}}/>
+                    {mentionState && mentionState.context === 'reply' && (
+                      <div style={{position:'absolute',top:(mentionState.top||24)+'px',left:(mentionState.left||10)+'px',zIndex:9999,background:'#fff',border:'2px solid #0d9488',borderRadius:'8px',padding:'4px',boxShadow:'0 8px 24px rgba(0,0,0,0.18)',minWidth:'260px',maxHeight:'220px',overflowY:'auto'}}>
+                        {mentionState.loading && <div style={{padding:'8px 10px',fontSize:'12px',color:'#6b7280'}}><i className="fa-solid fa-spinner fa-spin" style={{marginRight:'5px'}}></i>กำลังโหลด...</div>}
+                        {!mentionState.loading && mentionState.users.length === 0 && <div style={{padding:'8px 10px',fontSize:'12px',color:'#6b7280',fontStyle:'italic'}}>ไม่พบผู้ใช้</div>}
+                        {!mentionState.loading && mentionState.users.map((u, i) => {
+                          const isAdminUser = u.role === 'admin';
+                          const isActive = i === mentionState.idx;
+                          const rowBg = isActive ? '#5eead4' : (isAdminUser ? '#fef3c7' : 'transparent');
+                          return (
+                            <div key={u.id} onClick={()=>applyMention(u,'reply')} onMouseDown={e=>e.preventDefault()}
+                              onMouseEnter={()=>setMentionState(prev => prev ? {...prev, idx: i} : prev)}
+                              style={{padding:'7px 10px',cursor:'pointer',borderRadius:'5px',fontSize:'13px',color:'#1f2937',background:rowBg,borderBottom:'1px solid #f1f5f9',borderLeft:isAdminUser?'3px solid #d97706':'3px solid transparent',transition:'background 0.12s ease'}}>
+                              <b style={{color:isAdminUser?'#92400e':'#0f766e'}}>@{u.username}</b>
+                              {isAdminUser && <span style={{marginLeft:'5px',fontSize:'9px',fontWeight:800,color:'#fff',background:'#d97706',padding:'1px 6px',borderRadius:'999px'}}>ADMIN</span>}
+                              <span style={{color:'#374151',fontWeight:600,marginLeft:'4px'}}>· {u.display_name}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:'6px'}}>
+                      <span style={{fontSize:'10px',color:replyText.length>1900?'#dc2626':'#9ca3af'}}>{replyText.length} / 2000</span>
+                      <div style={{display:'flex',gap:'6px'}}>
+                        <button type="button" onClick={cancelReply} disabled={savingReply} style={{cursor:'pointer',border:'1px solid #e5e7eb',background:'#fff',color:'#6b7280',fontSize:'11px',padding:'5px 12px',borderRadius:'6px',fontWeight:600}}>ยกเลิก</button>
+                        <button type="button" onClick={()=>submitReply(c.id)} disabled={savingReply || !replyText.trim()} style={{cursor:'pointer',border:'none',background:'#0f766e',color:'#fff',fontSize:'11px',padding:'5px 14px',borderRadius:'6px',fontWeight:700,opacity:savingReply||!replyText.trim()?0.5:1}}>{savingReply ? 'กำลังส่ง...' : 'ส่ง'}</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {Array.isArray(c.replies) && c.replies.length > 0 && (
+                  <div style={{marginTop:'10px',paddingLeft:'18px',borderLeft:'2px dashed '+T.cardBorder,display:'flex',flexDirection:'column',gap:'6px'}}>
+                    {c.replies.map(r => {
+                      const rmeta = CHANGELOG_STATUS_META[r.status] || CHANGELOG_STATUS_META.feedback;
+                      const rIsOwner = r.user_id === currentUserId;
+                      const rIsDeleted = !!r.deleted_at;
+                      const rRevealed = isAdmin && revealDeletedIds.has(r.id);
+                      return (
+                        <div key={r.id} id={'cmt-'+r.id} style={{background:'#fff',border:'1px solid '+T.cardBorder,borderLeft:`2px solid ${rmeta.fg}`,borderRadius:'6px',padding:'8px 10px',opacity:rIsDeleted?0.75:1}}>
+                          <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'4px',flexWrap:'wrap'}}>
+                            <div style={{minWidth:'30px',height:'22px',padding:'0 6px',borderRadius:'999px',background:rmeta.bg,color:rmeta.fg,border:`1px solid ${rmeta.border}`,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:800,fontSize:'10px',flexShrink:0,lineHeight:1}}>{r.profession_label || initials(r.display_name)}</div>
+                            <span style={{fontWeight:700,fontSize:'11.5px',color:'#1f2937'}}>{r.display_name}</span>
+                            {r.role === 'admin' && <span style={{fontSize:'9px',fontWeight:700,color:'#0f766e',background:'#ccfbf1',padding:'1px 5px',borderRadius:'999px'}}>ADMIN</span>}
+                            {rIsDeleted && <span style={{fontSize:'9px',fontWeight:700,color:'#991b1b',background:'#fee2e2',border:'1px solid #fca5a5',padding:'1px 5px',borderRadius:'999px'}}><i className="fa-solid fa-trash" style={{fontSize:'7px'}}></i> ลบแล้ว</span>}
+                            <span style={{marginLeft:'auto',display:'inline-flex',alignItems:'center',gap:'6px'}}>
+                              {!rIsDeleted && (
+                                <button type="button" onClick={()=>toggleLike(r)} tabIndex={-1} onMouseDown={e=>e.preventDefault()}
+                                  style={{cursor:'pointer',border:'1px solid '+(r.liked_by_me?'#d97706':'#e5e7eb'),background:r.liked_by_me?'#fef3c7':'#fff',color:r.liked_by_me?'#92400e':'#6b7280',fontSize:'10px',padding:'1px 6px',borderRadius:'5px',fontWeight:700}}>
+                                  👍 {r.likes_count || 0}
+                                </button>
+                              )}
+                              {rIsOwner && !rIsDeleted && editingId !== r.id && <button type="button" onClick={()=>startEdit(r)} tabIndex={-1} onMouseDown={e=>e.preventDefault()} style={{cursor:'pointer',border:'none',background:'transparent',color:'#0d9488',fontSize:'10px',padding:'1px 3px',fontWeight:600}}><i className="fa-solid fa-pen" style={{fontSize:'8px',marginRight:'2px'}}></i>แก้</button>}
+                              {(rIsOwner || isAdmin) && !rIsDeleted && editingId !== r.id && <button type="button" onClick={()=>setConfirmDelId(r.id)} tabIndex={-1} onMouseDown={e=>e.preventDefault()} style={{cursor:'pointer',border:'none',background:'transparent',color:'#dc2626',fontSize:'10px',padding:'1px 3px',fontWeight:600}}><i className="fa-solid fa-trash" style={{fontSize:'8px',marginRight:'2px'}}></i>ลบ</button>}
+                              <span style={{fontSize:'10px',color:'#9ca3af',whiteSpace:'nowrap'}} title={new Date(r.created_at).toLocaleString('th-TH')}>
+                                {relTime(r.created_at)}
+                                {r.edited && !rIsDeleted && (rIsOwner || isAdmin) ? (
+                                  <button type="button" onClick={()=>openHistory(r.id)} tabIndex={-1} onMouseDown={e=>e.preventDefault()} title="ดูข้อความก่อนแก้ไข" style={{marginLeft:'4px',cursor:'pointer',border:'none',background:'transparent',color:'#0d9488',fontSize:'10px',padding:'0',fontWeight:600,textDecoration:'underline'}}>· แก้แล้ว (ดู)</button>
+                                ) : r.edited && !rIsDeleted && <span> · แก้แล้ว</span>}
+                              </span>
+                            </span>
+                          </div>
+                          {editingId === r.id ? (
+                            <div style={{marginTop:'4px'}}>
+                              <textarea value={editText} onChange={e=>setEditText(e.target.value)} rows={2} maxLength={2000} style={{width:'100%',padding:'6px 8px',borderRadius:'5px',border:'1px solid #d1d5db',fontSize:'12px',outline:'none',fontFamily:'inherit',resize:'vertical',color:'#1f2937',caretColor:'#0d9488',background:'#fff'}}/>
+                              <div style={{display:'flex',gap:'6px',marginTop:'4px',justifyContent:'flex-end'}}>
+                                <button type="button" onClick={cancelEdit} style={{cursor:'pointer',border:'1px solid #e5e7eb',background:'#fff',color:'#6b7280',fontSize:'10px',padding:'3px 10px',borderRadius:'5px',fontWeight:600}}>ยกเลิก</button>
+                                <button type="button" onClick={()=>saveEdit(r.id)} disabled={savingEdit || !editText.trim()} style={{cursor:'pointer',border:'none',background:'#0f766e',color:'#fff',fontSize:'10px',padding:'3px 12px',borderRadius:'5px',fontWeight:700,opacity:savingEdit||!editText.trim()?0.5:1}}>{savingEdit?'กำลังบันทึก...':'บันทึก'}</button>
+                              </div>
+                            </div>
+                          ) : rIsDeleted && !rRevealed ? (
+                            <p style={{fontSize:'12.5px',color:'#9ca3af',fontStyle:'italic',margin:'2px 0 0',lineHeight:1.55}}>
+                              [ข้อความนี้ถูกลบ]
+                              {isAdmin && <button type="button" onClick={()=>toggleRevealDeleted(r.id)} style={{marginLeft:'6px',cursor:'pointer',border:'1px solid #e5e7eb',background:'#fff',color:'#6b7280',fontSize:'9px',padding:'1px 6px',borderRadius:'4px',fontWeight:600}}><i className="fa-regular fa-eye" style={{marginRight:'2px',fontSize:'7px'}}></i>ดูเดิม</button>}
+                            </p>
+                          ) : rIsDeleted && rRevealed ? (
+                            <div style={{margin:'2px 0 0'}}>
+                              <p style={{fontSize:'15px',color:'#7c2d12',fontWeight:500,background:'#fef2f2',border:'1px dashed #fca5a5',borderRadius:'5px',padding:'8px 10px',margin:0,lineHeight:1.5,whiteSpace:'pre-wrap',wordBreak:'break-word',overflowWrap:'anywhere'}}>{renderCommentText(r.comment_text)}</p>
+                              <button type="button" onClick={()=>toggleRevealDeleted(r.id)} style={{marginTop:'3px',cursor:'pointer',border:'none',background:'transparent',color:'#9ca3af',fontSize:'9px',padding:'1px 3px',fontWeight:600}}><i className="fa-regular fa-eye-slash" style={{marginRight:'2px'}}></i>ซ่อน</button>
+                            </div>
+                          ) : (
+                            <p style={{fontSize:'16px',color:'#0f766e',fontWeight:600,margin:'4px 0 0',lineHeight:1.5,whiteSpace:'pre-wrap',wordBreak:'break-word',overflowWrap:'anywhere',letterSpacing:'-0.2px'}}>{renderCommentText(r.comment_text)}</p>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -3631,28 +4061,85 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
         </div>
       )}
 
-      {/* ── ฟอร์มเขียนใหม่ ───────────────────────────────── */}
       <form onSubmit={handleSubmit} style={{background:'#fff',border:'1.5px solid '+T.formBorder,borderRadius:'8px',padding:'10px 12px'}}>
         <div style={{display:'flex',gap:'6px',alignItems:'center',marginBottom:'6px',flexWrap:'wrap'}}>
           <label style={{fontSize:'11px',color:'#6b7280',fontWeight:600}}>ประเภท:</label>
-          <select value={draftStatus} onChange={e=>setDraftStatus(e.target.value)}
-            style={{fontSize:'11px',padding:'3px 6px',borderRadius:'5px',border:'1px solid #e5e7eb'}}>
-            {Object.entries(CHANGELOG_STATUS_META).map(([k,m])=>(
-              <option key={k} value={k}>{m.emoji} {m.label}</option>
-            ))}
+          <select value={draftStatus} onChange={e=>setDraftStatus(e.target.value)} style={{fontSize:'11px',padding:'3px 6px',borderRadius:'5px',border:'1px solid #e5e7eb'}}>
+            {Object.entries(CHANGELOG_STATUS_META).map(([k,m])=>(<option key={k} value={k}>{m.emoji} {m.label}</option>))}
           </select>
+          <span style={{marginLeft:'auto',fontSize:'10px',color:'#9ca3af',fontStyle:'italic'}} title="พิมพ์ @ แล้วเลือกชื่อจากรายการ เพื่อเรียกผู้ใช้คนนั้นในระบบ">
+            <i className="fa-regular fa-circle-question" style={{marginRight:'3px',color:'#0d9488'}}></i>
+            พิมพ์ <b>@</b> เพื่อเรียกผู้ใช้
+          </span>
         </div>
-        <textarea value={draftText} onChange={e=>setDraftText(e.target.value)} rows={3} maxLength={2000}
-          placeholder="เขียนความคิดเห็น ข้อเสนอแนะ หรือแจ้งบั๊กที่นี่..."
-          style={{width:'100%',padding:'8px 10px',borderRadius:'6px',border:'1px solid #d1d5db',fontSize:'13px',outline:'none',fontFamily:'inherit',resize:'vertical',color:'#1f2937',caretColor:'#0d9488',background:'#fff'}}/>
+        <div style={{position:'relative'}}>
+          <textarea value={draftText}
+            onChange={e=>{ setDraftText(e.target.value); checkMention(e.target.value, e.target.selectionStart, 'draft', e.target); }}
+            onKeyDown={e=>{ if (e.key === 'Escape') setMentionState(null); }}
+            rows={3} maxLength={2000}
+            placeholder="เขียนความคิดเห็น ข้อเสนอแนะ หรือแจ้งบั๊กที่นี่... (พิมพ์ @ เพื่อเรียกผู้ใช้)"
+            style={{width:'100%',padding:'8px 10px',borderRadius:'6px',border:'1px solid #d1d5db',fontSize:'13px',outline:'none',fontFamily:'inherit',resize:'vertical',color:'#1f2937',caretColor:'#0d9488',background:'#fff'}}/>
+          {mentionState && mentionState.context === 'draft' && (
+            <div style={{position:'absolute',top:(mentionState.top||24)+'px',left:(mentionState.left||0)+'px',zIndex:9999,background:'#fff',border:'2px solid #0d9488',borderRadius:'8px',padding:'4px',boxShadow:'0 8px 24px rgba(0,0,0,0.18)',minWidth:'260px',maxHeight:'260px',overflowY:'auto'}}>
+              {mentionState.loading && <div style={{padding:'8px 10px',fontSize:'12px',color:'#6b7280'}}><i className="fa-solid fa-spinner fa-spin" style={{marginRight:'5px'}}></i>กำลังโหลด...</div>}
+              {!mentionState.loading && mentionState.users.length === 0 && <div style={{padding:'8px 10px',fontSize:'12px',color:'#6b7280',fontStyle:'italic'}}>ไม่พบผู้ใช้</div>}
+              {!mentionState.loading && mentionState.users.map((u, i) => {
+                const isAdminUser = u.role === 'admin';
+                const isActive = i === mentionState.idx;
+                const rowBg = isActive ? '#5eead4' : (isAdminUser ? '#fef3c7' : 'transparent');
+                return (
+                  <div key={u.id} onClick={()=>applyMention(u,'draft')} onMouseDown={e=>e.preventDefault()}
+                    onMouseEnter={()=>setMentionState(prev => prev ? {...prev, idx: i} : prev)}
+                    style={{padding:'7px 10px',cursor:'pointer',borderRadius:'5px',fontSize:'13px',color:'#1f2937',background:rowBg,borderBottom:'1px solid #f1f5f9',borderLeft:isAdminUser?'3px solid #d97706':'3px solid transparent',transition:'background 0.12s ease'}}>
+                    <b style={{color:isAdminUser?'#92400e':'#0f766e'}}>@{u.username}</b>
+                    {isAdminUser && <span style={{marginLeft:'5px',fontSize:'9px',fontWeight:800,color:'#fff',background:'#d97706',padding:'1px 6px',borderRadius:'999px'}}>ADMIN</span>}
+                    <span style={{color:'#374151',fontWeight:600,marginLeft:'4px'}}>· {u.display_name}</span>
+                    {u.profession_label && <span style={{color:'#6b7280',fontSize:'11px'}}> · {u.profession_label}</span>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:'6px'}}>
           <span style={{fontSize:'10px',color:draftText.length>1900?'#dc2626':'#9ca3af'}}>{draftText.length} / 2000</span>
-          <button type="submit" disabled={submitting || !draftText.trim()}
-            style={{cursor:'pointer',border:'none',background:'#0f766e',color:'#fff',fontSize:'12px',padding:'7px 18px',borderRadius:'6px',fontWeight:700,opacity:(submitting||!draftText.trim())?0.5:1}}>
+          <button type="submit" disabled={submitting || !draftText.trim()} style={{cursor:'pointer',border:'none',background:'#0f766e',color:'#fff',fontSize:'12px',padding:'7px 18px',borderRadius:'6px',fontWeight:700,opacity:(submitting||!draftText.trim())?0.5:1}}>
             <i className="fa-solid fa-paper-plane" style={{marginRight:'5px'}}></i>{submitting ? 'กำลังส่ง...' : 'ส่ง'}
           </button>
         </div>
       </form>
+
+      {historyOpenId && (
+        <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.5)',backdropFilter:'blur(2px)',zIndex:80,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={closeHistory}>
+          <div onClick={e=>e.stopPropagation()} className="modal-A" style={{background:'#fff',borderRadius:'14px',padding:'18px 22px',maxWidth:'520px',width:'100%',maxHeight:'80vh',overflowY:'auto',boxShadow:'0 20px 50px rgba(0,0,0,0.25)'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'10px'}}>
+              <p style={{fontSize:'14px',fontWeight:700,color:'#1f2937',margin:0}}><i className="fa-regular fa-clock" style={{marginRight:'6px',color:'#0d9488'}}></i>ประวัติการแก้ไข</p>
+              <button type="button" onClick={closeHistory} style={{cursor:'pointer',border:'none',background:'transparent',color:'#9ca3af',fontSize:'18px'}}>×</button>
+            </div>
+            {historyLoading && <div style={{padding:'20px',textAlign:'center',color:'#9ca3af',fontSize:'12px'}}><i className="fa-solid fa-spinner fa-spin"></i> กำลังโหลด...</div>}
+            {!historyLoading && historyData && (
+              <div>
+                <p style={{fontSize:'11px',color:'#0d9488',fontWeight:700,margin:'10px 0 6px'}}>เวอร์ชันปัจจุบัน</p>
+                <div style={{background:'#f0fdfa',border:'1px solid #5eead4',borderRadius:'8px',padding:'10px 12px',marginBottom:'14px'}}>
+                  <p style={{fontSize:'12.5px',color:'#374151',margin:0,whiteSpace:'pre-wrap',wordBreak:'break-word',lineHeight:1.5}}>{historyData.current.comment_text}</p>
+                  <p style={{fontSize:'10px',color:'#9ca3af',margin:'4px 0 0'}}>ประเภท: {CHANGELOG_STATUS_META[historyData.current.status]?.label}</p>
+                </div>
+                {historyData.edits && historyData.edits.length > 0 ? (
+                  <>
+                    <p style={{fontSize:'11px',color:'#6b7280',fontWeight:700,margin:'14px 0 6px'}}>เวอร์ชันก่อนหน้า ({historyData.edits.length})</p>
+                    {historyData.edits.map(ed => (
+                      <div key={ed.id} style={{background:'#f9fafb',border:'1px solid #e5e7eb',borderRadius:'8px',padding:'10px 12px',marginBottom:'8px'}}>
+                        <p style={{fontSize:'10px',color:'#6b7280',margin:'0 0 4px'}}>{new Date(ed.edited_at).toLocaleString('th-TH')} · ประเภท: {CHANGELOG_STATUS_META[ed.old_status]?.label}</p>
+                        <p style={{fontSize:'12.5px',color:'#374151',margin:0,whiteSpace:'pre-wrap',wordBreak:'break-word',lineHeight:1.5}}>{ed.old_text}</p>
+                      </div>
+                    ))}
+                  </>
+                ) : <p style={{fontSize:'11px',color:'#9ca3af',textAlign:'center',padding:'14px',fontStyle:'italic'}}>ไม่มีประวัติเก่า (อาจถูกแก้ก่อนระบบบันทึก)</p>}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── popup ยืนยันลบ ────────────────────────────────── */}
       {confirmDelId && (

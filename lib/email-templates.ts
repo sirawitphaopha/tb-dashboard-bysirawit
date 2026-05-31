@@ -742,3 +742,99 @@ export function changelogCommentNotifyEmail(
   `
   return { subject, html: wrap(subject, body) }
 }
+
+// ════════════════════════════════════════════════════════════════════════
+// v0.7.14.5 — Reply / Mention / Resolved notifications
+// ════════════════════════════════════════════════════════════════════════
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')
+}
+
+function baseLink(baseUrl: string): string {
+  return /localhost|127\.0\.0\.1/.test(baseUrl) ? 'https://tbjourney.care' : baseUrl
+}
+
+// 1) มีคนตอบกลับ comment ของเรา
+export function changelogReplyNotifyEmail(
+  version: string,
+  actorName: string,
+  replyText: string,
+  baseUrl: string,
+) {
+  const subject = `↩ ${actorName} ตอบกลับความคิดเห็นของคุณ v${version}`
+  const safe = escapeHtml(replyText)
+  const link = baseLink(baseUrl)
+  const body = `
+    <h2 style="margin:0 0 16px;color:${BRAND_TEAL_DARK};font-size:18px;">มีคนตอบกลับความคิดเห็นของคุณ</h2>
+    <p style="margin:0 0 20px;font-size:14px;color:#4b5563;"><b>${actorName}</b> ตอบกลับความคิดเห็นของคุณใน v${version}</p>
+    <div style="background:#f0fdfa;border:2px solid #5eead4;border-radius:12px;padding:16px 20px;margin-bottom:24px;">
+      <p style="margin:0;font-size:14px;color:#1f2937;line-height:1.75;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;">${safe}</p>
+    </div>
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr><td align="center" style="padding:8px 0;">
+        <a href="${link}" style="display:inline-block;padding:14px 32px;background:${BRAND_TEAL};color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px;">📜 เปิดในระบบ</a>
+      </td></tr>
+    </table>
+  `
+  return { subject, html: wrap(subject, body) }
+}
+
+// 2) มีคนแท็กคุณ (@mention)
+export function changelogMentionNotifyEmail(
+  version: string,
+  actorName: string,
+  commentText: string,
+  baseUrl: string,
+) {
+  const subject = `@ ${actorName} แท็กคุณใน v${version}`
+  const safe = escapeHtml(commentText)
+  const link = baseLink(baseUrl)
+  const body = `
+    <h2 style="margin:0 0 16px;color:${BRAND_TEAL_DARK};font-size:18px;">มีคนแท็กคุณในความคิดเห็น</h2>
+    <p style="margin:0 0 20px;font-size:14px;color:#4b5563;"><b>${actorName}</b> เรียกชื่อคุณในความคิดเห็น v${version}</p>
+    <div style="background:#fffbeb;border:2px solid #f59e0b;border-radius:12px;padding:16px 20px;margin-bottom:24px;">
+      <p style="margin:0;font-size:14px;color:#1f2937;line-height:1.75;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;">${safe}</p>
+    </div>
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr><td align="center" style="padding:8px 0;">
+        <a href="${link}" style="display:inline-block;padding:14px 32px;background:${BRAND_TEAL};color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px;">📜 เปิดในระบบ</a>
+      </td></tr>
+    </table>
+  `
+  return { subject, html: wrap(subject, body) }
+}
+
+// 3) ประเด็นของเราถูกปิด — label เปลี่ยนตาม status
+export function changelogResolvedNotifyEmail(
+  version: string,
+  status: string,
+  resolverName: string,
+  commentText: string,
+  baseUrl: string,
+) {
+  const labelMap: Record<string, { subj: string; head: string; verb: string }> = {
+    bug_report: { subj: 'บั๊กที่คุณแจ้งถูกแก้ไขแล้ว', head: '✓ บั๊กที่คุณแจ้งถูกแก้ไขแล้ว', verb: 'แก้ไข' },
+    request:    { subj: 'ฟีเจอร์ที่คุณขอถูกเพิ่มแล้ว', head: '✓ ฟีเจอร์ที่คุณขอถูกเพิ่มแล้ว', verb: 'เพิ่ม' },
+    feedback:   { subj: 'ความคิดเห็นของคุณได้รับการรับทราบ', head: '✓ ความคิดเห็นของคุณได้รับการรับทราบ', verb: 'รับทราบ' },
+    note:       { subj: 'บันทึกของคุณได้รับการรับทราบ', head: '✓ บันทึกของคุณได้รับการรับทราบ', verb: 'รับทราบ' },
+  }
+  const L = labelMap[status] || labelMap.feedback
+  const subject = `${L.subj} · v${version}`
+  const safe = escapeHtml(commentText)
+  const link = baseLink(baseUrl)
+  const body = `
+    <h2 style="margin:0 0 16px;color:${BRAND_TEAL_DARK};font-size:18px;">${L.head}</h2>
+    <p style="margin:0 0 20px;font-size:14px;color:#4b5563;"><b>${resolverName}</b> ${L.verb}ประเด็นที่คุณแจ้งใน v${version}</p>
+    <p style="margin:0 0 8px;font-size:12px;color:#6b7280;">ข้อความเดิมของคุณ:</p>
+    <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:14px 18px;margin-bottom:24px;">
+      <p style="margin:0;font-size:13px;color:#4b5563;line-height:1.7;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;">${safe}</p>
+    </div>
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr><td align="center" style="padding:8px 0;">
+        <a href="${link}" style="display:inline-block;padding:14px 32px;background:${BRAND_TEAL};color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px;">📜 เปิดในระบบ</a>
+      </td></tr>
+    </table>
+  `
+  return { subject, html: wrap(subject, body) }
+}
