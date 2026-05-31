@@ -2700,7 +2700,7 @@ function RequestEditModal({ field, currentValue, onClose }) {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.14.7';
+const APP_VERSION = '0.7.14.8';
 const BUILD_DATE = '31 พ.ค. 2569';
 function AboutModal({ onClose, onShowChangelog }) {
   const [closing, setClosing] = React.useState(false);
@@ -3890,8 +3890,37 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
     if (propsUserId !== undefined) setCurrentUserId(propsUserId);
     if (propsIsAdmin !== undefined) setIsAdmin(!!propsIsAdmin);
   }, [initialComments, propsUserId, propsIsAdmin]);
-  const [draftText, setDraftText]     = React.useState('');
-  const [draftStatus, setDraftStatus] = React.useState('feedback');
+  // v0.7.16.7+ — draft auto-save keys (localStorage)
+  const draftKey = 'tb_draft_' + version;
+  const draftStatusKey = 'tb_draft_status_' + version;
+  const [draftText, setDraftText] = React.useState(() => {
+    try { return localStorage.getItem(draftKey) || ''; } catch { return ''; }
+  });
+  const [draftStatus, setDraftStatus] = React.useState(() => {
+    try { return localStorage.getItem(draftStatusKey) || 'feedback'; } catch { return 'feedback'; }
+  });
+  const [draftSavedAt, setDraftSavedAt] = React.useState(null); // indicator "บันทึกเมื่อ HH:MM"
+  const [uploadToast, setUploadToast] = React.useState(false); // toast แสดง "ฟีเจอร์อัปโหลดยังไม่เปิด"
+  const showUploadToast = React.useCallback(() => {
+    setUploadToast(true);
+    setTimeout(() => setUploadToast(false), 2800);
+  }, []);
+  // Save draft → localStorage (debounced 1.5s)
+  React.useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        if (draftText) {
+          localStorage.setItem(draftKey, draftText);
+          localStorage.setItem(draftStatusKey, draftStatus);
+          setDraftSavedAt(Date.now());
+        } else {
+          localStorage.removeItem(draftKey);
+          localStorage.removeItem(draftStatusKey);
+        }
+      } catch {}
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [draftText, draftStatus, draftKey, draftStatusKey]);
   const [submitting, setSubmitting]   = React.useState(false);
   const [editingId, setEditingId]   = React.useState(null);
   const [editText, setEditText]     = React.useState('');
@@ -3906,6 +3935,30 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
   const [replyText, setReplyText]       = React.useState('');
   const [replyStatus, setReplyStatus]   = React.useState('feedback');
   const [savingReply, setSavingReply]   = React.useState(false);
+  // v0.7.16.7+ — reply draft auto-save per parentId
+  React.useEffect(() => {
+    if (!replyingToId) return;
+    const t = setTimeout(() => {
+      try {
+        const k = 'tb_draft_reply_' + replyingToId;
+        if (replyText) localStorage.setItem(k, replyText);
+        else localStorage.removeItem(k);
+      } catch {}
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [replyText, replyingToId]);
+  // edit draft auto-save per commentId
+  React.useEffect(() => {
+    if (!editingId) return;
+    const t = setTimeout(() => {
+      try {
+        const k = 'tb_draft_edit_' + editingId;
+        if (editText) localStorage.setItem(k, editText);
+        else localStorage.removeItem(k);
+      } catch {}
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [editText, editingId]);
   const [historyOpenId, setHistoryOpenId] = React.useState(null);
   const [historyData, setHistoryData]     = React.useState(null);
   const [historyLoading, setHistoryLoading] = React.useState(false);
@@ -4017,6 +4070,9 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
     };
     setComments(prev => [...prev, optimistic]);
     setDraftText(''); setDraftStatus('feedback');
+    // clear localStorage draft (success path)
+    try { localStorage.removeItem(draftKey); localStorage.removeItem(draftStatusKey); } catch {}
+    setDraftSavedAt(null);
     try {
       const r = await fetch('/api/changelog/comment', {
         method: 'POST',
@@ -4028,18 +4084,24 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
       await load(); // refetch → replace temp ด้วย real
     } catch (e) {
       setError(e.message || 'ส่ง comment ล้มเหลว');
-      // rollback
+      // rollback + คืน text + restore draft
       setComments(prev => prev.filter(c => c.id !== tempId));
-      setDraftText(t); // คืน text ให้ user
+      setDraftText(t);
     } finally { setSubmitting(false); }
   };
 
   const startEdit = (c) => {
     setEditingId(c.id);
-    setEditText(c.comment_text);
+    // ถ้ามี draft edit เก่าใน localStorage → ใช้ค่านั้น (กันหาย)
+    let savedDraft = '';
+    try { savedDraft = localStorage.getItem('tb_draft_edit_' + c.id) || ''; } catch {}
+    setEditText(savedDraft || c.comment_text);
     setEditStatus(c.status);
   };
-  const cancelEdit = () => { setEditingId(null); setEditText(''); };
+  const cancelEdit = () => {
+    if (editingId) { try { localStorage.removeItem('tb_draft_edit_' + editingId); } catch {} }
+    setEditingId(null); setEditText('');
+  };
   const saveEdit = async (id) => {
     const t = editText.trim();
     if (!t) return;
@@ -4059,6 +4121,7 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
       }
       return updated;
     }));
+    try { localStorage.removeItem('tb_draft_edit_' + id); } catch {}
     setEditingId(null);
     try {
       const r = await fetch(`/api/changelog/comment/${id}`, {
@@ -4113,8 +4176,19 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
     finally { setHistoryLoading(false); }
   };
   const closeHistory = () => { setHistoryOpenId(null); setHistoryData(null); };
-  const startReply = (parentId, defaultStatus) => { setReplyingToId(parentId); setReplyText(''); setReplyStatus(defaultStatus || 'feedback'); };
-  const cancelReply = () => { setReplyingToId(null); setReplyText(''); };
+  const startReply = (parentId, defaultStatus) => {
+    setReplyingToId(parentId);
+    // ดึง draft reply เก่าจาก localStorage (ถ้ามี)
+    let savedDraft = '';
+    try { savedDraft = localStorage.getItem('tb_draft_reply_' + parentId) || ''; } catch {}
+    setReplyText(savedDraft);
+    setReplyStatus(defaultStatus || 'feedback');
+  };
+  const cancelReply = () => {
+    // ลบ draft + clear state
+    if (replyingToId) { try { localStorage.removeItem('tb_draft_reply_' + replyingToId); } catch {} }
+    setReplyingToId(null); setReplyText('');
+  };
   const submitReply = async (parentId) => {
     const t = replyText.trim(); if (!t) return;
     if (t.length > 2000) { setError('ตอบกลับยาวเกิน 2000 ตัวอักษร'); return; }
@@ -4146,6 +4220,7 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
       ? { ...c, replies: [...(c.replies||[]), optimisticReply] }
       : c
     ));
+    try { localStorage.removeItem('tb_draft_reply_' + parentId); } catch {}
     cancelReply();
     try {
       const r = await fetch(`/api/changelog/comment/${parentId}/reply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ comment_text: t, status: replyStatus }) });
@@ -4311,23 +4386,42 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
   const renderCommentText = (text) => {
     if (!text) return null;
     const users = window._mentionUsersCache?.users || [];
-    // map username (lowercase) → role
     const userRoleMap = {};
     for (const u of users) {
       if (u.username) userRoleMap[u.username.toLowerCase()] = u.role;
     }
-    return text.split(/(@[\w.\-ก-๛]+(?:@[\w.\-]+\.[A-Za-z]{2,})?)/g).map((p, i) => {
-      if (!p || !p.startsWith('@')) return p;
-      const uname = p.slice(1).toLowerCase();
-      const role = userRoleMap[uname];
-      const isAdmin = role === 'admin';
-      // admin = อำพัน + text น้ำตาลเข้ม + glow ส้ม · user = เทล + text ดำ + glow เขียว
-      const style = isAdmin
-        ? { background:'#fef3c7', color:'#92400e', fontWeight:700, padding:'1px 5px', borderRadius:'4px', boxShadow:'0 0 6px 1px rgba(217,119,6,0.45)' }
-        : role === 'user'
-        ? { background:'#ccfbf1', color:'#1f2937', fontWeight:700, padding:'1px 5px', borderRadius:'4px', boxShadow:'0 0 6px 1px rgba(13,148,136,0.45)' }
-        : { background:'#f3f4f6', color:'#6b7280', fontWeight:600, padding:'1px 5px', borderRadius:'4px' };  // unknown user (cache ยังไม่โหลด หรือ user ไม่มีจริง)
-      return <span key={i} style={style}>{p}</span>;
+    // v0.7.16.7+ — split รวม URL (https?://) + mention เดียวกัน
+    const splitRegex = /((?:https?:\/\/[^\s<>"'()]+)|(?:@[\w.\-ก-๛]+(?:@[\w.\-]+\.[A-Za-z]{2,})?))/g;
+    return text.split(splitRegex).map((p, i) => {
+      if (!p) return p;
+      // URL → ลิงก์คลิกได้
+      if (/^https?:\/\//.test(p)) {
+        // ตัดเครื่องหมายวรรคตอนท้าย URL (. , ; ) เป็นต้น)
+        const trailing = p.match(/[.,;!?]+$/);
+        const url = trailing ? p.slice(0, -trailing[0].length) : p;
+        const after = trailing ? trailing[0] : '';
+        return (
+          <React.Fragment key={i}>
+            <a href={url} target="_blank" rel="noopener noreferrer"
+              style={{color:'#1d4ed8',textDecoration:'underline',wordBreak:'break-all',fontWeight:500}}>
+              {url}
+            </a>{after}
+          </React.Fragment>
+        );
+      }
+      // Mention
+      if (p.startsWith('@')) {
+        const uname = p.slice(1).toLowerCase();
+        const role = userRoleMap[uname];
+        const isAdmin = role === 'admin';
+        const style = isAdmin
+          ? { background:'#fef3c7', color:'#92400e', fontWeight:700, padding:'1px 5px', borderRadius:'4px', boxShadow:'0 0 6px 1px rgba(217,119,6,0.45)' }
+          : role === 'user'
+          ? { background:'#ccfbf1', color:'#1f2937', fontWeight:700, padding:'1px 5px', borderRadius:'4px', boxShadow:'0 0 6px 1px rgba(13,148,136,0.45)' }
+          : { background:'#f3f4f6', color:'#6b7280', fontWeight:600, padding:'1px 5px', borderRadius:'4px' };
+        return <span key={i} style={style}>{p}</span>;
+      }
+      return p;
     });
   };
 
@@ -4534,6 +4628,10 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
                       </div>
                     )}
                     <div style={{display:'flex',gap:'6px',marginTop:'6px',justifyContent:'flex-end'}}>
+                      <button type="button" onClick={showUploadToast} title="แนบรูป (กำลังพัฒนา)"
+                        style={{cursor:'pointer',border:'1px dashed #9ca3af',background:'#f9fafb',color:'#6b7280',fontSize:'11px',padding:'5px 10px',borderRadius:'6px',fontWeight:600}}>
+                        <i className="fa-solid fa-paperclip" style={{marginRight:'3px'}}></i>แนบรูป
+                      </button>
                       <button type="button" onClick={cancelEdit} disabled={savingEdit} style={{cursor:'pointer',border:'1px solid #e5e7eb',background:'#fff',color:'#6b7280',fontSize:'11px',padding:'5px 12px',borderRadius:'6px',fontWeight:600}}>ยกเลิก</button>
                       <button type="button" onClick={()=>saveEdit(c.id)} disabled={savingEdit || !editText.trim()} style={{cursor:'pointer',border:'none',background:'#0f766e',color:'#fff',fontSize:'11px',padding:'5px 14px',borderRadius:'6px',fontWeight:700,opacity:savingEdit||!editText.trim()?0.5:1}}>{savingEdit ? 'กำลังบันทึก...' : 'บันทึก'}</button>
                     </div>
@@ -4584,6 +4682,10 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
                     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:'6px'}}>
                       <span style={{fontSize:'10px',color:replyText.length>1900?'#dc2626':'#9ca3af'}}>{replyText.length} / 2000</span>
                       <div style={{display:'flex',gap:'6px'}}>
+                        <button type="button" onClick={showUploadToast} title="แนบรูป (กำลังพัฒนา)"
+                          style={{cursor:'pointer',border:'1px dashed #9ca3af',background:'#f9fafb',color:'#6b7280',fontSize:'11px',padding:'5px 10px',borderRadius:'6px',fontWeight:600}}>
+                          <i className="fa-solid fa-paperclip" style={{marginRight:'3px'}}></i>แนบรูป
+                        </button>
                         <button type="button" onClick={cancelReply} disabled={savingReply} style={{cursor:'pointer',border:'1px solid #e5e7eb',background:'#fff',color:'#6b7280',fontSize:'11px',padding:'5px 12px',borderRadius:'6px',fontWeight:600}}>ยกเลิก</button>
                         <button type="button" onClick={()=>submitReply(c.id)} disabled={savingReply || !replyText.trim()} style={{cursor:'pointer',border:'none',background:'#0f766e',color:'#fff',fontSize:'11px',padding:'5px 14px',borderRadius:'6px',fontWeight:700,opacity:savingReply||!replyText.trim()?0.5:1}}>{savingReply ? 'กำลังส่ง...' : 'ส่ง'}</button>
                       </div>
@@ -4697,10 +4799,20 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
             </div>
           )}
         </div>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:'6px',gap:'8px'}}>
-          <span style={{fontSize:'10px',color:draftText.length>1900?'#dc2626':'#9ca3af'}}>{draftText.length} / 2000</span>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:'6px',gap:'8px',flexWrap:'wrap'}}>
+          <div style={{display:'flex',alignItems:'center',gap:'10px',fontSize:'10px',color:'#9ca3af'}}>
+            <span style={{color:draftText.length>1900?'#dc2626':'#9ca3af'}}>{draftText.length} / 2000</span>
+            {draftSavedAt && draftText && (
+              <span style={{color:'#0d9488',fontWeight:600}}><i className="fa-solid fa-cloud-arrow-up" style={{marginRight:'3px'}}></i>บันทึกอัตโนมัติแล้ว</span>
+            )}
+          </div>
           <div style={{display:'flex',gap:'6px'}}>
-            <button type="button" onClick={()=>{ setDraftText(''); setDraftStatus('feedback'); }}
+            <button type="button" onClick={showUploadToast}
+              title="แนบรูป (กำลังพัฒนา)"
+              style={{cursor:'pointer',border:'1px dashed #9ca3af',background:'#f9fafb',color:'#6b7280',fontSize:'12px',padding:'7px 12px',borderRadius:'6px',fontWeight:600}}>
+              <i className="fa-solid fa-paperclip" style={{marginRight:'4px'}}></i>แนบรูป
+            </button>
+            <button type="button" onClick={()=>{ setDraftText(''); setDraftStatus('feedback'); try { localStorage.removeItem(draftKey); localStorage.removeItem(draftStatusKey); } catch {} }}
               disabled={submitting || !draftText.trim()}
               style={{cursor:(submitting||!draftText.trim())?'not-allowed':'pointer',border:'1.5px solid #ef4444',background:'#fef2f2',color:'#b91c1c',fontSize:'12px',padding:'7px 14px',borderRadius:'6px',fontWeight:700,opacity:(submitting||!draftText.trim())?0.5:1}}>
               <i className="fa-solid fa-xmark" style={{marginRight:'4px'}}></i>ยกเลิก
@@ -4711,6 +4823,14 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
           </div>
         </div>
       </form>
+
+      {/* v0.7.16.7+ — toast แนบรูป (coming soon) */}
+      {uploadToast && (
+        <div style={{position:'fixed',bottom:'24px',left:'50%',transform:'translateX(-50%)',zIndex:9999,background:'#1f2937',color:'#fff',padding:'10px 18px',borderRadius:'10px',fontSize:'13px',fontWeight:600,boxShadow:'0 8px 20px rgba(0,0,0,0.3)',display:'flex',alignItems:'center',gap:'8px'}} className="modal-toast">
+          <i className="fa-solid fa-paperclip" style={{color:'#fbbf24'}}></i>
+          <span>ฟีเจอร์แนบรูปกำลังพัฒนา จะเปิดในเวอร์ชั่นถัดไป</span>
+        </div>
+      )}
 
       {historyOpenId && (
         <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.5)',backdropFilter:'blur(2px)',zIndex:80,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={closeHistory}>

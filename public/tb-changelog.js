@@ -23,10 +23,29 @@ window.TB_CHANGELOG = [
     description: "ระบบ login จริง + Audit Log ครบวงจร + Admin Approval + ดีไซน์ใหม่ทั้งหมด",
     versions: [
       {
-        version: "0.7.14.7",
+        version: "0.7.14.8",
         date: "31 พ.ค. 2569",
         commit: "pending",
         commitFull: "pending",
+        title: "Tier C — Draft auto-save + Auto-detect URL → clickable + ปุ่ม 📎 แนบรูป (placeholder)",
+        changes: [
+          { tag: "feature", text: "Draft auto-save — เก็บใน localStorage ทุก 1.5s หลังหยุดพิม · key แยกตาม context (tb_draft_${version}, tb_draft_reply_${parentId}, tb_draft_edit_${commentId}) · เปิดเว็บใหม่/รีโหลด → text ค้างอยู่ ไม่หาย" },
+          { tag: "feature", text: "Auto-load draft ตอน mount (comment ใหม่) + startReply (reply) + startEdit (edit) — restore จาก localStorage ทันที" },
+          { tag: "feature", text: "Auto-clear draft หลังส่งสำเร็จ + ตอนกดยกเลิก — กันค้างข้อมูลเก่า" },
+          { tag: "feature", text: "Indicator '💾 บันทึกอัตโนมัติแล้ว' ใต้ textarea ของ comment ใหม่ — แสดงตอนมี draft + savedAt timestamp (สีเทล)" },
+          { tag: "feature", text: "Auto-detect URL → คลิกได้ — renderCommentText จับ https?://[...] อัตโนมัติ → render เป็น <a target='_blank' rel='noopener noreferrer'> สีน้ำเงิน + underline + wordBreak break-all" },
+          { tag: "feature", text: "Smart URL trailing — ตัด . , ; ! ? ท้าย URL ออก (เช่น 'https://...html.' คลิกแค่ส่วน URL, '.' เป็น text)" },
+          { tag: "feature", text: "ปุ่ม 📎 แนบรูป (placeholder) ใน 3 form — draft + reply + edit · style: border dashed + bg เทาอ่อน · คลิก → toast 'ฟีเจอร์แนบรูปกำลังพัฒนา จะเปิดในเวอร์ชั่นถัดไป' (หาย 2.8s)" },
+          { tag: "feature", text: "Toast แนบรูป — ใช้ animation modal-toast + bottom centered + icon 📎 อำพัน" },
+          { tag: "ui", text: "Render URL + Mention ใน pass เดียว — regex รวม /(https?:\\/\\/[...]|@[username])/g → ลด complexity ของ splitting" },
+        ],
+        body: "🎯 เป้าหมาย\nเฟส Tier C polish — เพิ่ม 3 ฟีเจอร์ที่ user ขอชัด:\n1. Draft auto-save — กันเขียน comment ยาวๆ แล้วหาย\n2. Auto-detect URL → clickable — ลิงก์ guidelines/paper คลิกได้ทันที\n3. ปุ่ม 📎 แนบรูป (placeholder) — ส่งสัญญาณว่าฟีเจอร์มาแน่ แต่ยังไม่เปิด\n\n📦 Image upload (เต็ม) — Roadmap ข้อ 51\nระบบ image upload ทำเต็มในเฟสหน้า — Supabase Storage + thumbnail + lightbox + compress\nEstimate 6-8 ชม. ตามที่จดใน project_tb_dashboard_pending_master.md\n\n📝 Lesson\n- localStorage debounce 1.5s ดี (ไม่ aggressive เกิน, ไม่ช้าเกิน)\n- URL regex ต้องระวัง trailing punctuation (. , ; ! ?) — ตัดออกก่อน render link\n- Placeholder button + toast เป็น UX pattern ดีสำหรับฟีเจอร์ที่ commit ทำแต่ยังไม่ ship — สื่อ commitment + ไม่ทำให้ user คาดหวังเกินจริง",
+      },
+      {
+        version: "0.7.14.7",
+        date: "31 พ.ค. 2569",
+        commit: "0bb402a",
+        commitFull: "0bb402a98c449c652b5ee978fc04216e1fdede25",
         title: "Comment Filter Bar (แถบที่ 2) + Optimistic Update ทุก action + Mention rendering สีตาม role + Draft warning + Hover ไม่ดีเลย์",
         changes: [
           { tag: "feature", text: "แถบที่ 2 — ตัวกรองคอมเม้น (ใต้แถบเวอร์ชั่น) — ช่องค้นหา + 4 status chips + @mention dropdown multi-select + Resolved tri-state + คอมเม้นของฉัน + 3 extra chips (ที่ฉันถูกใจ/ที่ฉันตอบ/ยังไม่อ่าน)" },
