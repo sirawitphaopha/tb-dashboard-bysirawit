@@ -25,8 +25,8 @@ window.TB_CHANGELOG = [
       {
         version: "0.7.14.5",
         date: "31 พ.ค. 2569",
-        commit: "pending",
-        commitFull: "pending",
+        commit: "4d32b08",
+        commitFull: "4d32b087e50a829a0ebf901911992750bae3e763",
         title: "Changelog Comment Overhaul — Realtime + Reply + Resolve + @mention + Like + Edit history + Filter/Sort",
         changes: [
           { tag: "feature", text: "Realtime auto-update — comment ใหม่/ถูกลบ/ถูกแก้/ถูกถูกใจ ปรากฏทันทีไม่ต้องกด refresh (Supabase Realtime subscribe ทั้ง tb_changelog_comments + tb_changelog_comment_likes)" },
