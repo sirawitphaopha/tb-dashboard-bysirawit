@@ -25,8 +25,8 @@ window.TB_CHANGELOG = [
       {
         version: "0.7.14.6.1",
         date: "31 พ.ค. 2569",
-        commit: "pending",
-        commitFull: "pending",
+        commit: "f388631",
+        commitFull: "f388631ce4b11558064eac0265fed4dfd344e1c9",
         title: "Hotfix v0.7.14.6 — Admin ได้กระดิ่งแล้ว (root cause: frontend condition guard เก่า)",
         changes: [
           { tag: "bug", text: "Admin ไม่ได้กระดิ่งเมื่อถูก tag/reply/resolved — root cause: ใน tb-app.jsx มี 2 condition guard เก่าที่กัน admin ออกจาก loadUserNotifications + Realtime subscription ของ tb_notifications (เพราะตอนแรก admin มีแค่ admin alerts ไม่มี notification ที่ admin ได้รับ)" },
