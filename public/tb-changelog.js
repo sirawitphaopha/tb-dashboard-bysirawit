@@ -23,6 +23,21 @@ window.TB_CHANGELOG = [
     description: "ระบบ login จริง + Audit Log ครบวงจร + Admin Approval + ดีไซน์ใหม่ทั้งหมด",
     versions: [
       {
+        version: "0.7.14.6",
+        date: "31 พ.ค. 2569",
+        commit: "pending",
+        commitFull: "pending",
+        title: "Hotfix v0.7.14.5 — Admin bell ทุก comment + Keyboard nav + Enter ส่ง + Resolve admin-only",
+        changes: [
+          { tag: "feature", text: "Admin ได้กระดิ่งทุก comment ของผู้ใช้คนอื่น — type='comment_new' (skip ที่จะได้ notif เฉพาะแล้ว เช่น reply/mention/resolved กันส่งซ้ำ)" },
+          { tag: "feature", text: "Keyboard navigation ใน @ popup — ลูกศร ↑↓ เลือกชื่อ · Enter/Tab ใส่ · Escape ปิด · ทำงานทั้ง 3 textarea (draft/edit/reply)" },
+          { tag: "feature", text: "Enter ส่งความคิดเห็น / Shift+Enter ขึ้นบรรทัดใหม่ — ใช้คีย์บอร์ดอย่างเดียวได้ ไม่ต้องคลิกเมาส์ · กัน IME composing ภาษาไทย" },
+          { tag: "security", text: "ปุ่มรับทราบบั๊ก/ฟีเจอร์ — เฉพาะ admin เท่านั้น (frontend canResolve = isAdmin only + API guard) เพราะเจ้าของ comment คือคนแจ้ง ไม่ใช่คนแก้บั๊ก" },
+          { tag: "backend", text: "เพิ่ม helper notifyAdminsOfNewComment ใน lib/changelog-comment-helpers.ts — query admin ทุกคน + insert tb_notifications + skip excludeUserIds" },
+          { tag: "text", text: "placeholder ของ textarea อัปเดต — 'Enter ส่ง · Shift+Enter ขึ้นบรรทัดใหม่'" },
+        ],
+      },
+      {
         version: "0.7.14.5",
         date: "31 พ.ค. 2569",
         commit: "4d32b08",

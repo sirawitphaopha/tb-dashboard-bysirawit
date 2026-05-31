@@ -13,6 +13,7 @@ import {
   extractMentionUsernames,
   resolveMentionedUserIds,
   insertCommentNotif,
+  notifyAdminsOfNewComment,
   type Status,
 } from '@/lib/changelog-comment-helpers'
 
@@ -75,6 +76,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
 
     const baseUrl = req.nextUrl.origin
+
+    // ── แจ้ง admin ทุกคน (skip parent owner ที่จะได้ comment_reply + mentioned) ──
+    await notifyAdminsOfNewComment(admin, {
+      actorUserId: user.id,
+      actorName: snap.displayName,
+      commentVersion: parent.version,
+      commentId: newRow.id,
+      excludeUserIds: [parent.user_id, ...mentionedUserIds],
+    })
 
     // ── แจ้งเจ้าของ parent (bell + email) ──
     await insertCommentNotif(admin, {

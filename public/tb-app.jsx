@@ -1983,7 +1983,7 @@ function App() {
       : []),
   ];
   const userNotifAlerts = userDbNotifs.map(n => {
-    const isComment = n.type === 'comment_reply' || n.type === 'comment_mention' || n.type === 'comment_resolved';
+    const isComment = n.type === 'comment_reply' || n.type === 'comment_mention' || n.type === 'comment_resolved' || n.type === 'comment_new';
     return {
       id: 'user-notif-' + n.id,
       dbNotifId: n.id,
@@ -2001,6 +2001,7 @@ function App() {
          : n.type === 'comment_reply'           ? `${n.note} ตอบกลับความคิดเห็นของคุณใน v${n.comment_version}`
          : n.type === 'comment_mention'         ? `${n.note} เรียกคุณในความคิดเห็น v${n.comment_version}`
          : n.type === 'comment_resolved'        ? `${n.note} ปิดประเด็นของคุณใน v${n.comment_version}`
+         : n.type === 'comment_new'             ? `${n.note} เขียนความคิดเห็นใหม่ใน v${n.comment_version}`
          : `"${n.patient_name}" ถูกลบถาวรแล้ว`,
       time: new Date(n.created_at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }),
     };
@@ -2666,7 +2667,7 @@ function RequestEditModal({ field, currentValue, onClose }) {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.14.5';
+const APP_VERSION = '0.7.14.6';
 const BUILD_DATE = '31 พ.ค. 2569';
 function AboutModal({ onClose, onShowChangelog }) {
   const [closing, setClosing] = React.useState(false);
@@ -3734,6 +3735,39 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
     else if (context === 'reply') setReplyText(apply(replyText, mentionState?.caretPos ?? replyText.length));
     setMentionState(null);
   };
+  // Keyboard handler สำหรับ textarea — รองรับ mention navigation + Enter ส่ง
+  const handleTextareaKey = (e, context, submitFn) => {
+    // ถ้า popup mention เปิดอยู่ → ใช้ลูกศร/Enter เลือกชื่อ
+    if (mentionState && mentionState.context === context && mentionState.users.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setMentionState(prev => prev ? { ...prev, idx: Math.min(prev.users.length - 1, prev.idx + 1) } : prev);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setMentionState(prev => prev ? { ...prev, idx: Math.max(0, prev.idx - 1) } : prev);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        const u = mentionState.users[mentionState.idx];
+        if (u) applyMention(u, context);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setMentionState(null);
+        return;
+      }
+    }
+    // Enter (ไม่กด Shift) → submit · Shift+Enter → ขึ้นบรรทัดใหม่ (default)
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && submitFn) {
+      e.preventDefault();
+      submitFn();
+    }
+  };
+
   const renderCommentText = (text) => {
     if (!text) return null;
     // รองรับ handle ปกติ + email-style username (@xxx@host.tld)
@@ -3819,7 +3853,7 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
             const isOwner = c.user_id === currentUserId;
             const canDelete = isOwner || isAdmin;
             const editing = editingId === c.id;
-            const canResolve = (isOwner || isAdmin) && !c.parent_comment_id;
+            const canResolve = isAdmin && !c.parent_comment_id;  // เฉพาะ admin เท่านั้น (user ไม่ใช่คนแก้บั๊ก)
             const isResolved = !!c.resolved_at;
             const isDeleted = !!c.deleted_at;
             const resolvedLabel = c.status === 'bug_report' ? 'แก้ไขบั๊กแล้ว' : c.status === 'request' ? 'เพิ่มฟีเจอร์นี้แล้ว' : 'รับทราบ';
@@ -3919,7 +3953,7 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
                     </select>
                     <textarea value={editText}
                       onChange={e=>{ setEditText(e.target.value); checkMention(e.target.value, e.target.selectionStart, 'edit', e.target); }}
-                      onKeyDown={e=>{ if (e.key === 'Escape') setMentionState(null); }}
+                      onKeyDown={e=>handleTextareaKey(e, 'edit', () => saveEdit(c.id))}
                       rows={3} maxLength={2000}
                       style={{width:'100%',padding:'8px 10px',borderRadius:'6px',border:'1px solid #d1d5db',fontSize:'13px',outline:'none',fontFamily:'inherit',resize:'vertical',color:'#1f2937',caretColor:'#0d9488',background:'#fff'}}/>
                     {mentionState && mentionState.context === 'edit' && (
@@ -3965,8 +3999,8 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
                     </select>
                     <textarea value={replyText}
                       onChange={e=>{ setReplyText(e.target.value); checkMention(e.target.value, e.target.selectionStart, 'reply', e.target); }}
-                      onKeyDown={e=>{ if (e.key === 'Escape') setMentionState(null); }}
-                      rows={2} maxLength={2000} placeholder="พิมพ์ตอบกลับ... (พิมพ์ @ เพื่อเรียกผู้ใช้)"
+                      onKeyDown={e=>handleTextareaKey(e, 'reply', () => submitReply(c.id))}
+                      rows={2} maxLength={2000} placeholder="พิมพ์ตอบกลับ... (Enter ส่ง · Shift+Enter ขึ้นบรรทัดใหม่)"
                       style={{width:'100%',padding:'8px 10px',borderRadius:'6px',border:'1px solid #d1d5db',fontSize:'13px',outline:'none',fontFamily:'inherit',resize:'vertical',color:'#1f2937',caretColor:'#0d9488',background:'#fff'}}/>
                     {mentionState && mentionState.context === 'reply' && (
                       <div style={{position:'absolute',top:(mentionState.top||24)+'px',left:(mentionState.left||10)+'px',zIndex:9999,background:'#fff',border:'2px solid #0d9488',borderRadius:'8px',padding:'4px',boxShadow:'0 8px 24px rgba(0,0,0,0.18)',minWidth:'260px',maxHeight:'220px',overflowY:'auto'}}>
@@ -4075,9 +4109,9 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
         <div style={{position:'relative'}}>
           <textarea value={draftText}
             onChange={e=>{ setDraftText(e.target.value); checkMention(e.target.value, e.target.selectionStart, 'draft', e.target); }}
-            onKeyDown={e=>{ if (e.key === 'Escape') setMentionState(null); }}
+            onKeyDown={e=>handleTextareaKey(e, 'draft', () => handleSubmit())}
             rows={3} maxLength={2000}
-            placeholder="เขียนความคิดเห็น ข้อเสนอแนะ หรือแจ้งบั๊กที่นี่... (พิมพ์ @ เพื่อเรียกผู้ใช้)"
+            placeholder="เขียนความคิดเห็น ข้อเสนอแนะ หรือแจ้งบั๊กที่นี่... (พิมพ์ @ เพื่อเรียกผู้ใช้ · Enter ส่ง · Shift+Enter ขึ้นบรรทัดใหม่)"
             style={{width:'100%',padding:'8px 10px',borderRadius:'6px',border:'1px solid #d1d5db',fontSize:'13px',outline:'none',fontFamily:'inherit',resize:'vertical',color:'#1f2937',caretColor:'#0d9488',background:'#fff'}}/>
           {mentionState && mentionState.context === 'draft' && (
             <div style={{position:'absolute',top:(mentionState.top||24)+'px',left:(mentionState.left||0)+'px',zIndex:9999,background:'#fff',border:'2px solid #0d9488',borderRadius:'8px',padding:'4px',boxShadow:'0 8px 24px rgba(0,0,0,0.18)',minWidth:'260px',maxHeight:'260px',overflowY:'auto'}}>

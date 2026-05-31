@@ -41,9 +41,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!existing) return NextResponse.json({ error: 'comment not found' }, { status: 404 })
     if (existing.deleted_at) return NextResponse.json({ error: 'comment ถูกลบไปแล้ว' }, { status: 410 })
 
-    const isOwner = existing.user_id === user.id
-    if (!isOwner && !isAdmin)
-      return NextResponse.json({ error: 'อนุญาตเฉพาะเจ้าของ comment หรือ admin' }, { status: 403 })
+    if (!isAdmin)
+      return NextResponse.json({ error: 'อนุญาตเฉพาะ admin เท่านั้น' }, { status: 403 })
 
     const updates: any = resolved
       ? { resolved_at: new Date().toISOString(), resolved_by: user.id }

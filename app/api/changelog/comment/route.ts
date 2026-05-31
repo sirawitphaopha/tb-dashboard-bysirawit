@@ -16,6 +16,7 @@ import {
   extractMentionUsernames,
   resolveMentionedUserIds,
   insertCommentNotif,
+  notifyAdminsOfNewComment,
   type Status,
 } from '@/lib/changelog-comment-helpers'
 
@@ -107,6 +108,15 @@ export async function POST(req: NextRequest) {
         })
       } catch (e) { console.error('changelog comment admin email failed:', e) }
     }
+
+    // ── แจ้ง admin ทุกคน (skip ถ้าจะได้ mention/parent ซ้ำ) ──
+    await notifyAdminsOfNewComment(admin, {
+      actorUserId: user.id,
+      actorName: snap.displayName,
+      commentVersion: newRow.version,
+      commentId: newRow.id,
+      excludeUserIds: mentionedUserIds,  // ที่จะได้ comment_mention อยู่แล้ว
+    })
 
     // ── แจ้ง mentioned users (bell + email) ──
     if (mentionedUserIds.length > 0) {

@@ -109,6 +109,47 @@ export async function resolveMentionedUserIds(
     .map((p: any) => p.id)
 }
 
+// แจ้ง admin ทุกคนเมื่อมี comment ใหม่ของ user คนอื่น
+// skip ถ้า admin = actor หรือ admin อยู่ใน excludeUserIds (จะได้ notif ประเภทเฉพาะแล้ว)
+export async function notifyAdminsOfNewComment(
+  admin: SupabaseClient,
+  params: {
+    actorUserId: string
+    actorName: string
+    commentVersion: string
+    commentId: string
+    excludeUserIds?: string[]   // admin ที่ได้ notif เฉพาะ (reply/mention) แล้ว ไม่ต้องส่งซ้ำ
+  }
+): Promise<void> {
+  try {
+    const { data: admins } = await admin
+      .from('profiles')
+      .select('id')
+      .eq('role', 'admin')
+      .eq('status', 'approved')
+    if (!admins) return
+    const exclude = new Set([params.actorUserId, ...(params.excludeUserIds || [])])
+    for (const a of admins) {
+      if (exclude.has(a.id)) continue
+      try {
+        const { error } = await admin.from('tb_notifications').insert({
+          user_id: a.id,
+          type: 'comment_new',
+          note: params.actorName,
+          comment_version: params.commentVersion,
+          comment_id: params.commentId,
+          is_read: false,
+        })
+        if (error) console.error('[notifyAdminsOfNewComment] insert failed:', error.message, 'admin:', a.id)
+      } catch (e: any) {
+        console.error('[notifyAdminsOfNewComment] exception:', e?.message || e)
+      }
+    }
+  } catch (e: any) {
+    console.error('[notifyAdminsOfNewComment] query failed:', e?.message || e)
+  }
+}
+
 // ── สร้าง tb_notifications row (skip self) ────────────────────────
 export async function insertCommentNotif(
   admin: SupabaseClient,
