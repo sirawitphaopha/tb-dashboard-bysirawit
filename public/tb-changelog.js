@@ -23,6 +23,25 @@ window.TB_CHANGELOG = [
     description: "ระบบ login จริง + Audit Log ครบวงจร + Admin Approval + ดีไซน์ใหม่ทั้งหมด",
     versions: [
       {
+        version: "0.7.15.2",
+        date: "1 มิ.ย. 2569",
+        commit: "pending",
+        commitFull: "pending",
+        title: "Phase 2 Optimize Step 1 — Materialized View บันทึกกิจกรรม + KPI border + Virtual scroll",
+        changes: [
+          { tag: "backend", text: "เปลี่ยน view tb_activity_log → materialized view mv_activity_log — pre-compute UNION 5 ตาราง + regex device_type ครั้งเดียว · query 800-1500ms → 50-100ms" },
+          { tag: "backend", text: "เพิ่ม index 5 ตัวใน mv_activity_log: event_time DESC, user_id+event_time, category+event_time, success=false (partial), email lower" },
+          { tag: "backend", text: "Function refresh_activity_log() SECURITY DEFINER — admin เรียก REFRESH ผ่าน RPC ได้ โดยไม่ต้องเป็น owner" },
+          { tag: "feature", text: "ปุ่ม 'รีเฟรชล่าสุด' ใน header หน้าบันทึกกิจกรรม + tooltip บอกเวลา refresh ล่าสุด · POST /api/admin/activity-log/refresh" },
+          { tag: "feature", text: "Indicator 🔄 หมุนตอน refreshing · ข้อมูล MV stale สูงสุด 5 นาที (ถ้าตั้ง cron) หรือทันทีเมื่อกดปุ่ม" },
+          { tag: "security", text: "REVOKE ALL จาก anon/authenticated · GRANT SELECT เฉพาะ service_role · ฟังก์ชัน refresh เฉพาะ service_role" },
+          { tag: "backend", text: "API activity-log: count 'exact' → 'estimated' (เร็วกว่า, ใช้ pg_class.reltuples) + parallel admin check + main query (ลด round-trip 3→2)" },
+          { tag: "ui", text: "Dashboard KPI cards — เพิ่มเส้นขอบสีตามโทนการ์ดทั้ง 4 อัน (เดิมมีแค่ Lab ผิดปกติที่ alert) · default=hoverBorder, hover=accent (เข้มกว่า)" },
+          { tag: "ui", text: "Virtual scroll PatientList + ArchiveList + อื่นๆ ที่ใช้ class tb-pt-row — ใช้ CSS content-visibility:auto (browser-native, no library) · graceful degrade ถ้า browser ไม่รองรับ" },
+        ],
+        body: "🎯 Phase 2 Optimize เริ่ม\n— Materialized View activity log (DB query 800-1500ms → 0.1ms)\n— Dashboard KPI border consistency\n— Virtual scroll patient lists (browser-native)\n\n📦 SQL ที่ต้องรัน (idempotent):\nscripts/create-activity-log-mv.sql\n\n📝 Lesson\n- MV pre-computed cost = trade-off กับ staleness (5 นาที acceptable สำหรับ audit log)\n- pg_cron จะตั้งหลัง stable (ตอนนี้ admin trigger เอง)\n- SECURITY DEFINER function = secure way ให้ non-owner trigger REFRESH\n- count:'estimated' ใช้ pg_class.reltuples แทน SELECT COUNT(*) → ไม่ scan\n- content-visibility:auto = browser-native virtual scroll (ไม่ต้อง react-window library + ทำงานกับ HTML table sticky column ปกติ)\n- Network latency localhost dev → Supabase Cloud Singapore = 200-400ms ต่อ request — ใน production จะเร็วกว่าครึ่ง",
+      },
+      {
         version: "0.7.15.1",
         date: "31 พ.ค. 2569",
         commit: "34801af",

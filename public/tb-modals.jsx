@@ -4419,6 +4419,22 @@ function ActivityLogTab() {
   const [total, setTotal]         = useState(null)
   const [error, setError]         = useState('')
 
+  // v0.7.16.0 — Phase 2 MV refresh
+  const [refreshing, setRefreshing]     = useState(false)
+  const [lastRefreshedAt, setLastRefreshedAt] = useState(null)
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    try {
+      const res = await fetch('/api/admin/activity-log/refresh', { method: 'POST' })
+      const data = await res.json()
+      if (res.ok) {
+        setLastRefreshedAt(data.refreshed_at)
+        loadPage(0)  // reload ทันที
+      }
+    } catch {}
+    setRefreshing(false)
+  }
+
   // filter state (รอบ 2)
   const [users, setUsers]   = useState([])
   const [fUser, setFUser]   = useState('')   // user_id
@@ -4538,6 +4554,13 @@ function ActivityLogTab() {
             {total != null ? total : events.length} รายการ
           </span>
         )}
+        {/* v0.7.16.0 — ปุ่ม Refresh MV + indicator */}
+        <button type="button" onClick={handleRefresh} disabled={refreshing}
+          title={lastRefreshedAt ? `รีเฟรชล่าสุด: ${new Date(lastRefreshedAt).toLocaleTimeString('th-TH')}` : 'รีเฟรชข้อมูลล่าสุด (ข้อมูลอาจเก่าสุด 5 นาที)'}
+          style={{display:'inline-flex',alignItems:'center',gap:'5px',fontSize:'11px',fontWeight:700,padding:'5px 11px',borderRadius:'999px',background:'rgba(255,255,255,0.15)',color:'#fff',border:'1px solid rgba(255,255,255,0.3)',cursor:refreshing?'wait':'pointer',flexShrink:0,whiteSpace:'nowrap',opacity:refreshing?0.6:1}}>
+          <i className={`fa-solid fa-rotate ${refreshing?'fa-spin':''}`}></i>
+          {refreshing ? 'กำลังรีเฟรช' : 'รีเฟรชล่าสุด'}
+        </button>
       </div>
 
       {/* Filter panel */}

@@ -130,7 +130,7 @@ function Dashboard({ patients, archivePatients, onDashFilter, onGoArchiveDelayed
               borderRadius:'16px',
               background: hoveredKpi===k.label ? k.hoverBg : '#fff',
               boxShadow: hoveredKpi===k.label ? '0 10px 28px rgba(0,0,0,0.13)' : '0 1px 4px rgba(0,0,0,0.06)',
-              border: `2px solid ${hoveredKpi===k.label ? k.hoverBorder : k.alert ? '#fecaca' : '#f1f5f9'}`,
+              border: `2px solid ${hoveredKpi===k.label ? k.accent : k.alert ? '#fecaca' : k.hoverBorder}`,
               transform: hoveredKpi===k.label ? 'translateY(-5px) scale(1.025)' : 'translateY(0) scale(1)',
               transition: 'all 0.22s cubic-bezier(0.34,1.56,0.64,1)'
             }}>
@@ -2699,8 +2699,8 @@ function RequestEditModal({ field, currentValue, onClose }) {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.15.1';
-const BUILD_DATE = '31 พ.ค. 2569';
+const APP_VERSION = '0.7.15.2';
+const BUILD_DATE = '1 มิ.ย. 2569';
 function AboutModal({ onClose, onShowChangelog }) {
   const [closing, setClosing] = React.useState(false);
   const handleClose = () => { if (closing) return; setClosing(true); setTimeout(onClose, 580); };

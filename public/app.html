@@ -106,6 +106,10 @@
     }
     .tb-pt-row {
       transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1);
+      /* v0.7.16.0 — browser-native virtual scroll: skip rendering rows ที่ไม่อยู่ในจอ */
+      /* graceful degrade: browser ที่ไม่ support → render ปกติ */
+      content-visibility: auto;
+      contain-intrinsic-size: 0 60px;
     }
     .tb-pt-row:hover {
       transform: translateY(-3px);
@@ -114,9 +118,9 @@
 </head>
 <body class="bg-slate-100 overflow-hidden">
   <div id="root"></div>
-  <script src="tb-data.js?v=83"></script>
-  <script src="tb-changelog.js?v=83"></script>
-  <script type="text/babel" src="tb-modals.jsx?v=83"></script>
-  <script type="text/babel" src="tb-app.jsx?v=83"></script>
+  <script src="tb-data.js?v=85"></script>
+  <script src="tb-changelog.js?v=85"></script>
+  <script type="text/babel" src="tb-modals.jsx?v=85"></script>
+  <script type="text/babel" src="tb-app.jsx?v=85"></script>
 </body>
 </html>
