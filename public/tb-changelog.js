@@ -23,6 +23,24 @@ window.TB_CHANGELOG = [
     description: "ระบบ login จริง + Audit Log ครบวงจร + Admin Approval + ดีไซน์ใหม่ทั้งหมด",
     versions: [
       {
+        version: "0.7.16.1",
+        date: "1 มิ.ย. 2569",
+        commit: "pending",
+        commitFull: "pending",
+        title: "Phase 3 Step 2 — Teal Skeleton Loading (โครง pulse โทนเทล รู้ทันทีว่ากำลังโหลด)",
+        changes: [
+          { tag: "feature", text: "หน้าโหลดครั้งแรก: เห็น 'โครง skeleton' โทนเทลอ่อนทันที — sidebar ขาว + กล่อง pulse แทนเมนู/KPI/chart/list (จากเดิมจอขาวเปล่า 5-9 วินาที)" },
+          { tag: "feature", text: "เลย์เอาต์ตรงกับเว็บจริง: sidebar 260px + header 64px + 4 KPI (2x2/4col) + bar chart 2col + donut 1col + list 2col + side metric 1col" },
+          { tag: "feature", text: "ป้าย 'กำลังโหลด TB JOURNEY & CARE...' มุมล่างขวา + dot teal กระพริบ — บอก user ชัดว่ากำลังโหลด ไม่ใช่เว็บค้าง" },
+          { tag: "feature", text: "Color palette: bg #f0fdfa (teal-50) + pulse #ccfbf1 (teal-100) + soft pulse #e6faf6 + border #d1faf3 — เข้าธีมแบรนด์ ไม่ใช่เทากลาง" },
+          { tag: "backend", text: "Next.js app/components/HomeShell.tsx (client) — render skeleton + iframe(opacity:0) ฟัง postMessage('tb-app-ready') · safety timeout 15s" },
+          { tag: "backend", text: "tb-app.jsx App.useEffect: ส่ง window.parent.postMessage({type:'tb-app-ready'}) หลัง React mount ครั้งแรก → parent fade skeleton iframe โผล่เข้า 0.35s" },
+          { tag: "polish", text: "Iteration: รอบแรกทำ real-UI shell (text+icon จริง) → user รู้สึกเหมือนเว็บค้าง → กลับไป pulse box โทน teal ชัดเจนว่ากำลังโหลด" },
+          { tag: "polish", text: "Cache buster v=89 → v=90 + animation cascade (KPI 70ms stagger · row 80ms stagger · bar chart 50ms stagger)" },
+        ],
+        body: "🎯 Phase 3 Step 2 — Teal Skeleton Loading\n— Iteration 1: real-UI shell (text+icon จริง) → user รู้สึกเหมือนเว็บค้าง (รอข้อมูลแล้วไม่มา)\n— Iteration 2 (ปัจจุบัน): กลับไป skeleton box pulse แต่ใช้โทน teal อ่อน → user รู้ทันทีว่ากำลังโหลด + เข้าธีมแบรนด์\n\n📊 Perceived time\n- Before: blank 5-9s → user คิดว่าเว็บเสีย\n- After: skeleton 0.05s → pulse + ป้าย 'กำลังโหลด' → user รู้ว่ารอนิดเดียว\n\n🔧 Technical\n- Next.js SSR ส่ง skeleton HTML inline → paint แทบทันที\n- iframe load /app.html ใน background (opacity:0)\n- tb-app.jsx React mount → postMessage → parent ฟัง → fade skeleton ออก\n- Safety: 15s timeout เผื่อ postMessage หาย\n\n📝 Lesson\n- Real UI shell ดูเหมือนเว็บค้าง — user งงว่าทำไมข้อมูลไม่ขึ้น\n- Skeleton pulse + label 'กำลังโหลด' = สื่อสารชัดว่ารออะไรอยู่\n- Brand color (teal-50/100) แทนเทากลาง = ดูเข้าธีม สบายตา",
+      },
+      {
         version: "0.7.16.0",
         date: "1 มิ.ย. 2569",
         commit: "b958385",

@@ -1754,6 +1754,17 @@ function App() {
       if (!lastSeen || lastSeen !== APP_VERSION) setChangelogUnseen(true);
     } catch {/* localStorage ปิด → ไม่แสดง dot */}
   }, []);
+
+  // v0.7.16.1 Phase 3 Step 2 — ส่ง signal ขึ้น parent (Next.js HomeShell) ว่า React mount แล้ว
+  // parent ฟัง postMessage แล้วซ่อน skeleton + fade iframe เข้ามาแทน
+  // อยู่ใน try/catch — กัน error ตอน iframe ไม่มี parent (เช่น เปิดตรง /app.html)
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'tb-app-ready' }, '*');
+      }
+    } catch { /* noop — เปิดเดี่ยวๆไม่มี parent */ }
+  }, []);
   const [settings, setSettings] = useState({ comorbidities: DEFAULT_COMORBIDITIES, drugs: DEFAULT_DRUGS, labGroups: null, customDrugInteractions: [], restartReasons: DEFAULT_RESTART_REASONS, regimens: [...REGIMENS] });
   const [ptSearch, setPtSearch] = useState('');
   const [ptFilter, setPtFilter] = useState('all');
@@ -2699,7 +2710,7 @@ function RequestEditModal({ field, currentValue, onClose }) {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.16.0';
+const APP_VERSION = '0.7.16.1';
 const BUILD_DATE = '1 มิ.ย. 2569';
 function AboutModal({ onClose, onShowChangelog }) {
   const [closing, setClosing] = React.useState(false);

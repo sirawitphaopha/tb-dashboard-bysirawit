@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
 import { createServerClient } from '@supabase/ssr'
+import HomeShell from './components/HomeShell'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,11 +33,7 @@ export default async function Page() {
   if (profile?.status === 'pending')  redirect('/pending-approval')
   if (profile?.status === 'rejected') redirect('/rejected')
 
-  return (
-    <iframe
-      src="/app.html"
-      className="w-full h-screen border-0"
-      title="TB JOURNEY & CARE"
-    />
-  )
+  // v0.7.16.1 Phase 3 Step 2 — Skeleton (ลด blank time ตอนเปิดครั้งแรก)
+  // HomeShell = client component: render skeleton + iframe, fade skeleton เมื่อ tb-app.jsx ส่ง postMessage
+  return <HomeShell />
 }
