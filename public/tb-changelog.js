@@ -25,8 +25,8 @@ window.TB_CHANGELOG = [
       {
         version: "0.7.16.0",
         date: "1 มิ.ย. 2569",
-        commit: "pending",
-        commitFull: "pending",
+        commit: "b958385",
+        commitFull: "b958385e4d7ebf190f0a11ac7d3007de8c653cb9",
         title: "Phase 3 Step 1 — Pre-compile JSX (ลบ Babel 2.1 MB จาก prod) ลด first load ~30%",
         changes: [
           { tag: "feature", text: "Pre-compile JSX → JS ผ่าน esbuild · tb-app.jsx → tb-app.compiled.js (467 KB) · tb-modals.jsx → tb-modals.compiled.js (420 KB) · build time 30ms" },
