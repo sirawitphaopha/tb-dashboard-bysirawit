@@ -1719,7 +1719,16 @@ function KnowledgeBase() {
 
 // ===================== APP =====================
 function App() {
-  const [nav, setNav] = useState('dashboard');
+  const [nav, setNavRaw] = useState('dashboard');
+  const [pendingLeave, setPendingLeave] = useState(null); // v0.7.14.7 — target nav รอ user ยืนยันออกจาก draft
+  // v0.7.14.7 — wrapper setNav: ดัก draft ค้างก่อนเปลี่ยนหน้า
+  const setNav = React.useCallback((target) => {
+    if (nav === 'changelog' && target !== 'changelog' && window._hasUnsentChangelogDraft) {
+      setPendingLeave(target);
+      return;
+    }
+    setNavRaw(target);
+  }, [nav]);
   const [patients, setPatients] = useState([]);
   const [dbLoading, setDbLoading] = useState(true);
   const [clinical, setClinical] = useState(null);
@@ -2501,6 +2510,29 @@ function App() {
         onNavTarget={(target, highlight, alert)=>{ setNav(target); if(highlight) setHighlightUserId(highlight); if(alert?.commentId){ setHighlightCommentTarget({ version: alert.commentVersion, commentId: alert.commentId, ts: Date.now() }); } setShowFullNotifs(false); }}
         onClose={()=>setShowFullNotifs(false)}
       />}
+
+      {/* v0.7.14.7 — Modal เตือนเมื่อมี draft ค้าง กดออกจากหน้า Changelog */}
+      {pendingLeave && (
+        <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.55)',backdropFilter:'blur(2px)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}}
+          onClick={()=>setPendingLeave(null)}>
+          <div onClick={e=>e.stopPropagation()} className="modal-A"
+            style={{background:'#fff',borderRadius:'14px',padding:'22px 24px',maxWidth:'400px',width:'100%',textAlign:'center',boxShadow:'0 20px 50px rgba(0,0,0,0.25)'}}>
+            <i className="fa-solid fa-triangle-exclamation" style={{fontSize:'34px',color:'#f59e0b',marginBottom:'12px',display:'block'}}></i>
+            <p style={{fontSize:'15px',fontWeight:700,color:'#1f2937',margin:'0 0 6px'}}>มีข้อความที่ยังไม่ได้ส่ง</p>
+            <p style={{fontSize:'12.5px',color:'#6b7280',margin:'0 0 16px',lineHeight:1.5}}>ออกจากหน้านี้แล้วข้อความที่กำลังพิมพ์จะหาย ต้องการออกไปหรืออยู่ต่อ</p>
+            <div style={{display:'flex',gap:'8px'}}>
+              <button type="button" onClick={()=>setPendingLeave(null)}
+                style={{flex:1,padding:'10px',borderRadius:'8px',border:'1px solid #0d9488',background:'#fff',color:'#0f766e',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>
+                อยู่ต่อ
+              </button>
+              <button type="button" onClick={()=>{ window._hasUnsentChangelogDraft = false; const t = pendingLeave; setPendingLeave(null); setNavRaw(t); }}
+                style={{flex:1,padding:'10px',borderRadius:'8px',border:'none',background:'#ef4444',color:'#fff',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>
+                ออกไป
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2668,7 +2700,7 @@ function RequestEditModal({ field, currentValue, onClose }) {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.14.6.1';
+const APP_VERSION = '0.7.14.7';
 const BUILD_DATE = '31 พ.ค. 2569';
 function AboutModal({ onClose, onShowChangelog }) {
   const [closing, setClosing] = React.useState(false);
@@ -2748,6 +2780,24 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
   // ── Bulk comments store — fetch รวด 1 ครั้งแทน fetch ต่อ version ──
   const [allCommentsByVersion, setAllCommentsByVersion] = useState({}); // {version: [comments]}
   const [commentsMeta, setCommentsMeta] = useState({ currentUserId: null, isAdmin: false });
+
+  // ── แถบที่ 2: Comment-specific filters (v0.7.14.7) ──
+  const [commentSearch, setCommentSearch] = useState('');
+  const [debouncedCommentSearch, setDebouncedCommentSearch] = useState('');
+  const [selectedStatuses, setSelectedStatuses] = useState(new Set());
+  const [selectedMentionUserIds, setSelectedMentionUserIds] = useState(new Set());
+  const [resolvedFilter, setResolvedFilter] = useState('all'); // 'all'|'open'|'resolved'
+  const [onlyMyComments, setOnlyMyComments] = useState(false);
+  // extra filters: liked / my_replies / unread (multi-select)
+  const [extraFilters, setExtraFilters] = useState(new Set());
+  const [unreadCommentIds, setUnreadCommentIds] = useState(new Set());
+  // Mention dropdown
+  const [mentionPickerOpen, setMentionPickerOpen] = useState(false);
+  const [mentionUsers, setMentionUsers] = useState(null);
+  const [mentionLoading, setMentionLoading] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [hoveredMentionId, setHoveredMentionId] = useState(null);
+  const mentionPickerRef = React.useRef(null);
 
   // โหลด comment ทั้งหมดรวด 1 ครั้ง + auto-expand version ที่มี comment
   const refreshAllComments = React.useCallback(async () => {
@@ -2910,6 +2960,83 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
     return () => clearTimeout(t);
   }, [search]);
 
+  // v0.7.14.7 — debounce comment search
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedCommentSearch(commentSearch.trim().toLowerCase()), 300);
+    return () => clearTimeout(t);
+  }, [commentSearch]);
+
+  // v0.7.14.7 — pre-fetch mentionable users ตอน ChangelogPage mount → popup เปิดทันที (ใช้ global cache)
+  React.useEffect(() => {
+    if (window._mentionUsersCache?.users) {
+      setMentionUsers(window._mentionUsersCache.users);
+      return;
+    }
+    setMentionLoading(true);
+    (async () => {
+      try {
+        const r = await fetch('/api/changelog/mentionable-users');
+        const j = await r.json();
+        const users = r.ok ? (j.users || []) : [];
+        window._mentionUsersCache = { users, fetchedAt: Date.now() };
+        setMentionUsers(users);
+      } catch { setMentionUsers([]); }
+      finally { setMentionLoading(false); }
+    })();
+  }, []);
+  // backward compat — ใช้ใน onClick ของปุ่มเปิด dropdown (no-op ตอนนี้)
+  const ensureMentionUsersLoaded = React.useCallback(() => {}, []);
+
+  // v0.7.14.7 — outside-click ปิด mention picker
+  useEffect(() => {
+    if (!mentionPickerOpen) return;
+    const handler = (e) => {
+      if (mentionPickerRef.current && !mentionPickerRef.current.contains(e.target)) {
+        setMentionPickerOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [mentionPickerOpen]);
+
+  // v0.7.14.7 — toggle helpers
+  const toggleStatus = (s) => {
+    const n = new Set(selectedStatuses);
+    if (n.has(s)) n.delete(s); else n.add(s);
+    setSelectedStatuses(n);
+  };
+  const toggleMentionUser = (id) => {
+    const n = new Set(selectedMentionUserIds);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    setSelectedMentionUserIds(n);
+  };
+  const toggleExtra = (k) => {
+    const n = new Set(extraFilters);
+    if (n.has(k)) n.delete(k); else n.add(k);
+    setExtraFilters(n);
+  };
+
+  // v0.7.14.7 — ดึง notification ของ user → derive set ของ comment_id ที่ "ยังไม่อ่าน"
+  // unread = comment ที่ user ได้รับ notif (reply/mention/resolved/new) แต่ยังไม่กดอ่าน
+  useEffect(() => {
+    if (!window.loadUserNotifications) return;
+    let cancel = false;
+    (async () => {
+      try {
+        const notifs = await window.loadUserNotifications();
+        if (cancel) return;
+        const set = new Set();
+        for (const n of notifs) {
+          if (!n.is_read && n.comment_id && (n.type === 'comment_reply' || n.type === 'comment_mention' || n.type === 'comment_resolved' || n.type === 'comment_new')) {
+            set.add(n.comment_id);
+          }
+        }
+        setUnreadCommentIds(set);
+      } catch {}
+    })();
+    return () => { cancel = true; };
+  }, [allCommentsByVersion]);  // refetch เมื่อ comment data อัป (realtime หรือ refresh)
+
   const TAGS = window.TB_TAGS || {};
   const CHANGELOG = window.TB_CHANGELOG || [];
 
@@ -2926,7 +3053,82 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
     return { totalVersions, byTag };
   }, [CHANGELOG]);
 
-  // ฟิลเตอร์ version ตาม search + tag
+  // v0.7.14.7 — สถิติของแถบ 2 (นับ #versions ต่อ axis)
+  const commentFilterStats = React.useMemo(() => {
+    const byStatus = { feedback:0, bug_report:0, request:0, note:0 };
+    const byMentionedId = {};
+    let openCount = 0, resolvedCount = 0, mineCount = 0;
+    let likedCount = 0, myRepliesCount = 0, unreadCount = 0;
+    const me = commentsMeta.currentUserId;
+    Object.values(allCommentsByVersion).forEach(list => {
+      const seenStatus = new Set();
+      const seenMention = new Set();
+      let hasOpen=false, hasResolved=false, hasMine=false;
+      let hasLiked=false, hasMyReply=false, hasUnread=false;
+      const walk = (c) => {
+        if (c.deleted_at) return;
+        seenStatus.add(c.status);
+        if (Array.isArray(c.mentioned_user_ids)) c.mentioned_user_ids.forEach(uid => seenMention.add(uid));
+        if (c.resolved_at) hasResolved = true; else hasOpen = true;
+        if (me && c.user_id === me) hasMine = true;
+        if (c.liked_by_me) hasLiked = true;
+        if (c.parent_comment_id && me && c.user_id === me) hasMyReply = true;
+        if (unreadCommentIds.has(c.id)) hasUnread = true;
+      };
+      list.forEach(c => { walk(c); (c.replies||[]).forEach(walk); });
+      seenStatus.forEach(s => { if (s in byStatus) byStatus[s]++; });
+      seenMention.forEach(uid => { byMentionedId[uid] = (byMentionedId[uid]||0)+1; });
+      if (hasOpen) openCount++;
+      if (hasResolved) resolvedCount++;
+      if (hasMine) mineCount++;
+      if (hasLiked) likedCount++;
+      if (hasMyReply) myRepliesCount++;
+      if (hasUnread) unreadCount++;
+    });
+    return { byStatus, byMentionedId, openCount, resolvedCount, mineCount, likedCount, myRepliesCount, unreadCount };
+  }, [allCommentsByVersion, commentsMeta.currentUserId, unreadCommentIds]);
+
+  // v0.7.14.7 — comment-level filter logic
+  const hasCommentFilter = (
+    debouncedCommentSearch ||
+    selectedStatuses.size > 0 ||
+    selectedMentionUserIds.size > 0 ||
+    resolvedFilter !== 'all' ||
+    onlyMyComments ||
+    extraFilters.size > 0
+  );
+
+  const commentMatchesAxes = React.useCallback((c) => {
+    if (c.deleted_at) return false;
+    if (selectedStatuses.size > 0 && !selectedStatuses.has(c.status)) return false;
+    if (selectedMentionUserIds.size > 0) {
+      const ids = Array.isArray(c.mentioned_user_ids) ? c.mentioned_user_ids : [];
+      if (!ids.some(uid => selectedMentionUserIds.has(uid))) return false;
+    }
+    if (resolvedFilter === 'open' && c.resolved_at) return false;
+    if (resolvedFilter === 'resolved' && !c.resolved_at) return false;
+    if (onlyMyComments && commentsMeta.currentUserId && c.user_id !== commentsMeta.currentUserId) return false;
+    if (debouncedCommentSearch && !(c.comment_text || '').toLowerCase().includes(debouncedCommentSearch)) return false;
+    // extra
+    if (extraFilters.has('liked') && !c.liked_by_me) return false;
+    if (extraFilters.has('my_replies') && !(c.parent_comment_id && commentsMeta.currentUserId && c.user_id === commentsMeta.currentUserId)) return false;
+    if (extraFilters.has('unread') && !unreadCommentIds.has(c.id)) return false;
+    return true;
+  }, [selectedStatuses, selectedMentionUserIds, resolvedFilter, onlyMyComments, debouncedCommentSearch, extraFilters, unreadCommentIds, commentsMeta.currentUserId]);
+
+  const versionHasMatchingComment = (version) => {
+    const list = allCommentsByVersion[version];
+    if (!list?.length) return false;
+    for (const c of list) {
+      if (commentMatchesAxes(c)) return true;
+      if (Array.isArray(c.replies)) {
+        for (const r of c.replies) if (commentMatchesAxes(r)) return true;
+      }
+    }
+    return false;
+  };
+
+  // ฟิลเตอร์ version ตาม search + tag + comment filters (แถบ 2)
   const matchesFilters = (v) => {
     if (onlyWithComments && !(commentCounts[v.version] > 0)) return false;
     if (selectedTags.size > 0) {
@@ -2937,6 +3139,8 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
       const hay = (v.version + ' ' + v.title + ' ' + v.changes.map(c=>c.text).join(' ')).toLowerCase();
       if (!hay.includes(debouncedSearch)) return false;
     }
+    // v0.7.14.7 — comment-level filter (AND กับด้านบน)
+    if (hasCommentFilter && !versionHasMatchingComment(v.version)) return false;
     return true;
   };
 
@@ -2951,7 +3155,25 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
     if (next.has(tag)) next.delete(tag); else next.add(tag);
     setSelectedTags(next);
   };
-  const clearFilters = () => { setSearch(''); setSelectedTags(new Set()); setOnlyWithComments(false); };
+  const clearFilters = () => {
+    setSearch(''); setSelectedTags(new Set()); setOnlyWithComments(false);
+    // v0.7.14.7 — reset แถบ 2 ด้วย
+    setCommentSearch(''); setSelectedStatuses(new Set()); setSelectedMentionUserIds(new Set());
+    setResolvedFilter('all'); setOnlyMyComments(false); setExtraFilters(new Set());
+    setMentionPickerOpen(false); setMentionQuery('');
+  };
+  // v0.7.14.7 — แยกปุ่มล้างค่าตาม "แถว/ระบบ"
+  const clearTagFilters = () => {
+    setSearch(''); setSelectedTags(new Set()); setOnlyWithComments(false);
+  };
+  const clearCommentFilters = () => {
+    setCommentSearch(''); setSelectedStatuses(new Set()); setSelectedMentionUserIds(new Set());
+    setResolvedFilter('all'); setOnlyMyComments(false); setExtraFilters(new Set());
+    setMentionPickerOpen(false); setMentionQuery('');
+  };
+  const hasTagRowFilter = debouncedSearch || selectedTags.size > 0 || onlyWithComments;
+  const hasCommentRowFilter = debouncedCommentSearch || selectedStatuses.size > 0 || selectedMentionUserIds.size > 0
+    || resolvedFilter !== 'all' || onlyMyComments || extraFilters.size > 0;
 
   const toggleMajor = (major) => {
     const next = new Set(expandedMajors);
@@ -3086,11 +3308,14 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
 
   const filteredTimeline = React.useMemo(
     () => allVersions.filter(matchesFilters),
-    [allVersions, debouncedSearch, selectedTags, onlyWithComments, commentCounts]
+    [allVersions, debouncedSearch, selectedTags, onlyWithComments, commentCounts,
+     allCommentsByVersion, debouncedCommentSearch, selectedStatuses, selectedMentionUserIds, resolvedFilter, onlyMyComments, commentsMeta.currentUserId, extraFilters, unreadCommentIds]
   );
   const latestVersion = allVersions[0]?.version;
 
-  const hasActiveFilters = debouncedSearch || selectedTags.size > 0 || onlyWithComments;
+  const hasActiveFilters = debouncedSearch || selectedTags.size > 0 || onlyWithComments
+    || debouncedCommentSearch || selectedStatuses.size > 0 || selectedMentionUserIds.size > 0
+    || resolvedFilter !== 'all' || onlyMyComments || extraFilters.size > 0;
 
   return (
     <div className="tb-fade">
@@ -3141,9 +3366,14 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
         </div>
       </div>
 
-      {/* ── Filter bar — อยู่ใต้แบนเนอร์ในกลุ่ม sticky เดียวกัน ── */}
-      <div style={{padding:'12px 16px',marginTop:'12px',background:'#fff',borderRadius:'14px',border:'1px solid #e5e7eb',display:'flex',gap:'10px',alignItems:'center',flexWrap:'wrap',boxShadow:'0 4px 12px rgba(0,0,0,0.06)'}}>
-        <div style={{position:'relative',flex:'0 0 240px'}}>
+      {/* ── Filter bar (แถบ 1: ตัวกรองระบบ) ── */}
+      <div style={{padding:'12px 16px',marginTop:'12px',background:'#fff',borderRadius:'14px',border:'1px solid #e5e7eb',boxShadow:'0 4px 12px rgba(0,0,0,0.06)'}}>
+        <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'8px'}}>
+          <i className="fa-solid fa-sliders" style={{color:'#0d9488',fontSize:'12px'}}></i>
+          <span style={{fontSize:'12px',fontWeight:700,color:'#0f766e'}}>ตัวกรองเวอร์ชั่น</span>
+        </div>
+        <div style={{display:'flex',gap:'10px',alignItems:'center',flexWrap:'wrap'}}>
+        <div style={{position:'relative',flex:'0 0 260px'}}>
           <i className="fa-solid fa-magnifying-glass" style={{position:'absolute',left:'12px',top:'50%',transform:'translateY(-50%)',color:'#9ca3af',fontSize:'12px'}}></i>
           <input type="text" value={search} onChange={e=>setSearch(e.target.value)} placeholder="ค้นหาเวอร์ชัน/หัวเรื่อง/รายละเอียด"
             style={{width:'100%',padding:'8px 12px 8px 32px',borderRadius:'10px',border:'1px solid #e5e7eb',background:'#f9fafb',fontSize:'12px',outline:'none',color:'#1f2937',caretColor:'#0d9488'}}
@@ -3173,13 +3403,179 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
             <span style={{fontSize:'10px',opacity:0.7}}>({Object.values(commentCounts).filter(n=>n>0).length})</span>
           </button>
         </div>
-        {hasActiveFilters && (
-          <button type="button" onClick={clearFilters}
-            style={{padding:'6px 12px',borderRadius:'8px',border:'1px solid #fbbf24',background:'#fffbeb',color:'#b45309',fontSize:'11px',fontWeight:700,cursor:'pointer'}}>
+        {hasTagRowFilter && (
+          <button type="button" onClick={clearTagFilters}
+            style={{padding:'6px 12px',borderRadius:'8px',border:'1.5px solid #ef4444',background:'#fef2f2',color:'#b91c1c',fontSize:'11px',fontWeight:700,cursor:'pointer'}}>
             <i className="fa-solid fa-xmark" style={{marginRight:'4px'}}></i>ล้างค่า
           </button>
         )}
+        </div>{/* /flex row */}
       </div>
+
+      {/* ── แถบที่ 2: ตัวกรองคอมเม้น (v0.7.14.7) ── */}
+      <div style={{padding:'10px 14px',marginTop:'8px',background:'#fffbeb',borderRadius:'14px',border:'1px solid #fde68a',boxShadow:'0 4px 12px rgba(245,158,11,0.08)'}}>
+        <div style={{display:'flex',alignItems:'center',gap:'5px',marginBottom:'8px'}}>
+          <i className="fa-solid fa-comments" style={{color:'#d97706',fontSize:'12px'}}></i>
+          <span style={{fontSize:'12px',fontWeight:700,color:'#92400e'}}>ตัวกรองคอมเม้น</span>
+        </div>
+        <div style={{display:'flex',gap:'8px',alignItems:'center',flexWrap:'wrap'}}>
+        {/* ช่องค้นหา comment text */}
+        <div style={{position:'relative',flex:'0 0 260px'}}>
+          <i className="fa-solid fa-magnifying-glass" style={{position:'absolute',left:'10px',top:'50%',transform:'translateY(-50%)',color:'#9ca3af',fontSize:'11px'}}></i>
+          <input type="text" value={commentSearch} onChange={e=>setCommentSearch(e.target.value)} placeholder="ค้นหาข้อความในคอมเม้น"
+            style={{width:'100%',padding:'7px 10px 7px 28px',borderRadius:'8px',border:'1px solid #fbbf24',background:'#fff',fontSize:'12px',outline:'none',color:'#1f2937',caretColor:'#d97706'}}
+            onFocus={e=>{e.currentTarget.style.borderColor='#d97706';}}
+            onBlur={e=>{e.currentTarget.style.borderColor='#fbbf24';}}
+          />
+        </div>
+
+        {/* Status chips — 4 ประเภท */}
+        <div style={{display:'flex',gap:'5px',flexWrap:'wrap'}}>
+          {Object.entries(CHANGELOG_STATUS_META).map(([key,meta])=>{
+            const active = selectedStatuses.has(key);
+            const count = commentFilterStats.byStatus[key] || 0;
+            return (
+              <button key={key} type="button" onClick={()=>toggleStatus(key)}
+                style={{display:'inline-flex',alignItems:'center',gap:'4px',padding:'5px 9px',borderRadius:'999px',border:active?`1.5px solid ${meta.fg}`:'1px solid #e5e7eb',background:active?meta.bg:'#fff',color:active?meta.fg:'#6b7280',fontSize:'11px',fontWeight:600,cursor:'pointer',transition:'all 0.15s'}}>
+                <span>{meta.emoji}</span>
+                <span>{meta.label}</span>
+                <span style={{fontSize:'10px',opacity:0.7}}>({count})</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* @ Mention picker */}
+        <div ref={mentionPickerRef} style={{position:'relative'}}>
+          <button type="button" onClick={()=>{ const next = !mentionPickerOpen; setMentionPickerOpen(next); if (next) ensureMentionUsersLoaded(); }}
+            style={{display:'inline-flex',alignItems:'center',gap:'5px',padding:'5px 10px',borderRadius:'999px',border:selectedMentionUserIds.size>0?'1.5px solid #0d9488':'1px solid #5eead4',background:selectedMentionUserIds.size>0?'#ccfbf1':'#f0fdfa',color:'#0f766e',fontSize:'11px',fontWeight:700,cursor:'pointer',transition:'all 0.15s'}}>
+            <i className="fa-solid fa-at"></i>
+            <span>แท็กผู้ใช้</span>
+            {selectedMentionUserIds.size>0 && <span style={{fontSize:'10px',background:'#0d9488',color:'#fff',padding:'1px 6px',borderRadius:'999px'}}>{selectedMentionUserIds.size}</span>}
+            <i className={`fa-solid ${mentionPickerOpen?'fa-chevron-up':'fa-chevron-down'}`} style={{fontSize:'9px'}}></i>
+          </button>
+
+          {mentionPickerOpen && (
+            <div style={{position:'absolute',top:'calc(100% + 4px)',left:0,zIndex:60,background:'#fff',border:'2px solid #0d9488',borderRadius:'10px',minWidth:'360px',maxWidth:'440px',maxHeight:'360px',overflowY:'auto',boxShadow:'0 8px 24px rgba(0,0,0,0.18)'}}>
+              {/* Search ภายใน */}
+              <div style={{position:'sticky',top:0,background:'#fff',padding:'8px',borderBottom:'1px solid #f1f5f9'}}>
+                <input type="text" value={mentionQuery} onChange={e=>setMentionQuery(e.target.value)} placeholder="ค้นหาชื่อ"
+                  style={{width:'100%',padding:'5px 8px',fontSize:'12px',border:'1px solid #e5e7eb',borderRadius:'6px',outline:'none',color:'#1f2937',caretColor:'#0d9488'}}/>
+              </div>
+              {mentionLoading && (
+                <div style={{padding:'12px',fontSize:'11px',color:'#9ca3af',textAlign:'center'}}>
+                  <i className="fa-solid fa-spinner fa-spin"></i> กำลังโหลด...
+                </div>
+              )}
+              {!mentionLoading && mentionUsers !== null && (() => {
+                const q = mentionQuery.trim().toLowerCase();
+                const filtered = q
+                  ? mentionUsers.filter(u => (u.username||'').toLowerCase().includes(q) || (u.display_name||'').toLowerCase().includes(q))
+                  : mentionUsers;
+                if (filtered.length === 0) {
+                  return <div style={{padding:'12px',fontSize:'11px',color:'#9ca3af',textAlign:'center',fontStyle:'italic'}}>ไม่พบผู้ใช้</div>;
+                }
+                return filtered.map(u => {
+                  const checked = selectedMentionUserIds.has(u.id);
+                  const isAdminUser = u.role === 'admin';
+                  return (
+                    <label key={u.id} className={'tb-mention-filter-row' + (isAdminUser ? ' is-admin' : '')}
+                      style={{display:'flex',alignItems:'center',gap:'6px',padding:'7px 10px',cursor:'pointer',fontSize:'12px',color:'#1f2937',background:isAdminUser?'#fef3c7':(checked?'#ecfdf5':'transparent'),borderLeft:isAdminUser?'3px solid #d97706':'3px solid transparent',borderBottom:'1px solid #f1f5f9',flexWrap:'nowrap',whiteSpace:'nowrap',overflow:'hidden'}}>
+                      <input type="checkbox" checked={checked} onChange={()=>toggleMentionUser(u.id)} style={{cursor:'pointer',flexShrink:0}}/>
+                      <b style={{color:isAdminUser?'#92400e':'#0f766e',flexShrink:0}}>@{u.username}</b>
+                      {isAdminUser && <span style={{fontSize:'9px',fontWeight:800,color:'#fff',background:'#d97706',padding:'1px 5px',borderRadius:'999px',flexShrink:0}}>ADMIN</span>}
+                      <span style={{color:'#374151',fontWeight:600,fontSize:'11px',overflow:'hidden',textOverflow:'ellipsis',flex:'1 1 auto',minWidth:0}} title={u.display_name}>· {u.display_name}</span>
+                      {u.profession_label && <span style={{color:'#6b7280',fontSize:'10px',flexShrink:0}}>· {u.profession_label}</span>}
+                      <span style={{marginLeft:'4px',fontSize:'10px',color:'#9ca3af',flexShrink:0}}>({commentFilterStats.byMentionedId[u.id]||0})</span>
+                    </label>
+                  );
+                });
+              })()}
+              <div style={{padding:'6px 10px',borderTop:'1px solid #f1f5f9',textAlign:'right'}}>
+                <button type="button" onClick={()=>setMentionPickerOpen(false)}
+                  style={{padding:'4px 12px',borderRadius:'6px',border:'1px solid #0d9488',background:'#fff',color:'#0f766e',fontSize:'11px',fontWeight:700,cursor:'pointer'}}>
+                  เสร็จสิ้น
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Pills user ที่เลือก */}
+        {selectedMentionUserIds.size > 0 && (
+          <div style={{display:'flex',gap:'4px',flexWrap:'wrap'}}>
+            {[...selectedMentionUserIds].map(id => {
+              const u = (mentionUsers||[]).find(x=>x.id===id);
+              if (!u) return null;
+              return (
+                <span key={id} style={{display:'inline-flex',alignItems:'center',gap:'4px',padding:'3px 8px',borderRadius:'999px',background:'#ccfbf1',color:'#0f766e',fontSize:'10px',fontWeight:700,border:'1px solid #5eead4'}}>
+                  @{u.username}
+                  <button type="button" onClick={(e)=>{e.stopPropagation();toggleMentionUser(id);}}
+                    style={{cursor:'pointer',border:'none',background:'transparent',color:'#0f766e',fontSize:'12px',padding:0,lineHeight:1,marginLeft:'2px'}}>×</button>
+                </span>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Resolved tri-state — กดซ้ำ active button เพื่อกลับเป็น 'all' */}
+        <div style={{display:'inline-flex',border:'1px solid #fbbf24',borderRadius:'8px',overflow:'hidden'}}>
+          {[
+            { v:'all', label:'ทั้งหมด', count: null },
+            { v:'open', label:'ยังไม่จัดการ', count: commentFilterStats.openCount },
+            { v:'resolved', label:'จัดการแล้ว', count: commentFilterStats.resolvedCount },
+          ].map(({v,label,count}, i) => {
+            const active = resolvedFilter === v;
+            return (
+              <button key={v} type="button"
+                onClick={()=>setResolvedFilter(active && v !== 'all' ? 'all' : v)}
+                style={{padding:'5px 10px',border:'none',borderLeft:i>0?'1px solid #fbbf24':'none',background:active?'#d97706':'#fff',color:active?'#fff':'#92400e',fontSize:'11px',fontWeight:700,cursor:'pointer',transition:'all 0.15s'}}>
+                {label}{count !== null && <span style={{fontSize:'10px',opacity:0.8,marginLeft:'3px'}}>({count})</span>}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* คอมเม้นของฉัน */}
+        <button type="button" onClick={()=>setOnlyMyComments(v=>!v)}
+          disabled={!commentsMeta.currentUserId}
+          title={!commentsMeta.currentUserId ? 'ต้องเข้าสู่ระบบก่อน' : 'แสดงเฉพาะคอมเม้นของคุณ'}
+          style={{display:'inline-flex',alignItems:'center',gap:'5px',padding:'5px 10px',borderRadius:'999px',border:onlyMyComments?'1.5px solid #d97706':'1px solid #fbbf24',background:onlyMyComments?'#fef3c7':'#fffbeb',color:'#92400e',fontSize:'11px',fontWeight:700,cursor:commentsMeta.currentUserId?'pointer':'not-allowed',opacity:commentsMeta.currentUserId?1:0.5,transition:'all 0.15s'}}>
+          <i className="fa-solid fa-user"></i>
+          <span>คอมเม้นของฉัน</span>
+          <span style={{fontSize:'10px',opacity:0.7}}>({commentFilterStats.mineCount})</span>
+        </button>
+
+        {/* Extra chips: liked / my replies / unread (v0.7.14.7) */}
+        {[
+          { k:'liked',      icon:'fa-solid fa-thumbs-up',     label:'ที่ฉันถูกใจ',    count: commentFilterStats.likedCount,      fg:'#b45309', bg:'#fef3c7', border:'#d97706' },
+          { k:'my_replies', icon:'fa-solid fa-reply',         label:'ที่ฉันตอบ',      count: commentFilterStats.myRepliesCount,  fg:'#6b21a8', bg:'#f3e8ff', border:'#9333ea' },
+          { k:'unread',     icon:'fa-regular fa-envelope',    label:'ยังไม่อ่าน',     count: commentFilterStats.unreadCount,     fg:'#991b1b', bg:'#fee2e2', border:'#dc2626' },
+        ].map(({k,icon,label,count,fg,bg,border})=>{
+          const active = extraFilters.has(k);
+          const disabled = !commentsMeta.currentUserId;
+          return (
+            <button key={k} type="button" onClick={()=>{ if(!disabled) toggleExtra(k); }}
+              disabled={disabled}
+              title={disabled ? 'ต้องเข้าสู่ระบบก่อน' : label}
+              style={{display:'inline-flex',alignItems:'center',gap:'5px',padding:'5px 10px',borderRadius:'999px',border:active?`1.5px solid ${border}`:`1px solid ${border}`,background:active?bg:'#fff',color:active?fg:'#6b7280',fontSize:'11px',fontWeight:700,cursor:disabled?'not-allowed':'pointer',opacity:disabled?0.5:1,transition:'all 0.15s'}}>
+              <i className={icon}></i>
+              <span>{label}</span>
+              <span style={{fontSize:'10px',opacity:0.7}}>({count})</span>
+            </button>
+          );
+        })}
+
+        {/* ปุ่มล้างค่า — เฉพาะแถบ 2 (v0.7.14.7) */}
+        {hasCommentRowFilter && (
+          <button type="button" onClick={clearCommentFilters}
+            style={{marginLeft:'auto',padding:'6px 12px',borderRadius:'8px',border:'1.5px solid #ef4444',background:'#fef2f2',color:'#b91c1c',fontSize:'11px',fontWeight:700,cursor:'pointer'}}>
+            <i className="fa-solid fa-xmark" style={{marginRight:'4px'}}></i>ล้างค่า
+          </button>
+        )}
+        </div>{/* /flex row */}
+      </div>
+
       </div>{/* /sticky header group */}
 
       {/* ── Body — parent (main content area) จัดการ scroll เอง ── */}
@@ -3261,7 +3657,8 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
                           currentUserId={commentsMeta.currentUserId}
                           isAdmin={commentsMeta.isAdmin}
                           onRefresh={refreshAllComments}
-                          onCountChange={n=>setCommentCount(v.version, n)}/>
+                          onCountChange={n=>setCommentCount(v.version, n)}
+                          pageFilter={{ hasFilter: hasCommentFilter, matches: commentMatchesAxes }}/>
                       )}
                     </div>
                   </div>
@@ -3479,7 +3876,7 @@ const CHANGELOG_STATUS_META = {
   note:       { emoji:'📝', label:'บันทึก',     bg:'#f1f5f9', fg:'#334155', border:'#cbd5e1' },
 };
 
-const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ version, onCountChange, theme, initialComments, currentUserId: propsUserId, isAdmin: propsIsAdmin, onRefresh }) {
+const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ version, onCountChange, theme, initialComments, currentUserId: propsUserId, isAdmin: propsIsAdmin, onRefresh, pageFilter }) {
   const T = theme === 'amber'
     ? { bg:'#fffbeb', border:'#f59e0b', accent:'#92400e', accent2:'#d97706', sub:'#b45309', cardBorder:'#fbbf24', formBorder:'#f59e0b' }
     : { bg:'#f0fdfa', border:'#99f6e4', accent:'#0f766e', accent2:'#0d9488', sub:'#5eead4', cardBorder:'#ccfbf1', formBorder:'#5eead4' };
@@ -3575,12 +3972,51 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
     if (initialComments === undefined && !onRefresh) load();
   }, [initialComments, onRefresh, load]);
 
+  // v0.7.14.7 — หา snapshot ของ user ปัจจุบันจาก comment เก่า (display_name + profession_label)
+  const findMySnapshot = () => {
+    for (const c of comments) {
+      if (c.user_id === currentUserId) return { display_name: c.display_name, profession_label: c.profession_label, role: c.role };
+      if (Array.isArray(c.replies)) {
+        for (const r of c.replies) {
+          if (r.user_id === currentUserId) return { display_name: r.display_name, profession_label: r.profession_label, role: r.role };
+        }
+      }
+    }
+    return { display_name: 'คุณ', profession_label: '', role: isAdmin ? 'admin' : 'user' };
+  };
+
   const handleSubmit = async (e) => {
     e?.preventDefault();
     const t = draftText.trim();
     if (!t) return;
     if (t.length > 2000) { setError('comment ยาวเกิน 2000 ตัวอักษร'); return; }
     setSubmitting(true); setError('');
+    // ── Optimistic: push comment ทันที ──
+    const tempId = 'tmp-' + Date.now() + '-' + Math.random().toString(36).slice(2,8);
+    const me = findMySnapshot();
+    const optimistic = {
+      id: tempId,
+      version,
+      user_id: currentUserId,
+      display_name: me.display_name,
+      profession_label: me.profession_label,
+      role: me.role,
+      comment_text: t,
+      status: draftStatus,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      edited: false,
+      parent_comment_id: null,
+      resolved_at: null,
+      mentioned_user_ids: [],
+      deleted_at: null,
+      likes_count: 0,
+      liked_by_me: false,
+      replies: [],
+      _pending: true,
+    };
+    setComments(prev => [...prev, optimistic]);
+    setDraftText(''); setDraftStatus('feedback');
     try {
       const r = await fetch('/api/changelog/comment', {
         method: 'POST',
@@ -3589,10 +4025,13 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || 'submit failed');
-      setDraftText(''); setDraftStatus('feedback');
-      await load();
-    } catch (e) { setError(e.message || 'ส่ง comment ล้มเหลว'); }
-    finally { setSubmitting(false); }
+      await load(); // refetch → replace temp ด้วย real
+    } catch (e) {
+      setError(e.message || 'ส่ง comment ล้มเหลว');
+      // rollback
+      setComments(prev => prev.filter(c => c.id !== tempId));
+      setDraftText(t); // คืน text ให้ user
+    } finally { setSubmitting(false); }
   };
 
   const startEdit = (c) => {
@@ -3605,6 +4044,22 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
     const t = editText.trim();
     if (!t) return;
     setSavingEdit(true); setError('');
+    // Backup เพื่อ rollback
+    const before = comments;
+    const nowIso = new Date().toISOString();
+    // ── Optimistic: update local ทันที ──
+    const applyEdit = (c) => c.id === id
+      ? { ...c, comment_text: t, status: editStatus, edited: true, updated_at: nowIso }
+      : c;
+    setComments(prev => prev.map(c => {
+      const updated = applyEdit(c);
+      if (Array.isArray(c.replies)) {
+        const nr = c.replies.map(applyEdit);
+        if (nr.some((r,i) => r !== c.replies[i])) return { ...updated, replies: nr };
+      }
+      return updated;
+    }));
+    setEditingId(null);
     try {
       const r = await fetch(`/api/changelog/comment/${id}`, {
         method: 'PATCH',
@@ -3613,10 +4068,11 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || 'edit failed');
-      setEditingId(null);
       await load();
-    } catch (e) { setError(e.message || 'แก้ไขล้มเหลว'); }
-    finally { setSavingEdit(false); }
+    } catch (e) {
+      setError(e.message || 'แก้ไขล้มเหลว');
+      setComments(before); // rollback
+    } finally { setSavingEdit(false); }
   };
 
   const doDelete = async (id) => {
@@ -3663,33 +4119,103 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
     const t = replyText.trim(); if (!t) return;
     if (t.length > 2000) { setError('ตอบกลับยาวเกิน 2000 ตัวอักษร'); return; }
     setSavingReply(true); setError('');
+    // ── Optimistic: push reply ใน parent.replies ทันที ──
+    const tempId = 'tmp-' + Date.now() + '-' + Math.random().toString(36).slice(2,8);
+    const me = findMySnapshot();
+    const optimisticReply = {
+      id: tempId,
+      version,
+      user_id: currentUserId,
+      display_name: me.display_name,
+      profession_label: me.profession_label,
+      role: me.role,
+      comment_text: t,
+      status: replyStatus,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      edited: false,
+      parent_comment_id: parentId,
+      resolved_at: null,
+      mentioned_user_ids: [],
+      deleted_at: null,
+      likes_count: 0,
+      liked_by_me: false,
+      _pending: true,
+    };
+    setComments(prev => prev.map(c => c.id === parentId
+      ? { ...c, replies: [...(c.replies||[]), optimisticReply] }
+      : c
+    ));
+    cancelReply();
     try {
       const r = await fetch(`/api/changelog/comment/${parentId}/reply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ comment_text: t, status: replyStatus }) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || 'reply failed');
-      cancelReply(); await load();
-    } catch (e) { setError(e.message || 'ตอบกลับล้มเหลว'); }
-    finally { setSavingReply(false); }
+      await load();
+    } catch (e) {
+      setError(e.message || 'ตอบกลับล้มเหลว');
+      // rollback: ลบ reply temp ออก
+      setComments(prev => prev.map(c => c.id === parentId
+        ? { ...c, replies: (c.replies||[]).filter(r => r.id !== tempId) }
+        : c
+      ));
+    } finally { setSavingReply(false); }
   };
   const toggleResolve = async (c) => {
+    // ── Optimistic: update resolved_at ทันที ──
+    const newResolvedAt = c.resolved_at ? null : new Date().toISOString();
+    setComments(prev => prev.map(p => p.id === c.id ? { ...p, resolved_at: newResolvedAt } : p));
     try {
       const r = await fetch(`/api/changelog/comment/${c.id}/resolve`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ resolved: !c.resolved_at }) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || 'resolve failed');
       await load();
-    } catch (e) { setError(e.message || 'ทำเครื่องหมายล้มเหลว'); }
+    } catch (e) {
+      setError(e.message || 'ทำเครื่องหมายล้มเหลว');
+      // rollback
+      setComments(prev => prev.map(p => p.id === c.id ? { ...p, resolved_at: c.resolved_at } : p));
+    }
   };
 
   // ── Mention autocomplete + caret position ──
-  const mentionCacheRef = React.useRef({ users: null, fetchedAt: 0 });
-  // Pre-fetch users ตอน mount → ครั้งแรกที่กด @ มาขึ้นทันที (ปุ๊บปับ)
+  // v0.7.14.7 — ใช้ global cache (window scope) → persist ข้าม component mount → ไม่ต้องโหลดซ้ำเมื่อกลับมาหน้านี้
+  // v0.7.14.7 — เตือนก่อนปิดแท็บ/รีโหลด + ตั้ง window flag สำหรับ App component
   React.useEffect(() => {
-    if (mentionCacheRef.current.users) return;
+    const hasDraft = !!(draftText.trim() || editText.trim() || replyText.trim());
+    window._hasUnsentChangelogDraft = hasDraft;
+    if (!hasDraft) return;
+    const handler = (e) => {
+      e.preventDefault();
+      e.returnValue = 'มีข้อความที่ยังไม่ได้ส่ง — ออกจากหน้านี้แล้วข้อความจะหาย';
+      return e.returnValue;
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => {
+      window.removeEventListener('beforeunload', handler);
+      window._hasUnsentChangelogDraft = false;
+    };
+  }, [draftText, editText, replyText]);
+  // cleanup เมื่อ unmount — กัน flag ค้าง
+  React.useEffect(() => {
+    return () => { window._hasUnsentChangelogDraft = false; };
+  }, []);
+
+  if (!window._mentionUsersCache) window._mentionUsersCache = { users: null, fetchedAt: 0 };
+  const mentionCacheRef = React.useRef(window._mentionUsersCache);
+  // tick → trigger re-render เมื่อ cache โหลดเสร็จ → renderCommentText แสดงสีตาม role ถูก
+  const [, setMentionTick] = useState(0);
+  // Pre-fetch users ตอน mount + sync กับ global cache
+  React.useEffect(() => {
+    if (window._mentionUsersCache.users) { mentionCacheRef.current = window._mentionUsersCache; return; }
     (async () => {
       try {
         const r = await fetch('/api/changelog/mentionable-users');
         const j = await r.json();
-        if (r.ok) mentionCacheRef.current = { users: j.users || [], fetchedAt: Date.now() };
+        if (r.ok) {
+          window._mentionUsersCache = { users: j.users || [], fetchedAt: Date.now() };
+          mentionCacheRef.current = window._mentionUsersCache;
+          setMentionTick(t => t + 1);  // trigger re-render → render mention ถูกสี
+        }
       } catch {/* ignore */}
     })();
   }, []);
@@ -3715,12 +4241,25 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
     if (!m) { setMentionState(null); return; }
     const query = m[1].toLowerCase();
     const px = ta ? getCaretPx(ta) : { top: 24, left: 0 };
-    setMentionState({ context, query, users: [], idx: 0, caretPos, loading: true, top: px.top, left: px.left });
-    let all = mentionCacheRef.current.users;
-    if (!all || Date.now() - mentionCacheRef.current.fetchedAt > 60000) {
-      try { const r = await fetch('/api/changelog/mentionable-users'); const j = await r.json(); if (r.ok) { all = j.users || []; mentionCacheRef.current = { users: all, fetchedAt: Date.now() }; } else all = []; }
-      catch { all = []; }
+    // v0.7.14.7 — ถ้ามี cache แล้ว → ใช้ทันที (ไม่ขึ้น loading)
+    let all = window._mentionUsersCache?.users;
+    const cacheValid = all && Date.now() - (window._mentionUsersCache?.fetchedAt || 0) < 60000;
+    if (cacheValid) {
+      const filtered = query ? all.filter(u => (u.username||'').toLowerCase().startsWith(query) || (u.display_name||'').toLowerCase().includes(query)) : all;
+      setMentionState({ context, query, users: filtered.slice(0, 8), idx: 0, caretPos, loading: false, top: px.top, left: px.left });
+      return;
     }
+    // ไม่มี cache → fetch + แสดง loading
+    setMentionState({ context, query, users: [], idx: 0, caretPos, loading: true, top: px.top, left: px.left });
+    try {
+      const r = await fetch('/api/changelog/mentionable-users');
+      const j = await r.json();
+      if (r.ok) {
+        all = j.users || [];
+        window._mentionUsersCache = { users: all, fetchedAt: Date.now() };
+        mentionCacheRef.current = window._mentionUsersCache;
+      } else { all = []; }
+    } catch { all = []; }
     const filtered = query ? all.filter(u => (u.username||'').toLowerCase().startsWith(query) || (u.display_name||'').toLowerCase().includes(query)) : all;
     setMentionState({ context, query, users: filtered.slice(0, 8), idx: 0, caretPos, loading: false, top: px.top, left: px.left });
   };
@@ -3771,10 +4310,25 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
 
   const renderCommentText = (text) => {
     if (!text) return null;
-    // รองรับ handle ปกติ + email-style username (@xxx@host.tld)
-    return text.split(/(@[\w.\-ก-๛]+(?:@[\w.\-]+\.[A-Za-z]{2,})?)/g).map((p, i) => p && p.startsWith('@')
-      ? <span key={i} style={{background:'#fef3c7',color:'#92400e',fontWeight:700,padding:'0 3px',borderRadius:'3px'}}>{p}</span>
-      : p);
+    const users = window._mentionUsersCache?.users || [];
+    // map username (lowercase) → role
+    const userRoleMap = {};
+    for (const u of users) {
+      if (u.username) userRoleMap[u.username.toLowerCase()] = u.role;
+    }
+    return text.split(/(@[\w.\-ก-๛]+(?:@[\w.\-]+\.[A-Za-z]{2,})?)/g).map((p, i) => {
+      if (!p || !p.startsWith('@')) return p;
+      const uname = p.slice(1).toLowerCase();
+      const role = userRoleMap[uname];
+      const isAdmin = role === 'admin';
+      // admin = อำพัน + text น้ำตาลเข้ม + glow ส้ม · user = เทล + text ดำ + glow เขียว
+      const style = isAdmin
+        ? { background:'#fef3c7', color:'#92400e', fontWeight:700, padding:'1px 5px', borderRadius:'4px', boxShadow:'0 0 6px 1px rgba(217,119,6,0.45)' }
+        : role === 'user'
+        ? { background:'#ccfbf1', color:'#1f2937', fontWeight:700, padding:'1px 5px', borderRadius:'4px', boxShadow:'0 0 6px 1px rgba(13,148,136,0.45)' }
+        : { background:'#f3f4f6', color:'#6b7280', fontWeight:600, padding:'1px 5px', borderRadius:'4px' };  // unknown user (cache ยังไม่โหลด หรือ user ไม่มีจริง)
+      return <span key={i} style={style}>{p}</span>;
+    });
   };
 
   const initials = (name) => {
@@ -3863,7 +4417,7 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
                       : c.status === 'feedback'   ? { icon: 'fa-thumbs-up', text: 'รับทราบ' }
                                                   : { icon: 'fa-bookmark', text: 'รับทราบ' };
             return (
-              <div key={c.id} id={'cmt-'+c.id} style={{background:'#fff',border:'1.5px solid '+T.cardBorder,borderLeft:`3px solid ${meta.fg}`,borderRadius:'8px',padding:'10px 12px',minWidth:0,opacity:isDeleted?0.85:1}}>
+              <div key={c.id} id={'cmt-'+c.id} style={{background:(pageFilter?.hasFilter && pageFilter.matches(c))?'#fef3c7':'#fff',border:'1.5px solid '+((pageFilter?.hasFilter && pageFilter.matches(c))?'#fbbf24':T.cardBorder),borderLeft:`3px solid ${meta.fg}`,borderRadius:'8px',padding:'10px 12px',minWidth:0,opacity:isDeleted?0.85:(c._pending?0.7:1),transition:'all 0.2s'}}>
                 <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'6px',flexWrap:'wrap'}}>
                   <div style={{minWidth:'34px',height:'26px',padding:'0 8px',borderRadius:'999px',background:meta.bg,color:meta.fg,border:`1px solid ${meta.border}`,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:800,fontSize:'11px',flexShrink:0,lineHeight:1}}>
                     {c.profession_label || initials(c.display_name)}
@@ -3964,7 +4518,9 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
                         {!mentionState.loading && mentionState.users.map((u, i) => {
                           const isAdminUser = u.role === 'admin';
                           const isActive = i === mentionState.idx;
-                          const rowBg = isActive ? '#5eead4' : (isAdminUser ? '#fef3c7' : 'transparent');
+                          const rowBg = isActive
+                            ? (isAdminUser ? '#fcd34d' : '#ccfbf1')
+                            : (isAdminUser ? '#fef3c7' : 'transparent');
                           return (
                             <div key={u.id} onClick={()=>applyMention(u,'edit')} onMouseDown={e=>e.preventDefault()}
                               onMouseEnter={()=>setMentionState(prev => prev ? {...prev, idx: i} : prev)}
@@ -4010,7 +4566,9 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
                         {!mentionState.loading && mentionState.users.map((u, i) => {
                           const isAdminUser = u.role === 'admin';
                           const isActive = i === mentionState.idx;
-                          const rowBg = isActive ? '#5eead4' : (isAdminUser ? '#fef3c7' : 'transparent');
+                          const rowBg = isActive
+                            ? (isAdminUser ? '#fcd34d' : '#ccfbf1')
+                            : (isAdminUser ? '#fef3c7' : 'transparent');
                           return (
                             <div key={u.id} onClick={()=>applyMention(u,'reply')} onMouseDown={e=>e.preventDefault()}
                               onMouseEnter={()=>setMentionState(prev => prev ? {...prev, idx: i} : prev)}
@@ -4041,7 +4599,7 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
                       const rIsDeleted = !!r.deleted_at;
                       const rRevealed = isAdmin && revealDeletedIds.has(r.id);
                       return (
-                        <div key={r.id} id={'cmt-'+r.id} style={{background:'#fff',border:'1px solid '+T.cardBorder,borderLeft:`2px solid ${rmeta.fg}`,borderRadius:'6px',padding:'8px 10px',opacity:rIsDeleted?0.75:1}}>
+                        <div key={r.id} id={'cmt-'+r.id} style={{background:(pageFilter?.hasFilter && pageFilter.matches(r))?'#fef3c7':'#fff',border:'1px solid '+((pageFilter?.hasFilter && pageFilter.matches(r))?'#fbbf24':T.cardBorder),borderLeft:`2px solid ${rmeta.fg}`,borderRadius:'6px',padding:'8px 10px',opacity:rIsDeleted?0.75:(r._pending?0.7:1),transition:'all 0.2s'}}>
                           <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'4px',flexWrap:'wrap'}}>
                             <div style={{minWidth:'30px',height:'22px',padding:'0 6px',borderRadius:'999px',background:rmeta.bg,color:rmeta.fg,border:`1px solid ${rmeta.border}`,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:800,fontSize:'10px',flexShrink:0,lineHeight:1}}>{r.profession_label || initials(r.display_name)}</div>
                             <span style={{fontWeight:700,fontSize:'11.5px',color:'#1f2937'}}>{r.display_name}</span>
@@ -4121,7 +4679,10 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
               {!mentionState.loading && mentionState.users.map((u, i) => {
                 const isAdminUser = u.role === 'admin';
                 const isActive = i === mentionState.idx;
-                const rowBg = isActive ? '#5eead4' : (isAdminUser ? '#fef3c7' : 'transparent');
+                // v0.7.14.7 — admin active = อำพันเข้ม, user active = เทลจาง, idle: admin=อำพันอ่อน, user=ใส
+                const rowBg = isActive
+                  ? (isAdminUser ? '#fcd34d' : '#ccfbf1')
+                  : (isAdminUser ? '#fef3c7' : 'transparent');
                 return (
                   <div key={u.id} onClick={()=>applyMention(u,'draft')} onMouseDown={e=>e.preventDefault()}
                     onMouseEnter={()=>setMentionState(prev => prev ? {...prev, idx: i} : prev)}
@@ -4136,11 +4697,18 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
             </div>
           )}
         </div>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:'6px'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:'6px',gap:'8px'}}>
           <span style={{fontSize:'10px',color:draftText.length>1900?'#dc2626':'#9ca3af'}}>{draftText.length} / 2000</span>
-          <button type="submit" disabled={submitting || !draftText.trim()} style={{cursor:'pointer',border:'none',background:'#0f766e',color:'#fff',fontSize:'12px',padding:'7px 18px',borderRadius:'6px',fontWeight:700,opacity:(submitting||!draftText.trim())?0.5:1}}>
-            <i className="fa-solid fa-paper-plane" style={{marginRight:'5px'}}></i>{submitting ? 'กำลังส่ง...' : 'ส่ง'}
-          </button>
+          <div style={{display:'flex',gap:'6px'}}>
+            <button type="button" onClick={()=>{ setDraftText(''); setDraftStatus('feedback'); }}
+              disabled={submitting || !draftText.trim()}
+              style={{cursor:(submitting||!draftText.trim())?'not-allowed':'pointer',border:'1.5px solid #ef4444',background:'#fef2f2',color:'#b91c1c',fontSize:'12px',padding:'7px 14px',borderRadius:'6px',fontWeight:700,opacity:(submitting||!draftText.trim())?0.5:1}}>
+              <i className="fa-solid fa-xmark" style={{marginRight:'4px'}}></i>ยกเลิก
+            </button>
+            <button type="submit" disabled={submitting || !draftText.trim()} style={{cursor:'pointer',border:'none',background:'#0f766e',color:'#fff',fontSize:'12px',padding:'7px 18px',borderRadius:'6px',fontWeight:700,opacity:(submitting||!draftText.trim())?0.5:1}}>
+              <i className="fa-solid fa-paper-plane" style={{marginRight:'5px'}}></i>{submitting ? 'กำลังส่ง...' : 'ส่ง'}
+            </button>
+          </div>
         </div>
       </form>
 
@@ -4205,7 +4773,9 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
   prev.theme === next.theme &&
   prev.initialComments === next.initialComments &&
   prev.currentUserId === next.currentUserId &&
-  prev.isAdmin === next.isAdmin
+  prev.isAdmin === next.isAdmin &&
+  prev.pageFilter?.hasFilter === next.pageFilter?.hasFilter &&
+  prev.pageFilter?.matches === next.pageFilter?.matches
 );
 
 // ───── Main Profile Modal ─────

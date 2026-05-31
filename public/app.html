@@ -93,6 +93,9 @@
       100% { background: #fff; box-shadow: 0 0 0 0 rgba(13,148,136,0.0); }
     }
     .comment-flash { animation: commentFlash 2.4s ease-out 1; }
+    /* Mention filter dropdown row — CSS hover (เร็วกว่า React state) — v0.7.14.7 */
+    .tb-mention-filter-row:hover { background-color: #ccfbf1 !important; }
+    .tb-mention-filter-row.is-admin:hover { background-color: #fcd34d !important; }
     .tb-dash-card {
       transition: transform 0.22s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.22s cubic-bezier(0.34,1.56,0.64,1), border-color 0.15s ease;
     }
@@ -111,9 +114,9 @@
 </head>
 <body class="bg-slate-100 overflow-hidden">
   <div id="root"></div>
-  <script src="tb-data.js?v=78"></script>
-  <script src="tb-changelog.js?v=78"></script>
-  <script type="text/babel" src="tb-modals.jsx?v=78"></script>
-  <script type="text/babel" src="tb-app.jsx?v=78"></script>
+  <script src="tb-data.js?v=79"></script>
+  <script src="tb-changelog.js?v=79"></script>
+  <script type="text/babel" src="tb-modals.jsx?v=79"></script>
+  <script type="text/babel" src="tb-app.jsx?v=79"></script>
 </body>
 </html>
