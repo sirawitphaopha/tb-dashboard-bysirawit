@@ -23,6 +23,19 @@ window.TB_CHANGELOG = [
     description: "ระบบ login จริง + Audit Log ครบวงจร + Admin Approval + ดีไซน์ใหม่ทั้งหมด",
     versions: [
       {
+        version: "0.7.15.3",
+        date: "1 มิ.ย. 2569",
+        commit: "pending",
+        commitFull: "pending",
+        title: "Phase 2 Step 2 — RLS strict tb_changelog_comments + pg_cron auto-refresh MV ทุก 5 นาที",
+        changes: [
+          { tag: "security", text: "RLS strict ของ tb_changelog_comments — non-admin เห็นเฉพาะ comment ที่ไม่ถูกลบ (deleted_at IS NULL) หรือที่ตัวเองเป็นคนลบ · admin เห็นทุก row ผ่าน is_admin() · ปกป้องเนื้อหา deleted comment จาก direct client query" },
+          { tag: "security", text: "frontend ไม่ต้องเปลี่ยน — /api/changelog/comments-all ใช้ admin client bypass RLS อยู่แล้ว → tombstone ยัง work + masking comment_text สำหรับ non-admin ตามเดิม" },
+          { tag: "backend", text: "pg_cron schedule REFRESH MATERIALIZED VIEW mv_activity_log ทุก 5 นาที — admin ไม่ต้องกดปุ่มเองอีก (ปุ่ม manual refresh ยังคงอยู่สำหรับเคสต้องการดู real-time)" },
+        ],
+        body: "🎯 Phase 2 Step 2 — Backend hardening\n— RLS strict ป้องกัน security in depth gap (ของ Plan agent ระบุ)\n— pg_cron auto refresh ลดภาระ admin\n\n📦 SQL ที่ต้องรัน (idempotent):\n1. scripts/fix-changelog-comment-rls-strict.sql\n2. scripts/add-pg-cron-mv-refresh.sql\n\n📝 Lesson\n- Realtime broadcast event อาจหายไปสำหรับ non-admin ตอน soft delete (RLS reject → no broadcast) → แต่ frontend debounced refetch ผ่าน admin client ครอบคลุม\n- pg_cron extension ใน Supabase รองรับ free tier — schedule jobs ได้ผ่าน cron.schedule() RPC\n- REFRESH MATERIALIZED VIEW (ไม่ใช้ CONCURRENTLY) ใช้ exclusive lock ระยะสั้น (~100ms สำหรับ table เล็ก) — acceptable",
+      },
+      {
         version: "0.7.15.2",
         date: "1 มิ.ย. 2569",
         commit: "c19894d",
