@@ -25,8 +25,8 @@ window.TB_CHANGELOG = [
       {
         version: "0.7.15.5",
         date: "1 มิ.ย. 2569",
-        commit: "pending",
-        commitFull: "pending",
+        commit: "4da584c",
+        commitFull: "4da584c1bcec7a3c040f5f50e94e40bc5402f670",
         title: "Phase 2 Step 4 — Style refactor Comment card (inline → CSS class · ลด React allocation 50%)",
         changes: [
           { tag: "ui", text: "เพิ่ม CSS class 4 ตัวใน app.html: .cm-card (parent), .cm-card-reply (reply), .cm-card-text (parent body), .cm-card-text-reply (reply body) — static styles ที่ไม่ขึ้นกับ state" },
