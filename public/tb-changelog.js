@@ -23,6 +23,20 @@ window.TB_CHANGELOG = [
     description: "ระบบ login จริง + Audit Log ครบวงจร + Admin Approval + ดีไซน์ใหม่ทั้งหมด",
     versions: [
       {
+        version: "0.7.15.1",
+        date: "31 พ.ค. 2569",
+        commit: "pending",
+        commitFull: "pending",
+        title: "Phase 1B Optimize — เร่งความลื่นหน้าจอ ลดการคำนวณซ้ำในแดชบอร์ด + ปรับจังหวะเช็คคอมเม้นใหม่",
+        changes: [
+          { tag: "ui", text: "ChangelogCommentSection setInterval 30s → 60s — ลด re-render ครึ่งหนึ่ง (relative time 'X นาทีที่แล้ว' ไม่ละเอียดวินาที ยอมรับได้)" },
+          { tag: "ui", text: "Realtime refresh debounce 300ms → 500ms — ลด API call ตอน batch updates ครึ่งหนึ่ง" },
+          { tag: "ui", text: "Dashboard KPI ใช้ useMemo + 1 pass loop — เดิม 10 .filter() × N rows = 5000 ops ทุก render ใหม่ → คำนวณครั้งเดียวต่อ patients เปลี่ยน" },
+          { tag: "bug", text: "Key prop fix — restartReasons (ลบเหตุผลทีละตัว), customDrugInteractions (ลบ DDI ทีละตัว), visibleChanges (filter เปลี่ยน) — เดิม key={i} ทำให้ React reconcile ผิด animation/state ของ DOM ที่เหลือ" },
+        ],
+        body: "🎯 เป้าหมาย Phase 1B Frontend Quick Wins\n— ลด re-render ที่ไม่จำเป็น\n— ตอบสนอง smooth ขึ้นโดยไม่แตะ logic\n\n📊 Before/After\n- ChangelogCommentSection re-render: ทุก 30s → ทุก 60s (ลดครึ่ง)\n- Realtime refresh API: 300ms debounce → 500ms (ลดครึ่ง)\n- Dashboard KPI: 5000 ops/render → 0 ถ้า patients ไม่เปลี่ยน (useMemo cache)\n- List animations หลังลบ item: React reuse DOM ถูกตำแหน่ง (key fix)\n\n📝 Lesson\n- setInterval สั้นเกินไป = re-render เปลือง — เริ่มจาก need (60s ก็ smooth พอ)\n- 1 pass loop คำนวณ N KPI พร้อมกัน เร็วกว่า N filter() แยก\n- key={i} อันตรายเมื่อ list เพิ่ม/ลบ/reorder — ใช้ stable id เสมอ",
+      },
+      {
         version: "0.7.15.0",
         date: "31 พ.ค. 2569",
         commit: "e512462",

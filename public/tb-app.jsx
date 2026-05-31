@@ -20,48 +20,45 @@ function Dashboard({ patients, archivePatients, onDashFilter, onGoArchiveDelayed
   const [selectedYear, setSelectedYear] = useState(2026);
   const [showSputumModal, setShowSputumModal] = useState(false);
   const [hoveredKpi, setHoveredKpi] = useState(null);
-  const active = patients.filter(p => p.status !== 'done');
-  const criticals = patients.filter(p => p.status === 'critical');
-  const intensive = patients.filter(p => p.phase === 'Intensive').length;
-  const cont = patients.filter(p => p.phase === 'Continuation').length;
-  const mdr = patients.filter(p => p.regimen && (p.regimen.includes('Bdq')||p.regimen.includes('Lzd')||p.regimen.includes('Mfx'))).length;
-  const done = patients.filter(p => p.status === 'done').length;
-
-  // ── helpers ──
+  // v0.7.15.1 — useMemo KPI ทั้งหมด → คำนวณครั้งเดียวต่อ patients/archive เปลี่ยน
+  // เดิม: 10 .filter() ครั้ง × N rows = 5000 ops ทุก render
+  // ใหม่: 1 pass loop คำนวณทุก KPI พร้อมกัน + cache จน patients เปลี่ยน
   const isNeg = r => /neg/i.test(r||'');
   const isPos = r => /\+|scanty/i.test(r||'');
-
-  // ── ใกล้เปลี่ยน Phase ──
   const getIntensiveMonths = r => { const m = r?.match(/^(\d+)/); return m ? parseInt(m[1]) : 2; };
-  const nearPhaseChange = patients.filter(p =>
-    p.phase === 'Intensive' && p.status !== 'done' &&
-    p.month >= getIntensiveMonths(p.regimen) - 0.5
-  );
-
-  // ── Sputum Conversion Rate ──
-  // smearPos: active patients ที่ M0 บวก
-  const smearPos = patients.filter(p => (p.sputum||[]).length && isPos(p.sputum[0]?.result));
-  // converted: smear+ ที่มี Neg อย่างน้อย 1 ครั้งหลัง M0 (รวม delayed-then-neg)
-  const converted = smearPos.filter(p => (p.sputum||[]).slice(1).some(s => isNeg(s.result)));
-  const convRate = smearPos.length > 0 ? Math.round(converted.length / smearPos.length * 100) : null;
-
-  // delayedActive: active patients ที่มีเสมหะบวก/scanty ที่ M2 ขึ้นไป (โผล่ใน modal)
   const hasSputumDelayed = p => (p.sputum||[]).filter(s => s.tp !== 'M0').some(s => isPos(s.result));
-  const delayedActive = patients.filter(p => hasSputumDelayed(p));
 
-  // archivedDelayed: archived patients ที่เคย delayed (ปุ่ม Cured+Delayed)
-  const archivedDelayed = (archivePatients||[]).filter(p => hasSputumDelayed(p));
+  // หมายเหตุ: ใช้ชื่อ kpiCalc แทน kpis เพราะ kpis array (KPI cards) อยู่ใน scope แล้ว
+  const kpiCalc = React.useMemo(() => {
+    const active = []; const criticals = []; const smearPos = []; const delayedActive = []; const nearPhaseChange = []; const nearDone = []; const cohortDone = [];
+    let intensive = 0, cont = 0, mdr = 0, done = 0;
+    for (const p of patients) {
+      if (p.status !== 'done') active.push(p); else { done++; cohortDone.push(p); }
+      if (p.status === 'critical') criticals.push(p);
+      if (p.phase === 'Intensive') intensive++;
+      if (p.phase === 'Continuation') cont++;
+      if (p.regimen && (p.regimen.includes('Bdq')||p.regimen.includes('Lzd')||p.regimen.includes('Mfx'))) mdr++;
+      if (p.phase === 'Intensive' && p.status !== 'done' && p.month >= getIntensiveMonths(p.regimen) - 0.5) nearPhaseChange.push(p);
+      const sp = p.sputum||[];
+      if (sp.length && isPos(sp[0]?.result)) smearPos.push(p);
+      if (hasSputumDelayed(p)) delayedActive.push(p);
+      if (p.status !== 'done') {
+        const total = getTotalMonths(p.regimen);
+        if (total && (total - p.month) <= 1 && (total - p.month) > 0) nearDone.push(p);
+      }
+    }
+    const converted = smearPos.filter(p => (p.sputum||[]).slice(1).some(s => isNeg(s.result)));
+    const convRate = smearPos.length > 0 ? Math.round(converted.length / smearPos.length * 100) : null;
+    const successRate = patients.length > 0 ? Math.round(done / patients.length * 100) : 0;
+    return { active, criticals, intensive, cont, mdr, done, smearPos, converted, convRate, delayedActive, nearPhaseChange, nearDone, cohortDone, successRate };
+  }, [patients]);
 
-  // ── Treatment Success Rate ──
-  const cohortDone = patients.filter(p => p.status === 'done');
-  const successRate = patients.length > 0 ? Math.round(cohortDone.length / patients.length * 100) : 0;
+  const archivedDelayed = React.useMemo(() =>
+    (archivePatients||[]).filter(p => hasSputumDelayed(p)),
+  [archivePatients]);
 
-  // ── ใกล้จบรักษา (≤1 เดือน) ──
-  const nearDone = patients.filter(p => {
-    if (p.status === 'done') return false;
-    const total = getTotalMonths(p.regimen);
-    return total && (total - p.month) <= 1 && (total - p.month) > 0;
-  });
+  // destructure ออกมาเป็นตัวแปรเดิม → ไม่ต้องแก้ JSX ที่ใช้ตัวแปรเหล่านี้
+  const { active, criticals, intensive, cont, mdr, done, smearPos, converted, convRate, delayedActive, nearPhaseChange, nearDone, cohortDone, successRate } = kpiCalc;
 
   useEffect(() => {
     if (!barRef.current) return;
@@ -1446,7 +1443,7 @@ function AdminSettings({ settings, setSettings, setNav }) {
           </div>
           <div className="flex flex-col gap-2 min-h-24 bg-slate-50 p-3 rounded-xl mb-4">
             {(settings.restartReasons||[]).map((r,i) => (
-              <div key={i} className="flex items-center justify-between bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm text-gray-700 hover:border-red-200 group transition-colors">
+              <div key={`${i}-${r}`} className="flex items-center justify-between bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm text-gray-700 hover:border-red-200 group transition-colors">
                 <span><span className="text-gray-400 font-mono text-xs mr-2">{i+1}.</span>{r}</span>
                 <button onClick={() => removeReason(r)} className="text-gray-300 hover:text-red-500 transition-colors group-hover:text-red-400 ml-2 flex-shrink-0"><i className="fa-solid fa-xmark text-xs"></i></button>
               </div>
@@ -1500,7 +1497,7 @@ function AdminSettings({ settings, setSettings, setNav }) {
             <h4 className="font-bold text-gray-700 text-sm mb-3"><i className="fa-solid fa-plus mr-1 text-red-500"></i>เพิ่ม Drug Interaction (Custom)</h4>
             <div className="space-y-3">
               {(settings.customDrugInteractions||[]).map((ci,i)=>(
-                <div key={i} className="bg-red-50 border border-red-100 rounded-xl p-3 space-y-2">
+                <div key={ci.id || `${i}-${ci.drug||''}`} className="bg-red-50 border border-red-100 rounded-xl p-3 space-y-2">
                   <div className="grid grid-cols-[80px_1fr_1fr_24px] gap-2 items-start">
                     <div>
                       <label className="text-xs text-gray-500 block mb-0.5">ระดับ</label>
@@ -2216,7 +2213,8 @@ function App() {
     <div className="flex h-screen bg-teal-50 overflow-hidden">
 
       {/* ── SIDEBAR ── */}
-      <div style={{position:'relative',width:sidebarOpen?'260px':'72px',transition:'width 0.2s ease',flexShrink:0}} onMouseEnter={()=>setSidebarHovered(true)} onMouseLeave={()=>setSidebarHovered(false)}>
+      {/* v0.7.15.1 — zIndex:40 กันปุ่ม chevron toggle ถูก header (zIndex:30) ทับครึ่ง */}
+      <div style={{position:'relative',width:sidebarOpen?'260px':'72px',transition:'width 0.2s ease',flexShrink:0,zIndex:40}} onMouseEnter={()=>setSidebarHovered(true)} onMouseLeave={()=>setSidebarHovered(false)}>
       <aside style={{width:'100%',height:'100%',overflow:'hidden',display:'flex',flexDirection:'column',background:'#fff',borderRight:'1px solid #e5e7eb'}}>
 
         {/* Header: icon คงที่ + label fade */}
@@ -2255,7 +2253,8 @@ function App() {
                 onMouseEnter={e=>{if(nav!==n.id&&!hasBadge){e.currentTarget.style.background='#f0fdfa';e.currentTarget.style.color='#0f766e';}}}
                 onMouseLeave={e=>{if(nav!==n.id&&!hasBadge){e.currentTarget.style.background='transparent';e.currentTarget.style.color='#374151';}}}
               >
-                <span style={{width:'36px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,position:'relative'}}>
+                {/* v0.7.15.1 — icon คงที่ 36px + ขยับขวา 10px ตอน collapsed ให้ center ตรงกับ logo ปอด */}
+                <span style={{width:'36px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,position:'relative',marginLeft:sidebarOpen?'0':'10px',transition:'margin-left 0.2s ease'}}>
                   <i className={`fa-solid ${n.icon}`} style={{fontSize:'17px',color:hasBadge?'#dc2626':'#0f766e'}}></i>
                   {n.redDot && <span className="tb-pulse-badge" style={{position:'absolute',top:'2px',right:'4px',width:'8px',height:'8px',background:'#ef4444',borderRadius:'50%',display:'block'}}/>}
                 </span>
@@ -2275,7 +2274,7 @@ function App() {
           <button onClick={()=>setShowProfile(true)} style={{width:'100%',display:'flex',alignItems:'center',padding:'8px',borderRadius:'10px',cursor:'pointer',transition:'background 0.15s',border:'none',background:'transparent',textAlign:'left'}}
             onMouseEnter={e=>e.currentTarget.style.background='#f0fdfa'}
             onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
-            <span style={{width:'36px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+            <span style={{width:'36px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginLeft:sidebarOpen?'0':'10px',transition:'margin-left 0.2s ease'}}>
               <div style={{width:'32px',height:'32px',borderRadius:'50%',background:'#0f766e',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:(currentUser?.avatar||'').length>3?'8px':'11px'}}>{currentUser?.avatar || '?'}</div>
             </span>
             <div style={{overflow:'hidden',maxWidth:sidebarOpen?'160px':'0px',opacity:sidebarOpen?1:0,transition:'max-width 0.2s ease,opacity 0.15s ease',whiteSpace:'nowrap'}}>
@@ -2321,15 +2320,15 @@ function App() {
 
       </aside>
 
-      {/* Floating chevron toggle — option 1 */}
+      {/* Floating chevron toggle — v0.7.15.1: ขอบเทลตลอด + hover เทลทั้งอัน + icon ขาว */}
       <button
         onClick={()=>setSidebarOpen(o=>!o)}
         title={sidebarOpen?'ซ่อนเมนู':'แสดงเมนู'}
-        style={{position:'absolute',right:'-12px',top:'32px',width:'24px',height:'24px',borderRadius:'50%',border:'1.5px solid #e5e7eb',background:'#fff',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',zIndex:20,color:'#0d9488',transition:'border-color 0.15s'}}
-        onMouseEnter={e=>e.currentTarget.style.borderColor='#0d9488'}
-        onMouseLeave={e=>e.currentTarget.style.borderColor='#e5e7eb'}
+        style={{position:'absolute',right:'-12px',top:'20px',width:'24px',height:'24px',borderRadius:'50%',border:'1.5px solid #0d9488',background:'#fff',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',zIndex:50,transition:'all 0.15s',boxShadow:'0 1px 3px rgba(0,0,0,0.08)'}}
+        onMouseEnter={e=>{ e.currentTarget.style.background='#0d9488'; const icon = e.currentTarget.querySelector('i'); if (icon) icon.style.color='#fff'; }}
+        onMouseLeave={e=>{ e.currentTarget.style.background='#fff'; const icon = e.currentTarget.querySelector('i'); if (icon) icon.style.color='#0d9488'; }}
       >
-        <i className={`fa-solid ${sidebarOpen?'fa-chevron-left':'fa-chevron-right'}`} style={{fontSize:'9px',color:'#0d9488'}}></i>
+        <i className={`fa-solid ${sidebarOpen?'fa-chevron-left':'fa-chevron-right'}`} style={{fontSize:'9px',color:'#0d9488',transition:'color 0.15s'}}></i>
       </button>
 
       </div>
@@ -2700,7 +2699,7 @@ function RequestEditModal({ field, currentValue, onClose }) {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.15.0';
+const APP_VERSION = '0.7.15.1';
 const BUILD_DATE = '31 พ.ค. 2569';
 function AboutModal({ onClose, onShowChangelog }) {
   const [closing, setClosing] = React.useState(false);
@@ -2839,7 +2838,9 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
   React.useEffect(() => {
     if (!window._sb) return;
     let pending = null;
-    const debounced = () => { clearTimeout(pending); pending = setTimeout(refreshAllComments, 300); };
+    // v0.7.15.1 — debounce 500ms (เดิม 300ms) → ลด API call ตอน batch updates ครึ่งหนึ่ง
+    // (เริ่มที่ 500ms ก่อน — Plan agent แนะนำ ถ้าไม่บ่นค่อยขยับ 600ms)
+    const debounced = () => { clearTimeout(pending); pending = setTimeout(refreshAllComments, 500); };
     const chC = window._sb.channel('changelog-comments-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tb_changelog_comments' }, debounced)
       .subscribe();
@@ -3619,7 +3620,7 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
                         <TagBreakdown changes={v.changes}/>
                       </div>
                       <p style={{fontSize:'14px',fontWeight:700,color:'#1f2937',margin:'0 0 8px'}}>{highlightMatch(v.title)}</p>
-                      {visibleChanges.map((c,i)=><ChangeRow key={i} change={c}/>)}
+                      {visibleChanges.map((c,i)=><ChangeRow key={`${i}-${c.tag}`} change={c}/>)}
                       {(() => {
                         const hasComments = commentCounts[v.version] > 0;
                         // มี comment → สีอำพัน / ไม่มี → สี teal
@@ -3732,7 +3733,7 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
                                       </div>
                                       {isOpen && (
                                         <div style={{padding:'4px 4px 4px 24px',borderLeft:`2px solid ${major.color}22`,marginLeft:'5px',marginTop:'2px'}}>
-                                          {visibleChanges.map((c,i)=><ChangeRow key={i} change={c}/>)}
+                                          {visibleChanges.map((c,i)=><ChangeRow key={`${i}-${c.tag}`} change={c}/>)}
                                           {v.commit && <div style={{margin:'8px 0 0'}}><CommitChip v={v} color={major.color} small/></div>}
                                           {(() => {
                                             const has = commentCounts[v.version] > 0;
@@ -3886,7 +3887,32 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
   const [currentUserId, setCurrentUserId] = React.useState(propsUserId || null);
   const [isAdmin, setIsAdmin]   = React.useState(!!propsIsAdmin);
   React.useEffect(() => {
-    if (initialComments) { setComments(initialComments); setLoading(false); }
+    if (initialComments) {
+      // v0.7.15.1 fix — merge optimistic _pending comments ที่ parent ยังไม่เห็น
+      // match ด้วย signature (user_id + comment_text + version + parent_comment_id)
+      // เพราะ id ของ optimistic = tmp-xxx ไม่ตรงกับ id จริงของ server
+      setComments(prev => {
+        // flatten incoming: parents + replies
+        const flatIncoming = [];
+        for (const c of initialComments) {
+          flatIncoming.push(c);
+          if (Array.isArray(c.replies)) flatIncoming.push(...c.replies);
+        }
+        const stillPending = prev.filter(c => {
+          if (!c._pending) return false;
+          // เก็บไว้ถ้า server ยังไม่มี comment ที่ match
+          const matched = flatIncoming.some(ic =>
+            ic.user_id === c.user_id &&
+            ic.comment_text === c.comment_text &&
+            ic.version === c.version &&
+            (ic.parent_comment_id || null) === (c.parent_comment_id || null)
+          );
+          return !matched;
+        });
+        return stillPending.length > 0 ? [...initialComments, ...stillPending] : initialComments;
+      });
+      setLoading(false);
+    }
     if (propsUserId !== undefined) setCurrentUserId(propsUserId);
     if (propsIsAdmin !== undefined) setIsAdmin(!!propsIsAdmin);
   }, [initialComments, propsUserId, propsIsAdmin]);
@@ -3968,9 +3994,11 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
     const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n;
   });
   // Tick state — บังคับ re-render ทุก 30s เพื่ออัป relative time ("4 นาทีที่แล้ว")
+  // v0.7.15.1 — tick 60s (เดิม 30s) → ลด re-render ครึ่งหนึ่ง
+  // relative time "4 นาทีที่แล้ว" → "5 นาที" — ไม่ละเอียดวินาที ยอมรับได้
   const [, setTick] = React.useState(0);
   React.useEffect(() => {
-    const id = setInterval(() => setTick(t => t + 1), 30000);
+    const id = setInterval(() => setTick(t => t + 1), 60000);
     return () => clearInterval(id);
   }, []);
 
