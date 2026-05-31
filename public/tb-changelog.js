@@ -25,8 +25,8 @@ window.TB_CHANGELOG = [
       {
         version: "0.7.15.1",
         date: "31 พ.ค. 2569",
-        commit: "pending",
-        commitFull: "pending",
+        commit: "34801af",
+        commitFull: "34801af2065c371f93977fb15513b0c5f9988ef1",
         title: "Phase 1B Optimize — เร่งความลื่นหน้าจอ ลดการคำนวณซ้ำในแดชบอร์ด + ปรับจังหวะเช็คคอมเม้นใหม่",
         changes: [
           { tag: "ui", text: "ChangelogCommentSection setInterval 30s → 60s — ลด re-render ครึ่งหนึ่ง (relative time 'X นาทีที่แล้ว' ไม่ละเอียดวินาที ยอมรับได้)" },
