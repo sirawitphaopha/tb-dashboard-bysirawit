@@ -2699,7 +2699,7 @@ function RequestEditModal({ field, currentValue, onClose }) {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.15.3';
+const APP_VERSION = '0.7.15.4';
 const BUILD_DATE = '1 มิ.ย. 2569';
 function AboutModal({ onClose, onShowChangelog }) {
   const [closing, setClosing] = React.useState(false);
@@ -2773,6 +2773,8 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
   const [commitDetailEntry, setCommitDetailEntry] = useState(null); // {entry, color}
   const [localToast, setLocalToast] = useState(null); // {text, type}
   const [expandedComments, setExpandedComments] = useState(new Set()); // version ที่เปิด comments ใน Timeline view
+  // v0.7.15.4 — track version ที่เคยเปิด (keep mounted) → เปิด/ปิดครั้งถัดไป instant
+  const [everOpenedVersions, setEverOpenedVersions] = useState(new Set());
   const [commentCounts, setCommentCounts] = useState({}); // {version: active count รวม reply}
   const [commentDeletedCounts, setCommentDeletedCounts] = useState({}); // {version: deleted count รวม reply}
   const [onlyWithComments, setOnlyWithComments] = useState(false); // filter: เฉพาะมี comment
@@ -2829,6 +2831,12 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
           withComments.forEach(v => next.add(v));
           return next;
         });
+        // v0.7.15.4 — auto-expand version → mark เป็น ever-opened ด้วย
+        setEverOpenedVersions(prev => {
+          const next = new Set(prev);
+          withComments.forEach(v => next.add(v));
+          return next;
+        });
       }
     } catch {/* network fail */}
   }, []);
@@ -2858,6 +2866,7 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
     if (!version || !commentId) return;
     setView('timeline');
     setExpandedComments(prev => { const n = new Set(prev); n.add(version); return n; });
+    setEverOpenedVersions(prev => { const n = new Set(prev); n.add(version); return n; });
     let tries = 0;
     const interval = setInterval(() => {
       tries += 1;
@@ -2884,6 +2893,11 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
       const next = new Set(prev);
       if (next.has(version)) next.delete(version); else next.add(version);
       return next;
+    });
+    // v0.7.15.4 — mark ว่า version นี้เคยเปิด → keep CommentSection mounted ตลอด
+    setEverOpenedVersions(prev => {
+      if (prev.has(version)) return prev;
+      const n = new Set(prev); n.add(version); return n;
     });
   };
   const setCommentCount = React.useCallback((version, n) => {
@@ -3651,15 +3665,18 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
                           </button>
                         );
                       })()}
-                      {isOpen && (
-                        <ChangelogCommentSection key={'cmt-'+v.version} version={v.version}
-                          theme={commentCounts[v.version] > 0 ? 'amber' : 'teal'}
-                          initialComments={allCommentsByVersion[v.version] || []}
-                          currentUserId={commentsMeta.currentUserId}
-                          isAdmin={commentsMeta.isAdmin}
-                          onRefresh={refreshAllComments}
-                          onCountChange={n=>setCommentCount(v.version, n)}
-                          pageFilter={{ hasFilter: hasCommentFilter, matches: commentMatchesAxes }}/>
+                      {/* v0.7.15.4 — keep mounted ตลอดหลังเปิดครั้งแรก → ปิด/เปิดครั้งถัดไป instant */}
+                      {everOpenedVersions.has(v.version) && (
+                        <div style={{display: isOpen ? 'block' : 'none'}}>
+                          <ChangelogCommentSection key={'cmt-'+v.version} version={v.version}
+                            theme={commentCounts[v.version] > 0 ? 'amber' : 'teal'}
+                            initialComments={allCommentsByVersion[v.version] || []}
+                            currentUserId={commentsMeta.currentUserId}
+                            isAdmin={commentsMeta.isAdmin}
+                            onRefresh={refreshAllComments}
+                            onCountChange={n=>setCommentCount(v.version, n)}
+                            pageFilter={{ hasFilter: hasCommentFilter, matches: commentMatchesAxes }}/>
+                        </div>
                       )}
                     </div>
                   </div>

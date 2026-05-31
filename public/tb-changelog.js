@@ -23,6 +23,19 @@ window.TB_CHANGELOG = [
     description: "ระบบ login จริง + Audit Log ครบวงจร + Admin Approval + ดีไซน์ใหม่ทั้งหมด",
     versions: [
       {
+        version: "0.7.15.4",
+        date: "1 มิ.ย. 2569",
+        commit: "pending",
+        commitFull: "pending",
+        title: "Phase 2 Step 3 — Keep mounted CommentSection (เปิดปิดคอมเม้น instant ครั้งถัดไป)",
+        changes: [
+          { tag: "ui", text: "ChangelogCommentSection ใช้ Keep mounted pattern — เปิดครั้งแรก mount, ปิดเป็น display:none, เปิดอีกครั้งกลับเป็น display:block · เปิดปิดครั้งถัดไป instant 0ms (เดิม mount/unmount ทุกครั้ง = render delay 50-200ms)" },
+          { tag: "ui", text: "เพิ่ม state everOpenedVersions (Set) ใน ChangelogPage — track version ที่เคยเปิด · sync ทั้งใน toggleComments + auto-expand (version ที่มี comment) + highlight comment (จากกระดิ่ง)" },
+          { tag: "backend", text: "Memory trade-off: 10 versions เปิดแล้ว = 10 CommentSection mounted ตลอด (acceptable เพราะ Realtime channels อยู่ที่ ChangelogPage parent ไม่ใช่ CommentSection)" },
+        ],
+        body: "🎯 เป้าหมาย\n— user รู้สึก instant ตอนเปิดปิดคอมเม้น (เด้งปุ๊บปั๊บ)\n\n📊 Before/After\n- เปิดครั้งแรก: 50-200ms render (เหมือนเดิม — first mount cost)\n- ปิด → เปิดอีก: 50-200ms → **0ms** (display toggle)\n- ปิด: 50ms unmount → **0ms** (display:none)\n\n📝 Lesson\n- Keep mounted pattern = simple + effective สำหรับ component ที่ user open/close ซ้ำ\n- display:none = browser skip paint/layout (เกือบเทียบเท่า unmount)\n- React.memo + useState ของ child component อยู่ครบ → reopen เห็น state เดิม (เช่น filter, draft text)\n- Memory trade-off acceptable เพราะ user ปกติเปิดไม่กี่ versions พร้อมกัน",
+      },
+      {
         version: "0.7.15.3",
         date: "1 มิ.ย. 2569",
         commit: "468134b",
