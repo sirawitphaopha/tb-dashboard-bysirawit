@@ -96,6 +96,47 @@
     /* Mention filter dropdown row — CSS hover (เร็วกว่า React state) — v0.7.14.7 */
     .tb-mention-filter-row:hover { background-color: #ccfbf1 !important; }
     .tb-mention-filter-row.is-admin:hover { background-color: #fcd34d !important; }
+    /* v0.7.15.5 — Comment card static styles → CSS class (ลด React inline allocation) */
+    .cm-card {
+      border-radius: 8px;
+      padding: 10px 12px;
+      min-width: 0;
+      transition: all 0.2s;
+    }
+    .cm-card-reply {
+      border-radius: 6px;
+      padding: 8px 10px;
+      transition: all 0.2s;
+    }
+    .cm-card-meta-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+      flex-wrap: wrap;
+    }
+    .cm-card-text {
+      font-size: 18px;
+      color: #0f766e;
+      font-weight: 600;
+      margin: 6px 0 0;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      letter-spacing: -0.2px;
+    }
+    .cm-card-text-reply {
+      font-size: 16px;
+      color: #0f766e;
+      font-weight: 600;
+      margin: 4px 0 0;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      letter-spacing: -0.2px;
+    }
     .tb-dash-card {
       transition: transform 0.22s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.22s cubic-bezier(0.34,1.56,0.64,1), border-color 0.15s ease;
     }
@@ -118,9 +159,9 @@
 </head>
 <body class="bg-slate-100 overflow-hidden">
   <div id="root"></div>
-  <script src="tb-data.js?v=87"></script>
-  <script src="tb-changelog.js?v=87"></script>
-  <script type="text/babel" src="tb-modals.jsx?v=87"></script>
-  <script type="text/babel" src="tb-app.jsx?v=87"></script>
+  <script src="tb-data.js?v=88"></script>
+  <script src="tb-changelog.js?v=88"></script>
+  <script type="text/babel" src="tb-modals.jsx?v=88"></script>
+  <script type="text/babel" src="tb-app.jsx?v=88"></script>
 </body>
 </html>

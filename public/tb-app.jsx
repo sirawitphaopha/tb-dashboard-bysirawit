@@ -2699,7 +2699,7 @@ function RequestEditModal({ field, currentValue, onClose }) {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.15.4';
+const APP_VERSION = '0.7.15.5';
 const BUILD_DATE = '1 มิ.ย. 2569';
 function AboutModal({ onClose, onShowChangelog }) {
   const [closing, setClosing] = React.useState(false);
@@ -4556,7 +4556,7 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
                       : c.status === 'feedback'   ? { icon: 'fa-thumbs-up', text: 'รับทราบ' }
                                                   : { icon: 'fa-bookmark', text: 'รับทราบ' };
             return (
-              <div key={c.id} id={'cmt-'+c.id} style={{background:(pageFilter?.hasFilter && pageFilter.matches(c))?'#fef3c7':'#fff',border:'1.5px solid '+((pageFilter?.hasFilter && pageFilter.matches(c))?'#fbbf24':T.cardBorder),borderLeft:`3px solid ${meta.fg}`,borderRadius:'8px',padding:'10px 12px',minWidth:0,opacity:isDeleted?0.85:(c._pending?0.7:1),transition:'all 0.2s'}}>
+              <div key={c.id} id={'cmt-'+c.id} className="cm-card" style={{background:(pageFilter?.hasFilter && pageFilter.matches(c))?'#fef3c7':'#fff',border:'1.5px solid '+((pageFilter?.hasFilter && pageFilter.matches(c))?'#fbbf24':T.cardBorder),borderLeft:`3px solid ${meta.fg}`,opacity:isDeleted?0.85:(c._pending?0.7:1)}}>
                 <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'6px',flexWrap:'wrap'}}>
                   <div style={{minWidth:'34px',height:'26px',padding:'0 8px',borderRadius:'999px',background:meta.bg,color:meta.fg,border:`1px solid ${meta.border}`,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:800,fontSize:'11px',flexShrink:0,lineHeight:1}}>
                     {c.profession_label || initials(c.display_name)}
@@ -4637,7 +4637,7 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
                   </div>
                 )}
                 {!editing && !isDeleted && (
-                  <p style={{fontSize:'18px',color:'#0f766e',fontWeight:600,margin:'6px 0 0',lineHeight:1.55,whiteSpace:'pre-wrap',wordBreak:'break-word',overflowWrap:'anywhere',letterSpacing:'-0.2px'}}>{renderCommentText(c.comment_text)}</p>
+                  <p className="cm-card-text">{renderCommentText(c.comment_text)}</p>
                 )}
 
                 {editing && (
@@ -4746,7 +4746,7 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
                       const rIsDeleted = !!r.deleted_at;
                       const rRevealed = isAdmin && revealDeletedIds.has(r.id);
                       return (
-                        <div key={r.id} id={'cmt-'+r.id} style={{background:(pageFilter?.hasFilter && pageFilter.matches(r))?'#fef3c7':'#fff',border:'1px solid '+((pageFilter?.hasFilter && pageFilter.matches(r))?'#fbbf24':T.cardBorder),borderLeft:`2px solid ${rmeta.fg}`,borderRadius:'6px',padding:'8px 10px',opacity:rIsDeleted?0.75:(r._pending?0.7:1),transition:'all 0.2s'}}>
+                        <div key={r.id} id={'cmt-'+r.id} className="cm-card-reply" style={{background:(pageFilter?.hasFilter && pageFilter.matches(r))?'#fef3c7':'#fff',border:'1px solid '+((pageFilter?.hasFilter && pageFilter.matches(r))?'#fbbf24':T.cardBorder),borderLeft:`2px solid ${rmeta.fg}`,opacity:rIsDeleted?0.75:(r._pending?0.7:1)}}>
                           <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'4px',flexWrap:'wrap'}}>
                             <div style={{minWidth:'30px',height:'22px',padding:'0 6px',borderRadius:'999px',background:rmeta.bg,color:rmeta.fg,border:`1px solid ${rmeta.border}`,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:800,fontSize:'10px',flexShrink:0,lineHeight:1}}>{r.profession_label || initials(r.display_name)}</div>
                             <span style={{fontWeight:700,fontSize:'11.5px',color:'#1f2937'}}>{r.display_name}</span>
@@ -4788,7 +4788,7 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
                               <button type="button" onClick={()=>toggleRevealDeleted(r.id)} style={{marginTop:'3px',cursor:'pointer',border:'none',background:'transparent',color:'#9ca3af',fontSize:'9px',padding:'1px 3px',fontWeight:600}}><i className="fa-regular fa-eye-slash" style={{marginRight:'2px'}}></i>ซ่อน</button>
                             </div>
                           ) : (
-                            <p style={{fontSize:'16px',color:'#0f766e',fontWeight:600,margin:'4px 0 0',lineHeight:1.5,whiteSpace:'pre-wrap',wordBreak:'break-word',overflowWrap:'anywhere',letterSpacing:'-0.2px'}}>{renderCommentText(r.comment_text)}</p>
+                            <p className="cm-card-text-reply">{renderCommentText(r.comment_text)}</p>
                           )}
                         </div>
                       );
