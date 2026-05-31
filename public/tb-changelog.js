@@ -23,6 +23,21 @@ window.TB_CHANGELOG = [
     description: "ระบบ login จริง + Audit Log ครบวงจร + Admin Approval + ดีไซน์ใหม่ทั้งหมด",
     versions: [
       {
+        version: "0.7.14.6.1",
+        date: "31 พ.ค. 2569",
+        commit: "pending",
+        commitFull: "pending",
+        title: "Hotfix v0.7.14.6 — Admin ได้กระดิ่งแล้ว (root cause: frontend condition guard เก่า)",
+        changes: [
+          { tag: "bug", text: "Admin ไม่ได้กระดิ่งเมื่อถูก tag/reply/resolved — root cause: ใน tb-app.jsx มี 2 condition guard เก่าที่กัน admin ออกจาก loadUserNotifications + Realtime subscription ของ tb_notifications (เพราะตอนแรก admin มีแค่ admin alerts ไม่มี notification ที่ admin ได้รับ)" },
+          { tag: "bug", text: "Fix: ย้าย loadUserNotifications() ออกจาก else branch ของ initial load → เรียกทุก role (admin + user)" },
+          { tag: "bug", text: "Fix: ลบ currentUser.role === 'admin' ออกจาก Realtime subscription condition ของ tb_notifications channel" },
+          { tag: "backend", text: "เพิ่ม success log ใน insertCommentNotif (✓ SUCCESS / ❌ INSERT FAILED) — debug ได้ชัด" },
+          { tag: "backend", text: "ใน notifyAdminsOfNewComment ลบ filter status='approved' ออก + log จำนวน admin ที่พบ + admin id/email — debug แต่ละ admin ถูก skip/sent ทีละคน" },
+        ],
+        body: "🎯 ที่เจอ\nuser อื่น tag @admin → admin ไม่เห็นกระดิ่งใน Browser แต่ DB มี row tb_notifications + email ส่งถึง (= backend สำเร็จ frontend ไม่ดึง)\n\n🔍 Debug Process\n1. เพิ่ม console.error ใน notifyAdminsOfNewComment + insertCommentNotif\n2. ตรวจ Supabase ผ่าน execute_sql → พบ notification 5 รายการของ admin user_id type='comment_mention' is_read=false → backend OK\n3. ตรวจ RLS ของ tb_notifications → SELECT USING (user_id = auth.uid()) → ปกติ admin ดู notif ตัวเองได้\n4. ตรวจ frontend → เจอ guard 2 ที่ที่กัน admin ออก\n\n🛠 Root Cause\nเดิม admin มี notification path แยก (delete-requests, edit-requests, profiles status='pending') → ไม่ใช้ tb_notifications → ตั้ง guard เพื่อ save resource\nพอ v0.7.14.5 เพิ่ม comment_reply / mention / resolved / comment_new ที่ admin ได้รับ → guard เก่าค้าง → admin ไม่รับ realtime\n\n📁 ไฟล์ที่แตะ\n- public/tb-app.jsx — แก้ 2 จุด (initial load + Realtime subscription)\n- lib/changelog-comment-helpers.ts — เพิ่ม success log ใน insertCommentNotif + ลบ status filter ใน notifyAdminsOfNewComment + log details\n- public/app.html — cache buster v=77 → v=78\n- app/login/page.tsx — Version 0.7.14.6 → 0.7.14.6.1\n- public/tb-changelog.js — entry v0.7.14.6.1\n\n📝 Lesson\nเพิ่มฟีเจอร์ที่ใช้ตาราง notification → ต้องเช็คทุก condition guard ที่กรอง role/type ใน initial load + Realtime subscription\nSupabase MCP execute_sql ดีมากใน debug — แยก backend vs frontend issue ได้เร็ว",
+      },
+      {
         version: "0.7.14.6",
         date: "31 พ.ค. 2569",
         commit: "c58a09c",

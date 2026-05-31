@@ -1792,10 +1792,11 @@ function App() {
       window.loadMyPendingDeleteRequests(currentUser.id)
         .then(reqs => setPendingDeleteRequests(reqs))
         .catch(() => {});
-      window.loadUserNotifications()
-        .then(notifs => setUserDbNotifs(notifs))
-        .catch(() => {});
     }
+    // v0.7.14.x — โหลด user notifications ของตัวเอง (รวม admin — admin ถูก tag/reply ได้)
+    window.loadUserNotifications()
+      .then(notifs => setUserDbNotifs(notifs))
+      .catch(() => {});
   }, [currentUser]);
 
   // Realtime: ฟังการเปลี่ยนแปลงของ tb_delete_requests (สำหรับ admin)
@@ -1830,9 +1831,9 @@ function App() {
     return () => { window._sb.removeChannel(channel); };
   }, [currentUser]);
 
-  // Realtime: ฟัง bell notification ของ user (สำหรับ user ทั่วไป)
+  // Realtime: ฟัง bell notification ของ user (รวม admin — admin ก็ถูก tag/reply ได้)
   useEffect(() => {
-    if (!currentUser?.id || currentUser.role === 'admin') return;
+    if (!currentUser?.id) return;
     const channel = window._sb
       .channel('user-notifications-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tb_notifications', filter: `user_id=eq.${currentUser.id}` }, async () => {
@@ -2667,7 +2668,7 @@ function RequestEditModal({ field, currentValue, onClose }) {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.14.6';
+const APP_VERSION = '0.7.14.6.1';
 const BUILD_DATE = '31 พ.ค. 2569';
 function AboutModal({ onClose, onShowChangelog }) {
   const [closing, setClosing] = React.useState(false);

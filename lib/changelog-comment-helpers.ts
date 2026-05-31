@@ -118,21 +118,29 @@ export async function notifyAdminsOfNewComment(
     actorName: string
     commentVersion: string
     commentId: string
-    excludeUserIds?: string[]   // admin ที่ได้ notif เฉพาะ (reply/mention) แล้ว ไม่ต้องส่งซ้ำ
+    excludeUserIds?: string[]
   }
 ): Promise<void> {
+  console.error('[notifyAdminsOfNewComment] ─── START ─── actor:', params.actorUserId, 'comment:', params.commentId)
   try {
-    const { data: admins } = await admin
+    // ดึง admin ทั้งหมด (ไม่ filter status — กรณีพี่กันหรือ admin อื่น status อาจไม่ใช่ 'approved')
+    const { data: admins, error: queryErr } = await admin
       .from('profiles')
-      .select('id')
+      .select('id, email, status, role')
       .eq('role', 'admin')
-      .eq('status', 'approved')
-    if (!admins) return
+    console.error('[notifyAdminsOfNewComment] query admins:', { count: admins?.length || 0, error: queryErr?.message, admins })
+    if (queryErr || !admins) return
     const exclude = new Set([params.actorUserId, ...(params.excludeUserIds || [])])
+    let sent = 0
+    let skipped = 0
     for (const a of admins) {
-      if (exclude.has(a.id)) continue
+      if (exclude.has(a.id)) {
+        console.error('[notifyAdminsOfNewComment] skip admin (excluded):', a.id, a.email)
+        skipped += 1
+        continue
+      }
       try {
-        const { error } = await admin.from('tb_notifications').insert({
+        const { error: insErr } = await admin.from('tb_notifications').insert({
           user_id: a.id,
           type: 'comment_new',
           note: params.actorName,
@@ -140,11 +148,17 @@ export async function notifyAdminsOfNewComment(
           comment_id: params.commentId,
           is_read: false,
         })
-        if (error) console.error('[notifyAdminsOfNewComment] insert failed:', error.message, 'admin:', a.id)
+        if (insErr) {
+          console.error('[notifyAdminsOfNewComment] INSERT FAILED:', insErr.message, 'for admin:', a.id, a.email)
+        } else {
+          console.error('[notifyAdminsOfNewComment] sent ✓ to admin:', a.id, a.email)
+          sent += 1
+        }
       } catch (e: any) {
-        console.error('[notifyAdminsOfNewComment] exception:', e?.message || e)
+        console.error('[notifyAdminsOfNewComment] exception for admin:', a.id, e?.message || e)
       }
     }
+    console.error('[notifyAdminsOfNewComment] ─── END ─── sent:', sent, 'skipped:', skipped, 'total admins:', admins.length)
   } catch (e: any) {
     console.error('[notifyAdminsOfNewComment] query failed:', e?.message || e)
   }
@@ -162,8 +176,12 @@ export async function insertCommentNotif(
     commentId: string
   }
 ): Promise<void> {
-  if (params.userId === params.actorUserId) return  // skip self
+  if (params.userId === params.actorUserId) {
+    console.error('[insertCommentNotif] SKIP SELF — user:', params.userId, 'type:', params.type)
+    return
+  }
   try {
+    console.error('[insertCommentNotif] inserting → user:', params.userId, 'type:', params.type, 'version:', params.commentVersion)
     const { error } = await admin.from('tb_notifications').insert({
       user_id: params.userId,
       type: params.type,
@@ -172,7 +190,11 @@ export async function insertCommentNotif(
       comment_id: params.commentId,
       is_read: false,
     })
-    if (error) console.error('[insertCommentNotif] insert failed:', error.message, 'params:', params)
+    if (error) {
+      console.error('[insertCommentNotif] ❌ INSERT FAILED:', error.message, 'params:', params)
+    } else {
+      console.error('[insertCommentNotif] ✓ SUCCESS → user:', params.userId, 'type:', params.type)
+    }
   } catch (e: any) {
     console.error('[insertCommentNotif] exception:', e?.message || e, 'params:', params)
   }
