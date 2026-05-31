@@ -1,9 +1,10 @@
 // GET — นับจำนวน comment (ที่ไม่ถูก soft delete) ต่อ version
 // counts: นับทุก comment รวม reply (ตาม decision v0.7.14.5)
 // unresolved_counts: นับเฉพาะ bug/request ที่ยังไม่ปิด (สำหรับ filter chip)
+//
+// v0.7.15.0 — ใช้ server client + RLS (tb_changelog_comments มี SELECT USING (true) ครอบคลุม)
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
-import { createAdminClient } from '@/lib/supabase-admin'
 
 export async function GET(req: NextRequest) {
   try {
@@ -16,8 +17,8 @@ export async function GET(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
-    const admin = createAdminClient()
-    const { data, error } = await admin
+    // ใช้ supabase (server client) — RLS ตาราง tb_changelog_comments ครอบคลุม
+    const { data, error } = await supabase
       .from('tb_changelog_comments')
       .select('version, status, resolved_at')
       .is('deleted_at', null)

@@ -52,38 +52,35 @@ export async function POST(req: NextRequest) {
       })
     if (insertErr) return NextResponse.json({ error: insertErr.message }, { status: 500 })
 
-    // ส่งเมลแจ้ง admin
+    // v0.7.15.0 — fire-and-forget 2 emails (admin + user confirmation) → response ทันที
     try {
-      const mail = adminEditRequestEmail(
+      const adminMail = adminEditRequestEmail(
         userName, field_label,
         old_value || '', new_value,
         reason || '',
         req.nextUrl.origin
       )
-      await getResend().emails.send({
+      getResend().emails.send({
         from: EMAIL_FROM,
         to: ADMIN_EMAILS,
-        subject: mail.subject,
-        html: mail.html,
-      })
-    } catch (e) { console.error('request-edit email failed:', e) }
+        subject: adminMail.subject,
+        html: adminMail.html,
+      }).catch(e => console.error('request-edit admin email failed:', e))
 
-    // ส่งเมลยืนยันกลับให้ user (เก็บไว้เป็นหลักฐานว่าขอแก้อะไรไป)
-    try {
       if (user.email) {
         const firstName = profile?.first_name || 'ผู้ใช้'
-        const mail = userEditRequestReceivedEmail(
+        const userMail = userEditRequestReceivedEmail(
           firstName, field_label,
           old_value || '', new_value, reason || ''
         )
-        await getResend().emails.send({
+        getResend().emails.send({
           from: EMAIL_FROM,
           to: user.email,
-          subject: mail.subject,
-          html: mail.html,
-        })
+          subject: userMail.subject,
+          html: userMail.html,
+        }).catch(e => console.error('request-edit user confirm email failed:', e))
       }
-    } catch (e) { console.error('request-edit user confirm email failed:', e) }
+    } catch (e) { console.error('request-edit email prep failed:', e) }
 
     return NextResponse.json({ success: true })
   } catch (e: any) {

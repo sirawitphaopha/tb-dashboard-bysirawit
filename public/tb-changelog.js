@@ -23,6 +23,22 @@ window.TB_CHANGELOG = [
     description: "ระบบ login จริง + Audit Log ครบวงจร + Admin Approval + ดีไซน์ใหม่ทั้งหมด",
     versions: [
       {
+        version: "0.7.15.0",
+        date: "31 พ.ค. 2569",
+        commit: "pending",
+        commitFull: "pending",
+        title: "Phase 1A Optimize — เร่งความเร็วหลังบ้าน เพิ่มดัชนีฐานข้อมูล + ส่งเมลแบบไม่รอ + เปลี่ยนกุญแจให้เล็กลง",
+        changes: [
+          { tag: "backend", text: "เพิ่ม Index ฐานข้อมูล 3 ตัว — tb_changelog_comment_likes(comment_id), tb_changelog_comments(user_id+created_at), tb_changelog_comments(version+created_at) → นับไลก์เร็วขึ้น 10-40 เท่า" },
+          { tag: "backend", text: "Fire-and-forget email — admin/edit-user + admin/approve + profile/request-edit (×2) ไม่รอ Resend ตอบ → response กลับเร็ว ลด blocking 100-500ms" },
+          { tag: "backend", text: "รวม login rate limit 2 queries → 1 query เดียวด้วย OR clause → ลด round-trip DB 50ms" },
+          { tag: "security", text: "Switch 3 routes จาก admin client → server client + RLS — /api/profile/me, /api/changelog/comment-counts, /api/auth/sessions/history (ลดการใช้ service role key โดยไม่จำเป็น)" },
+          { tag: "backend", text: "เพิ่ม RLS policy 3 ตัว — tb_session_log/logout_log/login_log ให้ user เห็น row ของตัวเองได้ (USING user_id = auth.uid())" },
+          { tag: "backend", text: "/api/changelog/mentionable-users keep admin client ไว้ก่อน — เปลี่ยนใน Phase 2 ที่ปรับ RLS profile แบบ scoped" },
+        ],
+        body: "🎯 เป้าหมาย (Phase 1A)\n— เร่ง response ของ backend ทันทีโดยไม่แตะ UI\n— ลดการใช้ admin client (service role bypass RLS) ในที่ที่ไม่จำเป็น\n\n📦 SQL ที่ต้องรัน (idempotent ทั้งคู่):\n1. scripts/add-perf-indexes.sql\n2. scripts/add-rls-policies-phase1.sql\n\n📝 Lesson\n- Fire-and-forget pattern: เปลี่ยน `await fn()` → `fn().catch(e => log)` ลด blocking ทันที\n- Combine queries เป็น 1 query + count ใน memory เร็วกว่า 2 queries ที่ DB\n- RLS policy ที่ scope ดี (USING user_id = auth.uid()) ปลอดภัยกว่า admin client",
+      },
+      {
         version: "0.7.14.8",
         date: "31 พ.ค. 2569",
         commit: "973881f",

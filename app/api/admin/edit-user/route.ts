@@ -129,14 +129,15 @@ export async function POST(req: NextRequest) {
         })
         const firstName = (current as any).first_name || 'ผู้ใช้'
         const mail = userProfileEditedEmail(firstName, changeList)
-        await getResend().emails.send({
+        // v0.7.15.0 — fire-and-forget: ไม่รอ Resend ตอบ → response กลับเร็ว
+        getResend().emails.send({
           from: EMAIL_FROM,
           to: userEmail,
           subject: mail.subject,
           html: mail.html,
-        })
+        }).catch(e => console.error('edit user email failed:', e))
       }
-    } catch (e) { console.error('edit user email failed:', e) }
+    } catch (e) { console.error('edit user email prep failed:', e) }
 
     return NextResponse.json({ success: true, changed: true })
   } catch (e: any) {

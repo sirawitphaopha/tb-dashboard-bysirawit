@@ -90,14 +90,13 @@ export async function POST(req: NextRequest) {
 
     if (userEmail && target) {
       const mail = userApprovedEmail(target.first_name || 'ผู้ใช้', req.nextUrl.origin)
-      try {
-        await getResend().emails.send({
-          from: EMAIL_FROM,
-          to: userEmail,
-          subject: mail.subject,
-          html: mail.html,
-        })
-      } catch (e) { console.error('approve email failed:', e) }
+      // v0.7.15.0 — fire-and-forget: admin กดอนุมัติ → response ทันที ไม่รอ Resend
+      getResend().emails.send({
+        from: EMAIL_FROM,
+        to: userEmail,
+        subject: mail.subject,
+        html: mail.html,
+      }).catch(e => console.error('approve email failed:', e))
     }
 
     return NextResponse.json({ success: true })

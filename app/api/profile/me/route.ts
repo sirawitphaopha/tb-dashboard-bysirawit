@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
-import { createAdminClient } from '@/lib/supabase-admin'
 
+// v0.7.15.0 — ใช้ server client + RLS แทน admin client (เร็วกว่า + ปลอดภัยกว่า)
+// RLS policy "profiles_select_own_or_admin" (id = auth.uid() OR is_admin()) ครอบคลุมแล้ว
 export async function GET(req: NextRequest) {
   try {
     const supabase = createServerClient(
@@ -17,8 +18,8 @@ export async function GET(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
-    const admin = createAdminClient()
-    const { data: profile } = await admin
+    // ใช้ supabase (server client) แทน admin — RLS จัดการ scope ให้
+    const { data: profile } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', user.id)
