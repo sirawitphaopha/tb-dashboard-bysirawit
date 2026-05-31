@@ -25,8 +25,8 @@ window.TB_CHANGELOG = [
       {
         version: "0.7.14.8",
         date: "31 พ.ค. 2569",
-        commit: "pending",
-        commitFull: "pending",
+        commit: "973881f",
+        commitFull: "973881ff0f6c5ee75311cc309cf55bdfff36525c",
         title: "Tier C — Draft auto-save + Auto-detect URL → clickable + ปุ่ม 📎 แนบรูป (placeholder)",
         changes: [
           { tag: "feature", text: "Draft auto-save — เก็บใน localStorage ทุก 1.5s หลังหยุดพิม · key แยกตาม context (tb_draft_${version}, tb_draft_reply_${parentId}, tb_draft_edit_${commentId}) · เปิดเว็บใหม่/รีโหลด → text ค้างอยู่ ไม่หาย" },
