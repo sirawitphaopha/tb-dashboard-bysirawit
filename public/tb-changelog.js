@@ -25,8 +25,8 @@ window.TB_CHANGELOG = [
       {
         version: "0.7.14.6",
         date: "31 พ.ค. 2569",
-        commit: "pending",
-        commitFull: "pending",
+        commit: "c58a09c",
+        commitFull: "c58a09cb6e1a8a41eeef9298d7ec84a18880bbff",
         title: "Hotfix v0.7.14.5 — Admin bell ทุก comment + Keyboard nav + Enter ส่ง + Resolve admin-only",
         changes: [
           { tag: "feature", text: "Admin ได้กระดิ่งทุก comment ของผู้ใช้คนอื่น — type='comment_new' (skip ที่จะได้ notif เฉพาะแล้ว เช่น reply/mention/resolved กันส่งซ้ำ)" },
