@@ -25,8 +25,8 @@ window.TB_CHANGELOG = [
       {
         version: "0.7.15.0",
         date: "31 พ.ค. 2569",
-        commit: "pending",
-        commitFull: "pending",
+        commit: "e512462",
+        commitFull: "e5124623e1b26e870ecee32765ae1b483f739763",
         title: "Phase 1A Optimize — เร่งความเร็วหลังบ้าน เพิ่มดัชนีฐานข้อมูล + ส่งเมลแบบไม่รอ + เปลี่ยนกุญแจให้เล็กลง",
         changes: [
           { tag: "backend", text: "เพิ่ม Index ฐานข้อมูล 3 ตัว — tb_changelog_comment_likes(comment_id), tb_changelog_comments(user_id+created_at), tb_changelog_comments(version+created_at) → นับไลก์เร็วขึ้น 10-40 เท่า" },
