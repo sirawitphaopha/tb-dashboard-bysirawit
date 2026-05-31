@@ -25,8 +25,8 @@ window.TB_CHANGELOG = [
       {
         version: "0.7.15.2",
         date: "1 มิ.ย. 2569",
-        commit: "pending",
-        commitFull: "pending",
+        commit: "c19894d",
+        commitFull: "c19894da6f5e468928a297147f33d318cdb610d2",
         title: "Phase 2 Optimize Step 1 — Materialized View บันทึกกิจกรรม + KPI border + Virtual scroll",
         changes: [
           { tag: "backend", text: "เปลี่ยน view tb_activity_log → materialized view mv_activity_log — pre-compute UNION 5 ตาราง + regex device_type ครั้งเดียว · query 800-1500ms → 50-100ms" },
