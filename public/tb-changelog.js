@@ -23,6 +23,21 @@ window.TB_CHANGELOG = [
     description: "ระบบ login จริง + Audit Log ครบวงจร + Admin Approval + ดีไซน์ใหม่ทั้งหมด",
     versions: [
       {
+        version: "0.7.16.0",
+        date: "1 มิ.ย. 2569",
+        commit: "pending",
+        commitFull: "pending",
+        title: "Phase 3 Step 1 — Pre-compile JSX (ลบ Babel 2.1 MB จาก prod) ลด first load ~30%",
+        changes: [
+          { tag: "feature", text: "Pre-compile JSX → JS ผ่าน esbuild · tb-app.jsx → tb-app.compiled.js (467 KB) · tb-modals.jsx → tb-modals.compiled.js (420 KB) · build time 30ms" },
+          { tag: "feature", text: "npm script ใหม่: 'build:jsx' + 'prebuild' → Cloudflare Pages build → auto compile JSX ก่อน next build" },
+          { tag: "feature", text: "app.html smart load — dev (localhost) ใช้ tb-*.jsx + Babel CDN, prod (Cloudflare) ใช้ tb-*.compiled.js + ไม่โหลด Babel" },
+          { tag: "feature", text: "Cache buster v=88 → v=89 + ลบ Babel CDN ใน prod (ลด 2.1 MB จาก first load)" },
+          { tag: "backend", text: "esbuild devDependency ใหม่ + .gitignore: public/tb-*.compiled.js (auto-generated, ไม่ commit)" },
+        ],
+        body: "🎯 Phase 3 Step 1 — Big Rewrite ตัวเล็ก (Pre-compile without iframe migration)\n— ลด Babel standalone 2.1 MB จาก first load (เฉพาะ prod)\n— ลด JSX compile time ใน browser 2-4s\n— Dev mode (localhost) ยังคงใช้ Babel runtime → hot reload ทันที (ไม่ต้อง rebuild)\n— Cloudflare Pages build run prebuild script อัตโนมัติ → compile JSX → deploy\n\n📊 Estimate (prod TTI)\n- Before: 8-10s (4G mobile)\n- After: ~5-7s (-30% — ลด Babel CDN + compile time)\n— จริงจังในการลด TTI ต้อง Phase 3 Step 2+ (ออก iframe → Next.js bundler)\n\n📝 Lesson\n- Pre-compile JSX via esbuild = lightweight alternative to full iframe migration\n- document.write() ใช้สำหรับ conditional script loading (deprecated แต่ work)\n- npm prebuild script = auto-run ก่อน build → integrate กับ Cloudflare Pages\n- Keep dev mode เดิม (Babel runtime + hot reload) — ไม่กระทบ workflow",
+      },
+      {
         version: "0.7.15.5",
         date: "1 มิ.ย. 2569",
         commit: "4da584c",

@@ -11,7 +11,13 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
-  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <!-- v0.7.16.0 Phase 3 Step 1 — load Babel runtime เฉพาะ dev (localhost) → prod ใช้ pre-compiled JS แทน ลด 2.1 MB -->
+  <script>
+    window.__tbIsDev = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+    if (window.__tbIsDev) {
+      document.write('<scr' + 'ipt src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"><\/scr' + 'ipt>');
+    }
+  </script>
   <style>
     body { font-family: 'Sarabun', sans-serif; }
     ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -159,9 +165,17 @@
 </head>
 <body class="bg-slate-100 overflow-hidden">
   <div id="root"></div>
-  <script src="tb-data.js?v=88"></script>
-  <script src="tb-changelog.js?v=88"></script>
-  <script type="text/babel" src="tb-modals.jsx?v=88"></script>
-  <script type="text/babel" src="tb-app.jsx?v=88"></script>
+  <script src="tb-data.js?v=89"></script>
+  <script src="tb-changelog.js?v=89"></script>
+  <!-- v0.7.16.0 Phase 3 — dev: text/babel + jsx · prod: pre-compiled js -->
+  <script>
+    if (window.__tbIsDev) {
+      document.write('<scr' + 'ipt type="text/babel" src="tb-modals.jsx?v=89"><\/scr' + 'ipt>');
+      document.write('<scr' + 'ipt type="text/babel" src="tb-app.jsx?v=89"><\/scr' + 'ipt>');
+    } else {
+      document.write('<scr' + 'ipt src="tb-modals.compiled.js?v=89"><\/scr' + 'ipt>');
+      document.write('<scr' + 'ipt src="tb-app.compiled.js?v=89"><\/scr' + 'ipt>');
+    }
+  </script>
 </body>
 </html>
