@@ -25,8 +25,8 @@ window.TB_CHANGELOG = [
       {
         version: "0.7.17.3",
         date: "2 มิ.ย. 2569",
-        commit: "PENDING",
-        commitFull: "PENDING",
+        commit: "6ca9ec8",
+        commitFull: "6ca9ec8e0d04bb33ae06b6fbbb3013033f0bf3e6",
         title: "Phase 4A+4B — Activity Log default 30 วัน + Session History pagination/filter + ScrollNav + Boot flow ลื่นขึ้น",
         changes: [
           { tag: "feature", text: "Phase 4A: หน้า 'บันทึกกิจกรรม' (admin) default แสดง 30 วันล่าสุดตอนเปิดหน้า — ลด query load + ข้อมูลเกี่ยวข้องกว่า · เปลี่ยน preset เป็นช่วงอื่นได้ตลอด" },
