@@ -23,6 +23,8 @@
  */
 
 import * as React from 'react'
+import { createPortal } from 'react-dom'
+import V2Skeleton from '../components/V2Skeleton'
 const { useState, useEffect, useRef } = React
 
 /* ════════════════ tb-modals.jsx ════════════════ */
@@ -4492,7 +4494,8 @@ function ActivityLogTab() {
   const [users, setUsers]   = useState([])
   const [fUser, setFUser]   = useState('')   // user_id
   const [fType, setFType]   = useState('')   // login/login_failed/logout/password/easter
-  const [fTime, setFTime]   = useState('')   // today/7d/30d/custom
+  // v0.7.17.3 Phase 4A — default '30d' (เห็นเฉพาะ 30 วันล่าสุด เพิ่ม performance + ความเกี่ยวข้อง)
+  const [fTime, setFTime]   = useState('30d')   // today/7d/30d/custom
   const [fDevice, setFDevice] = useState('') // desktop/mobile/tablet/unknown
   const [fDeviceFp, setFDeviceFp] = useState('') // device_fp (แยกเครื่องจริง)
   const [fDateFrom, setFDateFrom] = useState('')   // YYYY-MM-DD (กำหนดเอง)
@@ -6655,6 +6658,7 @@ function KnowledgeBase() {
 // ===================== APP =====================
 function App() {
   const [nav, setNavRaw] = useState('dashboard');
+  const mainScrollRef = React.useRef(null);  // v0.7.17.3 — สำหรับ ScrollNav
   const [pendingLeave, setPendingLeave] = useState(null); // v0.7.14.7 — target nav รอ user ยืนยันออกจาก draft
   // v0.7.14.7 — wrapper setNav: ดัก draft ค้างก่อนเปลี่ยนหน้า
   const setNav = React.useCallback((target) => {
@@ -7156,6 +7160,12 @@ function App() {
   const titles = { dashboard:'Dashboard', 'patient-list':'ทะเบียนผู้ป่วย Active', 'archive-list':'ทะเบียนจบการรักษา', 'all-patients':'ทะเบียนผู้ป่วยทั้งหมด', 'add-patient':'ลงทะเบียนผู้ป่วยใหม่', 'weekly-prep':'เตรียมเคสรายสัปดาห์', reports:'รายงาน และ สถิติ', knowledge:'คลังความรู้วัณโรค', settings:'ตั้งค่าระบบ', 'admin-users':'จัดการผู้ใช้', trash:'ถังขยะ', 'activity-log':'บันทึกกิจกรรม', 'audit-log':'ประวัติการลบถาวร', changelog:'ประวัติเวอร์ชั่น' };
   const pageIcons = { dashboard:'fa-chart-pie', 'patient-list':'fa-users', 'archive-list':'fa-box-archive', 'all-patients':'fa-users', 'add-patient':'fa-user-plus', 'weekly-prep':'fa-calendar-check', reports:'fa-file-contract', knowledge:'fa-book-open-reader', settings:'fa-gear', 'admin-users':'fa-user-shield', trash:'fa-trash', 'activity-log':'fa-wave-square', 'audit-log':'fa-clock-rotate-left', changelog:'fa-scroll' };
 
+  // v0.7.17.3 — ขณะ fetch ข้อมูลครั้งแรก คงโครง V2Skeleton ไว้แทน spinner ใจกลาง
+  //              (login → V2Skeleton → ของจริง · ไม่ตัดเป็น 2 ขั้น)
+  if (dbLoading) {
+    return <V2Skeleton />;
+  }
+
   // Clinical view กินทั้งจอ — ซ่อน sidebar + header ทั้งหมด
   if (clinical) {
     return (
@@ -7424,8 +7434,8 @@ function App() {
           </div>
         </header>
 
-        <div style={{ scrollbarGutter: 'stable' }} className={`flex-1 p-6 min-h-0 ${(nav==='patient-list'||nav==='archive-list'||nav==='all-patients')?'overflow-hidden':'overflow-y-auto'}`}>
-          {dbLoading && <div className="flex items-center justify-center h-full"><div className="text-center text-gray-400"><i className="fa-solid fa-spinner fa-spin text-3xl mb-3 block text-teal-500"></i><p className="text-sm">กำลังโหลดข้อมูล...</p></div></div>}
+        <div ref={mainScrollRef} style={{ scrollbarGutter: 'stable' }} className={`flex-1 p-6 min-h-0 ${(nav==='patient-list'||nav==='archive-list'||nav==='all-patients')?'overflow-hidden':'overflow-y-auto'}`}>
+          {/* v0.7.17.3 — dbLoading ใช้ V2Skeleton early-return ที่ระดับ App แล้ว → ที่นี่ไม่ต้องมี spinner */}
           {!dbLoading && nav==='dashboard'     && <Dashboard patients={patients.filter(p=>!p.archived)} archivePatients={patients.filter(p=>p.archived)} onDashFilter={f=>{setDashFilter(f);setNav('patient-list');}} onGoArchiveDelayed={()=>{setArchiveDashFilter('delayed');setNav('archive-list');}} onGoAllPatients={()=>setNav('all-patients')} onGoArchiveSuccess={()=>{setArchiveDashFilter('success');setNav('archive-list');}} onOpen={setClinical}/>}
           {!dbLoading && nav==='all-patients'  && <AllPatientsPage patients={patients.filter(p=>!p.archived)} archivePatients={patients.filter(p=>p.archived)} onOpen={setClinical} onBack={()=>setNav('dashboard')}/>}
           {!dbLoading && nav==='patient-list'  && <PatientList patients={patients.filter(p=>!p.archived)} onAdd={addPatient} onOpen={setClinical} settings={settings} dashFilter={dashFilter} onClearDashFilter={()=>setDashFilter(null)} search={ptSearch} filter={ptFilter} showColMgr={ptShowColMgr} onToggleColMgr={()=>setPtShowColMgr(v=>!v)} onArchive={archivePatient}/>}
@@ -7441,6 +7451,8 @@ function App() {
           {!dbLoading && nav==='audit-log'     && <AuditLogTab/>}
           {!dbLoading && nav==='changelog'     && <ChangelogPage highlightCommentTarget={highlightCommentTarget} onClearHighlight={()=>setHighlightCommentTarget(null)}/>}
         </div>
+        {/* v0.7.17.3 — Floating Scroll up/down (มองเฉพาะหน้าที่ scroll ของ main content) */}
+        <ScrollNav getContainer={() => mainScrollRef.current} />
       </main>
 
       {/* Dirty form toast */}
@@ -7663,7 +7675,7 @@ function RequestEditModal({ field, currentValue, onClose }) {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.17.2';
+const APP_VERSION = '0.7.17.3';
 const BUILD_DATE = '2 มิ.ย. 2569';
 function AboutModal({ onClose, onShowChangelog }) {
   const [closing, setClosing] = React.useState(false);
@@ -7741,7 +7753,6 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
   const [filterCmtOpen, setFilterCmtOpen] = useState(false);
   // v0.7.17.3 — Back-to-top button สำหรับฝั่งขวา (version cards)
   const rightColRef = React.useRef(null);
-  const [showBackToTop, setShowBackToTop] = useState(false);
   React.useEffect(() => {
     try { localStorage.setItem('tb_cl_filter_open', filterSidebarOpen ? '1' : '0'); } catch {}
   }, [filterSidebarOpen]);
@@ -8659,7 +8670,6 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
 
       {/* ── Right column: body (timeline / grouped) — scroll อิสระ ── */}
       <div ref={rightColRef}
-        onScroll={e=>setShowBackToTop(e.currentTarget.scrollTop > 300)}
         style={{flex:1,minWidth:0,height:'100%',overflowY:'auto',overscrollBehavior:'contain',paddingRight:'8px',position:'relative'}}>
         {view === 'timeline' ? (
           // ─── Timeline view — ขยาย 780→936px (+20%) ───
@@ -8875,17 +8885,8 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
         )}
       </div>{/* /right column */}
 
-      {/* v0.7.17.3 — ปุ่มกลับขึ้นบน (Back-to-top) */}
-      {showBackToTop && (
-        <button type="button"
-          onClick={()=>rightColRef.current?.scrollTo({top:0,behavior:'smooth'})}
-          title="กลับขึ้นบนสุด"
-          style={{position:'absolute',bottom:'20px',right:'20px',zIndex:50,width:'44px',height:'44px',borderRadius:'50%',border:'none',background:'#0d9488',color:'#fff',cursor:'pointer',boxShadow:'0 4px 16px rgba(13,148,136,0.35)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'16px',transition:'all 0.2s'}}
-          onMouseEnter={e=>{e.currentTarget.style.background='#0f766e';e.currentTarget.style.transform='translateY(-2px)';}}
-          onMouseLeave={e=>{e.currentTarget.style.background='#0d9488';e.currentTarget.style.transform='translateY(0)';}}>
-          <i className="fa-solid fa-arrow-up"></i>
-        </button>
-      )}
+      {/* v0.7.17.3 — ScrollNav ของคอลัมน์ขวา (ขึ้น/ลง auto-detect) */}
+      <ScrollNav getContainer={()=>rightColRef.current} />
       </div>{/* /2-column layout */}
 
       {/* Commit detail popup */}
@@ -10357,6 +10358,171 @@ function StatusLegend() {
   );
 }
 
+// v0.7.17.3 Phase 4B — ปุ่มลอยขวาล่าง (เลื่อนขึ้น/ลงรวดเดียว) ใช้กับ container ที่ scroll ได้
+//   props: getContainer? () => HTMLElement   ถ้าไม่ส่งจะใช้ window
+//          zIndex? number                    default 30 (ต่ำกว่า modals ที่ 50)
+//   - แสดงเฉพาะเมื่อเลื่อนลงได้/ขึ้นได้ (ซ่อนเองอัตโนมัติ)
+//   - ใช้ React Portal → render ที่ document.body
+//     (สำคัญ: ป้องกัน position:fixed ผิดที่ เมื่ออยู่ใน modal-A ที่มี transform)
+//   - คำนวณตำแหน่งจาก bounding rect ของ container → เกาะมุมล่างขวาของ "กรอบ"
+function ScrollNav({ getContainer, zIndex = 30 }) {
+  const [canUp, setCanUp]     = React.useState(false)
+  const [canDown, setCanDown] = React.useState(false)
+  const [pos, setPos]         = React.useState({ right: 22, bottom: 22 })  // px จาก viewport edges
+
+  React.useEffect(() => {
+    const el = getContainer ? getContainer() : null
+    const target = el || window
+    const computePos = () => {
+      if (el) {
+        const r = el.getBoundingClientRect()
+        // ฝัง padding 16px ภายในกรอบ
+        setPos({
+          right:  Math.max(8, window.innerWidth  - r.right  + 16),
+          bottom: Math.max(8, window.innerHeight - r.bottom + 16),
+        })
+      } else {
+        setPos({ right: 22, bottom: 22 })
+      }
+    }
+    const onScroll = () => {
+      let top, scrollHeight, clientHeight
+      if (el) {
+        top = el.scrollTop; scrollHeight = el.scrollHeight; clientHeight = el.clientHeight
+      } else {
+        top = window.scrollY || document.documentElement.scrollTop
+        scrollHeight = document.documentElement.scrollHeight
+        clientHeight = window.innerHeight
+      }
+      setCanUp(top > 50)
+      setCanDown(top + clientHeight < scrollHeight - 50)
+    }
+    computePos()
+    onScroll()
+    target.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('resize', () => { computePos(); onScroll(); })
+    // re-compute ตำแหน่งทุก 1s เผื่อ modal/layout เปลี่ยน
+    const id = setInterval(computePos, 800)
+    return () => {
+      target.removeEventListener('scroll', onScroll)
+      window.removeEventListener('resize', onScroll)
+      clearInterval(id)
+    }
+  }, [getContainer])
+
+  const scrollTo = (kind) => {
+    const el = getContainer ? getContainer() : null
+    const opts = { behavior: 'smooth' }
+    if (kind === 'up') {
+      if (el) el.scrollTo({ top: 0, ...opts }); else window.scrollTo({ top: 0, ...opts })
+    } else {
+      if (el) el.scrollTo({ top: el.scrollHeight, ...opts }); else window.scrollTo({ top: document.documentElement.scrollHeight, ...opts })
+    }
+  }
+
+  if (!canUp && !canDown) return null
+  if (typeof document === 'undefined') return null
+
+  // สีอ่อนใสตอนปกติ → hover ค่อยเข้ม
+  const btn = {
+    width:'40px',height:'40px',borderRadius:'50%',
+    border:'1px solid rgba(13,148,136,0.25)',
+    background:'rgba(255,255,255,0.7)',
+    color:'#0d9488',
+    cursor:'pointer',
+    boxShadow:'0 2px 6px rgba(0,0,0,0.06)',
+    backdropFilter:'blur(4px)',
+    WebkitBackdropFilter:'blur(4px)',
+    fontSize:'14px',display:'inline-flex',alignItems:'center',justifyContent:'center',
+    transition:'transform 0.15s, background 0.2s, color 0.2s, box-shadow 0.2s, border-color 0.2s'
+  }
+  const btnHoverEnter = (e)=>{
+    e.currentTarget.style.background='#0d9488';
+    e.currentTarget.style.color='#fff';
+    e.currentTarget.style.borderColor='#0d9488';
+    e.currentTarget.style.boxShadow='0 6px 18px rgba(13,148,136,0.45)';
+    e.currentTarget.style.transform='translateY(-2px)';
+  }
+  const btnHoverLeave = (e)=>{
+    e.currentTarget.style.background='rgba(255,255,255,0.7)';
+    e.currentTarget.style.color='#0d9488';
+    e.currentTarget.style.borderColor='rgba(13,148,136,0.25)';
+    e.currentTarget.style.boxShadow='0 2px 6px rgba(0,0,0,0.06)';
+    e.currentTarget.style.transform='translateY(0)';
+  }
+
+  // Render ผ่าน Portal ไปที่ document.body → หนีออกจาก subtree ของ modal-A
+  // (modal-A ใช้ transform ใน animation → จะดักให้ position:fixed กลายเป็น relative ต่อ modal)
+  return createPortal(
+    <div style={{position:'fixed',right:pos.right,bottom:pos.bottom,display:'flex',flexDirection:'column',gap:'8px',zIndex}}>
+      {canUp && (
+        <button title="ขึ้นบนสุด" onClick={()=>scrollTo('up')} style={btn}
+          onMouseEnter={btnHoverEnter} onMouseLeave={btnHoverLeave}>
+          <i className="fa-solid fa-chevron-up"></i>
+        </button>
+      )}
+      {canDown && (
+        <button title="ลงล่างสุด" onClick={()=>scrollTo('down')} style={btn}
+          onMouseEnter={btnHoverEnter} onMouseLeave={btnHoverLeave}>
+          <i className="fa-solid fa-chevron-down"></i>
+        </button>
+      )}
+    </div>,
+    document.body
+  )
+}
+
+// v0.7.17.3 Phase 4B — Pagination component สำหรับ Session History (เลขหน้า 1 2 3 ... N)
+function SessionPagination({ page, totalPages, total, pageSize, onChange }) {
+  // สร้าง list ของหมายเลขหน้า + ellipsis
+  // window 5 (รอบหน้าปัจจุบัน ±2) + first + last + ellipsis
+  const pageWindow = () => {
+    const cur = page + 1; // 1-indexed สำหรับแสดงผล
+    const last = totalPages;
+    const set = new Set([1, last, cur, cur-1, cur+1, cur-2, cur+2]);
+    const arr = [...set].filter(n => n >= 1 && n <= last).sort((a,b)=>a-b);
+    const out = [];
+    for (let i = 0; i < arr.length; i++) {
+      out.push(arr[i]);
+      if (i < arr.length - 1 && arr[i+1] - arr[i] > 1) out.push('…');
+    }
+    return out;
+  };
+  const items = pageWindow();
+  const from  = page * pageSize + 1;
+  const to    = Math.min(total, from + pageSize - 1);
+
+  const btnBase = { minWidth:'30px',height:'30px',padding:'0 9px',borderRadius:'8px',border:'1px solid #e5e7eb',background:'#fff',color:'#374151',fontSize:'12px',fontWeight:600,cursor:'pointer',display:'inline-flex',alignItems:'center',justifyContent:'center',transition:'all 0.15s' };
+  const btnActive = { borderColor:'#0d9488',background:'#0d9488',color:'#fff',boxShadow:'0 2px 6px rgba(13,148,136,0.3)' };
+  const btnDisabled = { opacity:0.4,cursor:'not-allowed' };
+
+  return (
+    <div style={{marginTop:'18px',paddingTop:'14px',borderTop:'1px solid #f3f4f6'}}>
+      <div style={{display:'flex',flexWrap:'wrap',alignItems:'center',justifyContent:'center',gap:'5px',marginBottom:'8px'}}>
+        <button onClick={()=>page>0 && onChange(page-1)} disabled={page===0}
+          style={{...btnBase, ...(page===0?btnDisabled:{})}} title="หน้าก่อนหน้า">
+          <i className="fa-solid fa-chevron-left"></i>
+        </button>
+        {items.map((it, idx) => (
+          it === '…'
+            ? <span key={`e${idx}`} style={{padding:'0 4px',color:'#9ca3af',fontSize:'12px'}}>…</span>
+            : <button key={it} onClick={()=>onChange(it-1)}
+                style={{...btnBase, ...(it === page+1 ? btnActive : {})}}>
+                {it}
+              </button>
+        ))}
+        <button onClick={()=>page<totalPages-1 && onChange(page+1)} disabled={page>=totalPages-1}
+          style={{...btnBase, ...(page>=totalPages-1?btnDisabled:{})}} title="หน้าถัดไป">
+          <i className="fa-solid fa-chevron-right"></i>
+        </button>
+      </div>
+      <div style={{textAlign:'center',fontSize:'11px',color:'#9ca3af'}}>
+        แสดง {from}-{to} จาก {total} รายการ · หน้า {page+1} / {totalPages}
+      </div>
+    </div>
+  );
+}
+
 function SessionsPanel({ onBack }) {
   const [sessions, setSessions]   = React.useState([]);
   const [currentId, setCurrentId] = React.useState(null);
@@ -10369,6 +10535,33 @@ function SessionsPanel({ onBack }) {
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   const [resultMsg, setResultMsg] = React.useState('');
 
+  // v0.7.17.3 Phase 4B — history filter + pagination
+  const [hPage, setHPage]               = React.useState(0)
+  const [hPageSize]                     = React.useState(50)
+  const [hTotal, setHTotal]             = React.useState(0)
+  const [hHasMore, setHHasMore]         = React.useState(false)
+  const [hfTime, setHfTime]             = React.useState('30d')  // today/7d/30d/all/custom
+  const [hfDevice, setHfDevice]         = React.useState('')      // desktop/mobile/tablet/unknown
+  const [hfStatus, setHfStatus]         = React.useState('')      // ''=all, active, manual, session_expired, forced_by_user, forced_by_admin
+  const [hfDateFrom, setHfDateFrom]     = React.useState('')
+  const [hfDateTo, setHfDateTo]         = React.useState('')
+  const [hSearchInput, setHSearchInput] = React.useState('')
+  const [hfSearch, setHfSearch]         = React.useState('')
+  // refreshing = filter/page change (ไม่โชว์ skeleton); historyLoading = first mount เท่านั้น
+  const [historyRefreshing, setHistoryRefreshing] = React.useState(false)
+  const [historyEverLoaded, setHistoryEverLoaded] = React.useState(false)
+  // ref ไปยัง root → ใช้หา parent scroll container สำหรับ ScrollNav
+  const panelRootRef = React.useRef(null);
+  const getScrollContainer = React.useCallback(() => {
+    let el = panelRootRef.current && panelRootRef.current.parentElement;
+    while (el) {
+      const s = window.getComputedStyle(el);
+      if (/(auto|scroll)/.test(s.overflowY)) return el;
+      el = el.parentElement;
+    }
+    return null; // fallback → window
+  }, []);
+
   const loadActive = async () => {
     setLoading(true); setError('');
     try {
@@ -10380,18 +10573,67 @@ function SessionsPanel({ onBack }) {
     } catch { setError('เกิดข้อผิดพลาด กรุณาลองใหม่'); }
     setLoading(false);
   };
-  const loadHistory = async () => {
-    setHistoryLoading(true);
+  // v0.7.17.3 Phase 4B — สร้าง params จาก filter state
+  const buildHistoryParams = (p) => {
+    const sp = new URLSearchParams()
+    sp.set('page', String(p))
+    sp.set('pageSize', String(hPageSize))
+    // ช่วงเวลา
+    const now = new Date()
+    if (hfTime === 'today') {
+      const d = new Date(now); d.setHours(0,0,0,0)
+      sp.set('since', d.toISOString())
+    } else if (hfTime === '7d') {
+      sp.set('since', new Date(now.getTime() - 7 * 86400000).toISOString())
+    } else if (hfTime === '30d') {
+      sp.set('since', new Date(now.getTime() - 30 * 86400000).toISOString())
+    } else if (hfTime === 'custom') {
+      if (hfDateFrom) sp.set('since', new Date(hfDateFrom + 'T00:00:00').toISOString())
+      if (hfDateTo)   sp.set('until', new Date(hfDateTo + 'T23:59:59.999').toISOString())
+    }
+    if (hfDevice) sp.set('device', hfDevice)
+    if (hfStatus) sp.set('status', hfStatus)
+    if (hfSearch) sp.set('q', hfSearch)
+    return sp
+  }
+
+  const loadHistory = async (p = 0) => {
+    // ตอนเปิดหน้าครั้งแรก → skeleton เต็ม; ครั้งถัดไป (filter / page) → spinner เบาๆ คงข้อมูลเก่าไว้
+    if (!historyEverLoaded) setHistoryLoading(true);
+    else                    setHistoryRefreshing(true);
     try {
-      const res  = await fetch('/api/auth/sessions/history');
+      const res  = await fetch(`/api/auth/sessions/history?${buildHistoryParams(p).toString()}`);
       const data = await res.json();
-      if (res.ok) setHistory(data.sessions || []);
+      if (res.ok) {
+        setHistory(data.rows || data.sessions || []);
+        setHTotal(typeof data.total === 'number' ? data.total : (data.rows?.length || 0));
+        setHHasMore(!!data.hasMore);
+        setHPage(p);
+        setHistoryEverLoaded(true);
+      }
     } catch {}
     setHistoryLoading(false);
+    setHistoryRefreshing(false);
   };
 
   React.useEffect(() => { loadActive(); }, []);
-  React.useEffect(() => { if (showHistory) loadHistory(); }, [showHistory]);
+  // debounce ช่องค้นหา 400ms
+  React.useEffect(() => {
+    const t = setTimeout(() => setHfSearch(hSearchInput.trim()), 400)
+    return () => clearTimeout(t)
+  }, [hSearchInput])
+  // โหลดใหม่ทุกครั้งที่เปลี่ยน filter (รวมตอนเปิดหน้าประวัติ)
+  React.useEffect(() => {
+    if (showHistory) loadHistory(0);
+  }, [showHistory, hfTime, hfDevice, hfStatus, hfDateFrom, hfDateTo, hfSearch]);
+
+  const hHasActiveFilter = !!(hfTime !== '30d' || hfDevice || hfStatus || hfSearch || hfDateFrom || hfDateTo);
+  const hTotalPages = Math.max(1, Math.ceil(hTotal / hPageSize));
+
+  // กดที่ chip ในแถว → ใส่ filter อัตโนมัติ
+  const applyIpFilter     = (ip)     => { setHSearchInput(ip); setHfSearch(ip); }
+  const applyDeviceFilter = (dtype)  => setHfDevice(dtype || 'unknown');
+  const applyStatusFilter = (reason) => setHfStatus(reason || 'active');
 
   const otherCount = sessions.filter(s => !s.is_current).length;
 
@@ -10408,8 +10650,9 @@ function SessionsPanel({ onBack }) {
   };
 
   if (showHistory) {
+    const selStyleH = { fontSize:'12px', padding:'7px 10px', borderRadius:'9px', border:'1px solid #e5e7eb', background:'#fff', color:'#374151', outline:'none', cursor:'pointer' };
     return (
-      <div>
+      <div ref={panelRootRef}>
         <div style={{position:'sticky',top:'-20px',zIndex:5,background:'#fff',margin:'-20px -28px 14px',padding:'20px 28px 0',boxShadow:'0 4px 8px -6px rgba(0,0,0,0.15)'}}>
           <div style={{display:'flex',alignItems:'center',gap:'10px',padding:'4px 0 14px',borderBottom:'1px solid #e5e7eb',marginBottom:'14px'}}>
             <button onClick={()=>setShowHistory(false)} title="กลับไปดูอุปกรณ์ที่กำลังเข้าใช้งาน"
@@ -10419,42 +10662,145 @@ function SessionsPanel({ onBack }) {
               <i className="fa-solid fa-arrow-left"></i>กลับ
             </button>
             <i className="fa-solid fa-clock-rotate-left" style={{color:'#0d9488',fontSize:'13px',marginLeft:'4px'}}></i>
-            <p style={{fontSize:'13px',fontWeight:700,color:'#0d9488',margin:0,textTransform:'uppercase',letterSpacing:'0.5px'}}>ประวัติการเข้าใช้งานทั้งหมด</p>
+            <p style={{fontSize:'13px',fontWeight:700,color:'#0d9488',margin:0,textTransform:'uppercase',letterSpacing:'0.5px',flex:1}}>ประวัติการเข้าใช้งานทั้งหมด</p>
+            {!historyLoading && (
+              <span style={{fontSize:'11px',fontWeight:700,padding:'4px 10px',borderRadius:'999px',background:'#ccfbf1',color:'#0f766e',whiteSpace:'nowrap'}}>
+                {hTotal} รายการ
+              </span>
+            )}
           </div>
+
+          {/* v0.7.17.3 Phase 4B — Filter panel */}
+          <div style={{background:'linear-gradient(135deg,#f0fdfa 0%,#f8fafc 100%)',border:'1px solid #d1fae5',borderRadius:'12px',padding:'10px',marginBottom:'10px'}}>
+            <div style={{display:'flex',flexWrap:'nowrap',gap:'7px',alignItems:'center'}}>
+              <div style={{position:'relative',flex:'1 1 80px',minWidth:'80px'}}>
+                <i className="fa-solid fa-magnifying-glass" style={{position:'absolute',left:'10px',top:'50%',transform:'translateY(-50%)',color:'#0d9488',fontSize:'11px'}}></i>
+                <input value={hSearchInput} onChange={e=>setHSearchInput(e.target.value)}
+                  placeholder="ค้นหา IP / อุปกรณ์"
+                  style={{width:'100%',fontSize:'12px',padding:'8px 26px 8px 28px',borderRadius:'9px',border:'1px solid #e5e7eb',outline:'none',boxSizing:'border-box',background:'#fff'}}/>
+                {hSearchInput && (
+                  <i className="fa-solid fa-xmark" onClick={()=>setHSearchInput('')}
+                    style={{position:'absolute',right:'10px',top:'50%',transform:'translateY(-50%)',color:'#9ca3af',fontSize:'11px',cursor:'pointer'}}></i>
+                )}
+              </div>
+              <FilterSelect icon="fa-laptop" value={hfDevice} onChange={e=>setHfDevice(e.target.value)}>
+                <option value="">ทุกอุปกรณ์</option>
+                <option value="desktop">คอมพิวเตอร์</option>
+                <option value="mobile">มือถือ</option>
+                <option value="tablet">แท็บเล็ต</option>
+                <option value="unknown">ไม่ทราบ</option>
+              </FilterSelect>
+              <FilterSelect icon="fa-calendar" value={hfTime} onChange={e=>setHfTime(e.target.value)}>
+                <option value="all">ทุกช่วงเวลา</option>
+                <option value="today">วันนี้</option>
+                <option value="7d">7 วันล่าสุด</option>
+                <option value="30d">30 วันล่าสุด</option>
+                <option value="custom">กำหนดเอง</option>
+              </FilterSelect>
+              <FilterSelect icon="fa-flag" value={hfStatus} onChange={e=>setHfStatus(e.target.value)}>
+                <option value="">ทุกสถานะ</option>
+                <option value="active">ยังใช้งานอยู่</option>
+                <option value="manual">ออกจากระบบเอง</option>
+                <option value="session_expired">หมดอายุการใช้งาน</option>
+                <option value="forced_by_user">ถูกบังคับออก</option>
+                <option value="forced_by_admin">ผู้ดูแลระบบบังคับออก</option>
+              </FilterSelect>
+              {hHasActiveFilter && (
+                <button onClick={()=>{ setHfTime('30d'); setHfDevice(''); setHfStatus(''); setHfDateFrom(''); setHfDateTo(''); setHSearchInput(''); setHfSearch(''); }}
+                  title="กลับเป็นค่าตั้งต้น (30 วันล่าสุด)"
+                  style={{fontSize:'12px',fontWeight:600,padding:'8px 11px',borderRadius:'9px',border:'1px solid #fcd34d',background:'#fffbeb',color:'#b45309',cursor:'pointer',whiteSpace:'nowrap'}}>
+                  <i className="fa-solid fa-rotate-left" style={{marginRight:'5px'}}></i>ล้างค่า
+                </button>
+              )}
+            </div>
+            {hfTime === 'custom' && (
+              <div style={{display:'flex',flexWrap:'wrap',gap:'7px',alignItems:'center',marginTop:'9px',paddingTop:'9px',borderTop:'1px dashed #99f6e4'}}>
+                <span style={{fontSize:'12px',color:'#0f766e',fontWeight:600}}><i className="fa-solid fa-calendar-day" style={{marginRight:'5px'}}></i>จากวันที่</span>
+                <input type="date" value={hfDateFrom} max={hfDateTo || undefined} onChange={e=>setHfDateFrom(e.target.value)} style={{...selStyleH,background:'#fff'}}/>
+                <span style={{fontSize:'12px',color:'#0f766e',fontWeight:600}}>ถึงวันที่</span>
+                <input type="date" value={hfDateTo} min={hfDateFrom || undefined} onChange={e=>setHfDateTo(e.target.value)} style={{...selStyleH,background:'#fff'}}/>
+              </div>
+            )}
+          </div>
+
           <StatusLegend/>
         </div>
 
-        {historyLoading ? (
-          <div style={{textAlign:'center',padding:'40px 0',color:'#9ca3af',fontSize:'13px'}}>
-            <i className="fa-solid fa-spinner fa-spin" style={{marginRight:'8px'}}></i>กำลังโหลด...
-          </div>
-        ) : history.length === 0 ? (
-          <div style={{textAlign:'center',padding:'40px 0',color:'#9ca3af',fontSize:'13px'}}>ไม่พบประวัติ</div>
-        ) : (
-          <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>
-            {history.map(s => {
-              const reason = endReasonLabel(s.end_reason);
-              const isActive = !s.ended_at;
-              return (
-                <div key={s.id} style={{padding:'12px 14px',borderRadius:'10px',border:'1px solid #e5e7eb',background:'#fff'}}>
-                  <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'6px'}}>
-                    <i className={`fa-solid ${deviceIcon(s.device_type)}`} style={{color:'#0d9488',fontSize:'16px',width:'18px',textAlign:'center'}}></i>
-                    <p style={{fontSize:'13px',fontWeight:700,color:'#134e4a',margin:0,flex:1}}>{s.device_label || 'ไม่ทราบอุปกรณ์'}</p>
-                    <span style={{display:'inline-flex',alignItems:'center',gap:'5px',fontSize:'10px',fontWeight:700,padding:'3px 9px',borderRadius:'999px',background:reason.bg,color:reason.color,whiteSpace:'nowrap'}}>
-                      <span style={{width:'7px',height:'7px',borderRadius:'50%',background:reason.color,flexShrink:0}}></span>{reason.label}
-                    </span>
-                  </div>
-                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'4px 16px',fontSize:'11px',color:'#6b7280',marginLeft:'28px'}}>
-                    <span><i className="fa-solid fa-globe" style={{marginRight:'5px'}}></i>{s.ip_address || '-'}</span>
-                    <span><i className="fa-solid fa-right-to-bracket" style={{marginRight:'5px'}}></i>เข้า {relTime(s.started_at)}</span>
-                    {s.ended_at && <span><i className="fa-solid fa-right-from-bracket" style={{marginRight:'5px'}}></i>ออก {relTime(s.ended_at)}</span>}
-                    {!s.ended_at && <span><i className="fa-solid fa-circle" style={{color:'#22c55e',marginRight:'5px',fontSize:'8px'}}></i>ใช้งานล่าสุด {relTime(s.last_active_at)}</span>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        {/* v0.7.17.3 — Container ขนาดคงที่ ป้องกัน filter panel หดตอน loading
+             - first mount เท่านั้นที่ขึ้น skeleton
+             - filter/page change คงข้อมูลเก่าไว้ + dim overlay เบาๆ */}
+        <div style={{position:'relative',minHeight:'200px'}}>
+          {historyLoading ? (
+            <div style={{textAlign:'center',padding:'40px 0',color:'#9ca3af',fontSize:'13px'}}>
+              <i className="fa-solid fa-spinner fa-spin" style={{marginRight:'8px'}}></i>กำลังโหลด...
+            </div>
+          ) : history.length === 0 ? (
+            <div style={{textAlign:'center',padding:'40px 0',color:'#9ca3af',fontSize:'13px'}}>
+              {hHasActiveFilter ? 'ไม่พบรายการตามเงื่อนไขที่กรอง' : 'ไม่พบประวัติ'}
+            </div>
+          ) : (
+            <>
+              <div style={{display:'flex',flexDirection:'column',gap:'10px',opacity:historyRefreshing?0.55:1,transition:'opacity 0.15s',pointerEvents:historyRefreshing?'none':'auto'}}>
+                {history.map(s => {
+                  const reason = endReasonLabel(s.end_reason);
+                  const statusKey = s.end_reason || 'active';
+                  return (
+                    <div key={s.id} style={{padding:'12px 14px',borderRadius:'10px',border:'1px solid #e5e7eb',background:'#fff'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'6px'}}>
+                        <i className={`fa-solid ${deviceIcon(s.device_type)}`} style={{color:'#0d9488',fontSize:'16px',width:'18px',textAlign:'center'}}></i>
+                        <span onClick={()=>applyDeviceFilter(s.device_type)} title={`กรองเฉพาะ ${s.device_label || 'อุปกรณ์นี้'}`}
+                          style={{fontSize:'13px',fontWeight:700,color:'#134e4a',margin:0,flex:1,cursor:'pointer'}}
+                          onMouseEnter={e=>e.currentTarget.style.color='#0d9488'}
+                          onMouseLeave={e=>e.currentTarget.style.color='#134e4a'}>
+                          {s.device_label || 'ไม่ทราบอุปกรณ์'}
+                        </span>
+                        <span onClick={()=>applyStatusFilter(statusKey)} title="กรองตามสถานะนี้"
+                          style={{display:'inline-flex',alignItems:'center',gap:'5px',fontSize:'10px',fontWeight:700,padding:'3px 9px',borderRadius:'999px',background:reason.bg,color:reason.color,whiteSpace:'nowrap',cursor:'pointer'}}>
+                          <span style={{width:'7px',height:'7px',borderRadius:'50%',background:reason.color,flexShrink:0}}></span>{reason.label}
+                        </span>
+                      </div>
+                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'4px 16px',fontSize:'11px',color:'#6b7280',marginLeft:'28px'}}>
+                        <span>
+                          <i className="fa-solid fa-globe" style={{marginRight:'5px'}}></i>
+                          {s.ip_address
+                            ? <span onClick={()=>applyIpFilter(s.ip_address)} title={`กรองเฉพาะ IP ${s.ip_address}`}
+                                style={{cursor:'pointer',textDecoration:'underline dotted',textUnderlineOffset:'2px'}}
+                                onMouseEnter={e=>e.currentTarget.style.color='#0d9488'}
+                                onMouseLeave={e=>e.currentTarget.style.color='#6b7280'}>
+                                {s.ip_address}
+                              </span>
+                            : '-'}
+                        </span>
+                        <span><i className="fa-solid fa-right-to-bracket" style={{marginRight:'5px'}}></i>เข้า {relTime(s.started_at)}</span>
+                        {s.ended_at && <span><i className="fa-solid fa-right-from-bracket" style={{marginRight:'5px'}}></i>ออก {relTime(s.ended_at)}</span>}
+                        {!s.ended_at && <span><i className="fa-solid fa-circle" style={{color:'#22c55e',marginRight:'5px',fontSize:'8px'}}></i>ใช้งานล่าสุด {relTime(s.last_active_at)}</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* v0.7.17.3 Phase 4B — Pagination */}
+              {hTotalPages > 1 && (
+                <SessionPagination
+                  page={hPage}
+                  totalPages={hTotalPages}
+                  total={hTotal}
+                  pageSize={hPageSize}
+                  onChange={(p) => loadHistory(p)}
+                />
+              )}
+            </>
+          )}
+
+          {/* Spinner overlay เบาๆ ตอน refresh (ไม่ใช่ skeleton เต็ม) */}
+          {historyRefreshing && history.length > 0 && (
+            <div style={{position:'absolute',top:'10px',right:'10px',display:'inline-flex',alignItems:'center',gap:'6px',fontSize:'11px',fontWeight:600,padding:'5px 11px',borderRadius:'999px',background:'rgba(13,148,136,0.95)',color:'#fff',boxShadow:'0 2px 8px rgba(13,148,136,0.3)'}}>
+              <i className="fa-solid fa-spinner fa-spin"></i>กำลังกรอง
+            </div>
+          )}
+        </div>
+        <ScrollNav getContainer={getScrollContainer} zIndex={9990} />
       </div>
     );
   }
@@ -10741,7 +11087,13 @@ function UserProfileModal({ onClose }) {
   return (
     <>
       <div className={overlayCls} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.4)',backdropFilter:'blur(2px)',zIndex:50,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}}>
-        <div className={modalCls} style={{background:'#fff',borderRadius:'20px',width:'100%',maxWidth:'920px',maxHeight:'88vh',display:'flex',flexDirection:'row',boxShadow:'0 20px 60px rgba(0,0,0,0.15)',overflow:'hidden'}}>
+        <div className={modalCls} style={{background:'#fff',borderRadius:'20px',width:'100%',maxWidth:'920px',
+          // v0.7.17.3 — หน้าโปรไฟล์ปล่อยให้กรอบหดตาม content (ไม่โล่ง)
+          //             หน้าอื่น (อุปกรณ์ / เปลี่ยนรหัสผ่าน) ล็อค height ไว้ ไม่ขยับตอนกรอง
+          ...(mode === 'profile'
+            ? { maxHeight: 'min(88vh, 720px)' }
+            : { height: '88vh', maxHeight: '720px' }),
+          display:'flex',flexDirection:'row',boxShadow:'0 20px 60px rgba(0,0,0,0.15)',overflow:'hidden'}}>
 
           {/* ═══ LEFT: Header column ═══ */}
           <div style={{background:'linear-gradient(160deg,#0f766e,#14b8a6)',padding:'32px 24px',width:'280px',flexShrink:0,display:'flex',flexDirection:'column',position:'relative'}}>
