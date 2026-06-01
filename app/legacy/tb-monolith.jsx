@@ -7663,7 +7663,7 @@ function RequestEditModal({ field, currentValue, onClose }) {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.17.1';
+const APP_VERSION = '0.7.17.2';
 const BUILD_DATE = '2 มิ.ย. 2569';
 function AboutModal({ onClose, onShowChangelog }) {
   const [closing, setClosing] = React.useState(false);
@@ -7731,6 +7731,20 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
   const [selectedTags, setSelectedTags] = useState(new Set());
   // v0.7.17.0 — lazy timeline: render แค่ N แรก กดดูเพิ่มเอง → ลด jank ตอน sidebar collapse
   const [visibleTimelineCount, setVisibleTimelineCount] = useState(15);
+  // v0.7.17.3 — Filter sidebar (ซ้าย, พับได้) แทน filter bars 2 แถบเดิม
+  const [filterSidebarOpen, setFilterSidebarOpen] = useState(() => {
+    try { const s = localStorage.getItem('tb_cl_filter_open'); return s === null ? true : s === '1'; }
+    catch { return true; }
+  });
+  // v0.7.17.3 — แต่ละ section เริ่มพับ (เห็นแค่หัวข้อ 2 แถว) — กดเปิดเอง
+  const [filterVerOpen, setFilterVerOpen] = useState(false);
+  const [filterCmtOpen, setFilterCmtOpen] = useState(false);
+  // v0.7.17.3 — Back-to-top button สำหรับฝั่งขวา (version cards)
+  const rightColRef = React.useRef(null);
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  React.useEffect(() => {
+    try { localStorage.setItem('tb_cl_filter_open', filterSidebarOpen ? '1' : '0'); } catch {}
+  }, [filterSidebarOpen]);
   const [expandedMajors, setExpandedMajors] = useState(new Set([window.TB_CHANGELOG[0]?.major]));
   const [expandedMinors, setExpandedMinors] = useState(new Set());
   const [expandedVersions, setExpandedVersions] = useState(new Set());
@@ -7760,6 +7774,8 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
   const [unreadCommentIds, setUnreadCommentIds] = useState(new Set());
   // Mention dropdown
   const [mentionPickerOpen, setMentionPickerOpen] = useState(false);
+  // v0.7.17.3 — fixed position สำหรับ mention dropdown (กัน overflow ของ sidebar ที่มี internal scroll)
+  const [mentionPos, setMentionPos] = useState({top:0,left:0,width:260});
   const [mentionUsers, setMentionUsers] = useState(null);
   const [mentionLoading, setMentionLoading] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
@@ -7833,25 +7849,45 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
     setView('timeline');
     setExpandedComments(prev => { const n = new Set(prev); n.add(version); return n; });
     setEverOpenedVersions(prev => { const n = new Set(prev); n.add(version); return n; });
+    // v0.7.17.2 fix — ขยาย visibleTimelineCount ถ้า version ที่กระดิ่งชี้ไปอยู่นอก slice (15)
+    //   ไม่งั้น version ไม่ถูก render → ChangelogCommentSection ไม่ mount → DOM ไม่มี comment
+    const targetIdx = allVersions.findIndex(v => v.version === version);
+    if (targetIdx >= 0) {
+      setVisibleTimelineCount(c => Math.max(c, targetIdx + 1));
+    }
     let tries = 0;
+    const scrollTimers = [];
     const interval = setInterval(() => {
       tries += 1;
       const el = document.getElementById('cmt-' + commentId);
       if (el) {
         clearInterval(interval);
-        // อยู่ใน iframe — ใช้ scrollIntoView พร้อม container scroll
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        el.classList.remove('comment-flash');
-        void el.offsetWidth;  // force reflow
-        el.classList.add('comment-flash');
-        setTimeout(() => { if (onClearHighlight) onClearHighlight(); }, 500);
+        // v0.7.17.2 fix — scroll ซ้ำหลายรอบเผื่อ layout shift (lazy mount + comments loading
+        //   ทำให้ page height โต → scroll smooth ไปตำแหน่งเก่า → หยุดก่อนถึงเป้า)
+        //   scroll 4 รอบ: ทันที + 300ms + 700ms + 1200ms ครอบคลุม fetch + mount + reflow
+        const scrollIt = () => {
+          try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch {}
+        };
+        scrollIt();
+        scrollTimers.push(setTimeout(scrollIt, 300));
+        scrollTimers.push(setTimeout(scrollIt, 700));
+        scrollTimers.push(setTimeout(scrollIt, 1200));
+        // flash หลัง scroll รอบสุดท้าย — มั่นใจว่าอยู่ในจอแล้ว
+        scrollTimers.push(setTimeout(() => {
+          el.classList.remove('comment-flash');
+          void el.offsetWidth;  // force reflow
+          el.classList.add('comment-flash');
+        }, 1300));
+        scrollTimers.push(setTimeout(() => {
+          if (onClearHighlight) onClearHighlight();
+        }, 1800));
       } else if (tries > 40) {  // 4 วินาที
         clearInterval(interval);
         console.warn('[ChangelogPage] comment not found:', commentId);
         if (onClearHighlight) onClearHighlight();
       }
     }, 100);
-    return () => clearInterval(interval);
+    return () => { clearInterval(interval); scrollTimers.forEach(clearTimeout); };
   }, [highlightCommentTarget, onClearHighlight]);
 
   const toggleComments = (version) => {
@@ -8314,13 +8350,14 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
       <div style={{position:'sticky',top:'-24px',zIndex:20,paddingTop:'0',marginBottom:'16px'}}>
       <div className="bg-gradient-to-r from-teal-700 to-teal-600 rounded-2xl p-5 text-white shadow-md">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center flex-shrink-0">
-            <i className="fa-solid fa-scroll text-2xl"></i>
-          </div>
           <div className="flex-1 min-w-0">
-            <h2 className="font-bold text-lg">ประวัติเวอร์ชั่น</h2>
-            <p className="text-xs text-teal-100" style={{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap'}}>
-              <span>รวม {stats.totalVersions} เวอร์ชัน</span>
+            {/* v0.7.17.3 — ทุกอย่างบรรทัดเดียว: รวม 83 เวอร์ชัน + range + chips */}
+            <div style={{display:'flex',alignItems:'center',gap:'10px',flexWrap:'wrap',color:'#fff',fontSize:'13px'}}>
+              <span style={{display:'inline-flex',alignItems:'baseline',gap:'6px'}}>
+                <span>รวม</span>
+                <span style={{fontSize:'28px',fontWeight:800,lineHeight:1,fontFamily:"'Manrope', sans-serif",letterSpacing:'-0.5px'}}>{stats.totalVersions}</span>
+                <span>เวอร์ชัน · ตั้งแต่ v0.5.0 ถึง v{APP_VERSION}</span>
+              </span>
               {Object.entries(stats.byTag).filter(([k,n])=>n>0 && TAGS[k]).map(([k,n])=>{
                 const active = selectedTags.has(k);
                 return (
@@ -8334,14 +8371,13 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
                 const totalComments = Object.values(commentCounts).reduce((a,b)=>a+b,0);
                 if (totalComments === 0) return null;
                 return (
-                  <button type="button" onClick={()=>setOnlyWithComments(v=>!v)} title="กรองเฉพาะที่มีคอมเม้น"
+                  <button type="button" onClick={()=>setOnlyWithComments(v=>!v)} title="กรองเฉพาะที่มีความคิดเห็น"
                     style={{cursor:'pointer',border:onlyWithComments?'1px solid #fff':'1px solid rgba(255,255,255,0.3)',background: onlyWithComments ? '#fff' : 'rgba(255,255,255,0.15)',color: onlyWithComments ? '#92400e' : '#fff',padding:'2px 8px',borderRadius:'999px',fontSize:'11px',fontWeight:700,transition:'all 0.15s',lineHeight:1.3,display:'inline-flex',alignItems:'center',gap:'3px'}}>
                     <i className="fa-regular fa-comment"></i>{totalComments}
                   </button>
                 );
               })()}
-            </p>
-            <p className="text-xs text-teal-100/80" style={{marginTop:'2px'}}>ตั้งแต่ v0.5.0 ถึง v{APP_VERSION}</p>
+            </div>
           </div>
           {/* View toggle — อยู่ในแบนเนอร์ */}
           <div style={{display:'flex',background:'rgba(255,255,255,0.15)',borderRadius:'10px',padding:'3px',gap:'2px',flexShrink:0}}>
@@ -8356,98 +8392,132 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
           </div>
         </div>
       </div>
+      </div>{/* /sticky header group (เหลือเฉพาะ banner) */}
 
-      {/* ── Filter bar (แถบ 1: ตัวกรองระบบ) ── */}
-      <div style={{padding:'12px 16px',marginTop:'12px',background:'#fff',borderRadius:'14px',border:'1px solid #e5e7eb',boxShadow:'0 4px 12px rgba(0,0,0,0.06)'}}>
-        <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'8px'}}>
-          <i className="fa-solid fa-sliders" style={{color:'#0d9488',fontSize:'12px'}}></i>
-          <span style={{fontSize:'12px',fontWeight:700,color:'#0f766e'}}>ตัวกรองเวอร์ชั่น</span>
-        </div>
-        <div style={{display:'flex',gap:'10px',alignItems:'center',flexWrap:'wrap'}}>
-        <div style={{position:'relative',flex:'0 0 260px'}}>
-          <i className="fa-solid fa-magnifying-glass" style={{position:'absolute',left:'12px',top:'50%',transform:'translateY(-50%)',color:'#9ca3af',fontSize:'12px'}}></i>
-          <input type="text" value={search} onChange={e=>setSearch(e.target.value)} placeholder="ค้นหาเวอร์ชัน/หัวเรื่อง/รายละเอียด"
-            style={{width:'100%',padding:'8px 12px 8px 32px',borderRadius:'10px',border:'1px solid #e5e7eb',background:'#f9fafb',fontSize:'12px',outline:'none',color:'#1f2937',caretColor:'#0d9488'}}
-            onFocus={e=>{e.currentTarget.style.borderColor='#14b8a6';e.currentTarget.style.background='#fff';}}
-            onBlur={e=>{e.currentTarget.style.borderColor='#e5e7eb';e.currentTarget.style.background='#f9fafb';}}
-          />
-        </div>
-        <div style={{display:'flex',gap:'6px',flexWrap:'wrap',flex:1}}>
+      {/* ── v0.7.17.3 — Layout 2 ช่อง แยก scroll อิสระ — Gmail-style ── */}
+      {/* outer height: calc(100vh - 200px) คือพื้นที่หลังจาก banner + margins */}
+      <div style={{display:'flex',gap:'16px',alignItems:'stretch',height:'calc(100vh - 200px)',minHeight:'400px',position:'relative'}}>
+
+      {/* ── Left aside: filter sidebar (พับได้, scroll อิสระ) ── */}
+      <aside style={{width:filterSidebarOpen?'260px':'40px',flexShrink:0,transition:'width 0.2s ease',position:'relative',height:'100%'}}>
+        {/* Chevron toggle button — ลอยขอบบน */}
+        <button type="button" onClick={()=>setFilterSidebarOpen(o=>!o)}
+          title={filterSidebarOpen?'ย่อแถบตัวกรอง':'ขยายแถบตัวกรอง'}
+          style={{position:'absolute',right:filterSidebarOpen?'-12px':'8px',top:'12px',width:'24px',height:'24px',borderRadius:'50%',border:'1.5px solid #0d9488',background:'#fff',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',zIndex:5,boxShadow:'0 1px 3px rgba(0,0,0,0.08)',transition:'all 0.15s'}}
+          onMouseEnter={e=>{ e.currentTarget.style.background='#0d9488'; const icon=e.currentTarget.querySelector('i'); if (icon) icon.style.color='#fff'; }}
+          onMouseLeave={e=>{ e.currentTarget.style.background='#fff'; const icon=e.currentTarget.querySelector('i'); if (icon) icon.style.color='#0d9488'; }}>
+          <i className={`fa-solid ${filterSidebarOpen?'fa-chevron-left':'fa-chevron-right'}`} style={{fontSize:'9px',color:'#0d9488',transition:'color 0.15s'}}></i>
+        </button>
+        {filterSidebarOpen ? (<div style={{display:'flex',flexDirection:'column',gap:'10px',height:'100%',overflowY:'auto',overscrollBehavior:'contain',scrollbarGutter:'stable',paddingBottom:'12px'}}>
+
+      {/* ── v0.7.17.3 — Filter bar (แถบ 1: ตัวกรองระบบ) — collapsible ── */}
+      <div style={{background:'#fff',borderRadius:'14px',border:'1px solid #e5e7eb',boxShadow:'0 4px 12px rgba(0,0,0,0.06)',flexShrink:0}}>
+        {/* Header — กดเปิด/พับ */}
+        <button type="button" className="tb-cl-header-ver" onClick={()=>setFilterVerOpen(o=>!o)}
+          style={{width:'100%',display:'flex',alignItems:'center',gap:'8px',padding:'10px 14px',background:filterVerOpen?'#f0fdfa':'#fff',border:'none',cursor:'pointer',transition:'background 0.15s',borderBottom:filterVerOpen?'1px solid #d1faf3':'none',borderRadius:filterVerOpen?'14px 14px 0 0':'14px'}}>
+          <i className="fa-solid fa-sliders" style={{color:'#0d9488',fontSize:'13px'}}></i>
+          <span style={{fontSize:'13px',fontWeight:700,color:'#0f766e',flex:1,textAlign:'left'}}>ตัวกรองเวอร์ชั่น</span>
+          {hasTagRowFilter && <span style={{fontSize:'9px',fontWeight:700,color:'#fff',background:'#0d9488',padding:'2px 6px',borderRadius:'999px'}}>มีกรอง</span>}
+          <i className={`fa-solid ${filterVerOpen?'fa-chevron-up':'fa-chevron-down'}`} style={{color:'#9ca3af',fontSize:'10px'}}></i>
+        </button>
+        {filterVerOpen && (
+        <div className="tb-cl-chips-ver" style={{padding:'10px 12px',display:'flex',flexDirection:'column',gap:'6px'}}>
+          {/* ค้นหา full-width */}
+          <div style={{position:'relative'}}>
+            <i className="fa-solid fa-magnifying-glass" style={{position:'absolute',left:'10px',top:'50%',transform:'translateY(-50%)',color:'#9ca3af',fontSize:'11px'}}></i>
+            <input type="text" value={search} onChange={e=>setSearch(e.target.value)} placeholder="ค้นหาเวอร์ชัน/หัวเรื่อง"
+              style={{width:'100%',boxSizing:'border-box',padding:'7px 10px 7px 28px',borderRadius:'8px',border:'1px solid #e5e7eb',background:'#f9fafb',fontSize:'12px',outline:'none',color:'#1f2937',caretColor:'#0d9488'}}
+              onFocus={e=>{e.currentTarget.style.borderColor='#14b8a6';e.currentTarget.style.background='#fff';}}
+              onBlur={e=>{e.currentTarget.style.borderColor='#e5e7eb';e.currentTarget.style.background='#f9fafb';}}
+            />
+          </div>
+          {/* Chips — แถวละอัน text-left + icon-right + count */}
           {Object.entries(TAGS).map(([key,t])=>{
             const active = selectedTags.has(key);
             const count = stats.byTag[key] || 0;
             return (
               <button key={key} type="button" onClick={()=>toggleTag(key)}
-                style={{display:'inline-flex',alignItems:'center',gap:'4px',padding:'5px 10px',borderRadius:'999px',border:active?`1.5px solid ${t.fg}`:'1px solid #e5e7eb',background:active?t.bg:'#fff',color:active?t.fg:'#6b7280',fontSize:'11px',fontWeight:600,cursor:'pointer',transition:'all 0.15s'}}>
-                <span>{t.emoji}</span>
+                style={{display:'flex',width:'100%',boxSizing:'border-box',alignItems:'center',justifyContent:'space-between',padding:'7px 10px',borderRadius:'8px',border:active?`1.5px solid ${t.fg}`:'1px solid #e5e7eb',background:active?t.bg:'#fff',color:active?t.fg:'#4b5563',fontSize:'12px',fontWeight:600,cursor:'pointer',transition:'all 0.15s'}}>
                 <span>{t.label}</span>
-                <span style={{fontSize:'10px',opacity:0.7}}>({count})</span>
+                <span style={{display:'inline-flex',alignItems:'center',gap:'5px',fontSize:'11px',color:active?t.fg:'#9ca3af'}}>
+                  <span>{t.emoji}</span>
+                  <span>({count})</span>
+                </span>
               </button>
             );
           })}
-          {/* ── ปุ่ม filter "เฉพาะมีคอมเม้น" สีอำพัน (ตรงกับกรอบคอมเม้น) ── */}
+          {/* "เฉพาะมีความคิดเห็น" — สีเทาเหมือน chips อื่นๆ */}
           <button type="button" onClick={()=>setOnlyWithComments(v=>!v)}
-            title="แสดงเฉพาะเวอร์ชั่นที่มีคอมเม้น"
-            style={{display:'inline-flex',alignItems:'center',gap:'4px',padding:'5px 10px',borderRadius:'999px',border: onlyWithComments?'1.5px solid #d97706':'1px solid #fbbf24',background: onlyWithComments?'#fef3c7':'#fffbeb',color:'#92400e',fontSize:'11px',fontWeight:700,cursor:'pointer',transition:'all 0.15s'}}>
-            <i className="fa-regular fa-comment"></i>
-            <span>เฉพาะมีคอมเม้น</span>
-            <span style={{fontSize:'10px',opacity:0.7}}>({Object.values(commentCounts).filter(n=>n>0).length})</span>
+            title="แสดงเฉพาะเวอร์ชั่นที่มีความคิดเห็น"
+            style={{display:'flex',width:'100%',boxSizing:'border-box',alignItems:'center',justifyContent:'space-between',padding:'7px 10px',borderRadius:'8px',border: onlyWithComments?'1.5px solid #6b7280':'1px solid #e5e7eb',background: onlyWithComments?'#f3f4f6':'#fff',color: onlyWithComments?'#374151':'#4b5563',fontSize:'12px',fontWeight:600,cursor:'pointer',transition:'all 0.15s'}}>
+            <span>เฉพาะมีความคิดเห็น</span>
+            <span style={{display:'inline-flex',alignItems:'center',gap:'5px',fontSize:'11px',color: onlyWithComments?'#374151':'#9ca3af'}}>
+              <i className="fa-regular fa-comment"></i>
+              <span>({Object.values(commentCounts).filter(n=>n>0).length})</span>
+            </span>
           </button>
+          {hasTagRowFilter && (
+            <button type="button" onClick={clearTagFilters}
+              style={{padding:'6px 10px',borderRadius:'8px',border:'1.5px solid #ef4444',background:'#fef2f2',color:'#b91c1c',fontSize:'11px',fontWeight:700,cursor:'pointer',marginTop:'2px'}}>
+              <i className="fa-solid fa-xmark" style={{marginRight:'4px'}}></i>ล้างตัวกรอง
+            </button>
+          )}
         </div>
-        {hasTagRowFilter && (
-          <button type="button" onClick={clearTagFilters}
-            style={{padding:'6px 12px',borderRadius:'8px',border:'1.5px solid #ef4444',background:'#fef2f2',color:'#b91c1c',fontSize:'11px',fontWeight:700,cursor:'pointer'}}>
-            <i className="fa-solid fa-xmark" style={{marginRight:'4px'}}></i>ล้างค่า
-          </button>
         )}
-        </div>{/* /flex row */}
       </div>
 
-      {/* ── แถบที่ 2: ตัวกรองคอมเม้น (v0.7.14.7) ── */}
-      <div style={{padding:'10px 14px',marginTop:'8px',background:'#fffbeb',borderRadius:'14px',border:'1px solid #fde68a',boxShadow:'0 4px 12px rgba(245,158,11,0.08)'}}>
-        <div style={{display:'flex',alignItems:'center',gap:'5px',marginBottom:'8px'}}>
-          <i className="fa-solid fa-comments" style={{color:'#d97706',fontSize:'12px'}}></i>
-          <span style={{fontSize:'12px',fontWeight:700,color:'#92400e'}}>ตัวกรองคอมเม้น</span>
-        </div>
-        <div style={{display:'flex',gap:'8px',alignItems:'center',flexWrap:'wrap'}}>
-        {/* ช่องค้นหา comment text */}
-        <div style={{position:'relative',flex:'0 0 260px'}}>
-          <i className="fa-solid fa-magnifying-glass" style={{position:'absolute',left:'10px',top:'50%',transform:'translateY(-50%)',color:'#9ca3af',fontSize:'11px'}}></i>
-          <input type="text" value={commentSearch} onChange={e=>setCommentSearch(e.target.value)} placeholder="ค้นหาข้อความในคอมเม้น"
-            style={{width:'100%',padding:'7px 10px 7px 28px',borderRadius:'8px',border:'1px solid #fbbf24',background:'#fff',fontSize:'12px',outline:'none',color:'#1f2937',caretColor:'#d97706'}}
-            onFocus={e=>{e.currentTarget.style.borderColor='#d97706';}}
-            onBlur={e=>{e.currentTarget.style.borderColor='#fbbf24';}}
-          />
-        </div>
+      {/* ── v0.7.17.3 — Filter bar (แถบ 2: ตัวกรองความคิดเห็น) — collapsible — สีอำพันเดิม ── */}
+      <div style={{background:'#fffbeb',borderRadius:'14px',border:'1px solid #fde68a',boxShadow:'0 4px 12px rgba(245,158,11,0.08)',flexShrink:0}}>
+        {/* Header — กดเปิด/พับ (สีอำพัน) */}
+        <button type="button" className="tb-cl-header-cmt" onClick={()=>setFilterCmtOpen(o=>!o)}
+          style={{width:'100%',display:'flex',alignItems:'center',gap:'8px',padding:'10px 14px',background:filterCmtOpen?'#fef3c7':'#fffbeb',border:'none',cursor:'pointer',transition:'background 0.15s',borderBottom:filterCmtOpen?'1px solid #fde68a':'none',borderRadius:filterCmtOpen?'14px 14px 0 0':'14px'}}>
+          <i className="fa-solid fa-comments" style={{color:'#d97706',fontSize:'13px'}}></i>
+          <span style={{fontSize:'13px',fontWeight:700,color:'#92400e',flex:1,textAlign:'left'}}>ตัวกรองความคิดเห็น</span>
+          {hasCommentRowFilter && <span style={{fontSize:'9px',fontWeight:700,color:'#fff',background:'#d97706',padding:'2px 6px',borderRadius:'999px'}}>มีกรอง</span>}
+          <i className={`fa-solid ${filterCmtOpen?'fa-chevron-up':'fa-chevron-down'}`} style={{color:'#9ca3af',fontSize:'10px'}}></i>
+        </button>
+        {filterCmtOpen && (
+        <div className="tb-cl-chips-cmt" style={{padding:'10px 12px',display:'flex',flexDirection:'column',gap:'6px'}}>
+          {/* ค้นหา full-width */}
+          <div style={{position:'relative'}}>
+            <i className="fa-solid fa-magnifying-glass" style={{position:'absolute',left:'10px',top:'50%',transform:'translateY(-50%)',color:'#9ca3af',fontSize:'11px'}}></i>
+            <input type="text" value={commentSearch} onChange={e=>setCommentSearch(e.target.value)} placeholder="ค้นหาข้อความในความคิดเห็น"
+              style={{width:'100%',boxSizing:'border-box',padding:'7px 10px 7px 28px',borderRadius:'8px',border:'1px solid #fbbf24',background:'#fff',fontSize:'12px',outline:'none',color:'#1f2937',caretColor:'#d97706'}}
+              onFocus={e=>{e.currentTarget.style.borderColor='#d97706';}}
+              onBlur={e=>{e.currentTarget.style.borderColor='#fbbf24';}}
+            />
+          </div>
 
-        {/* Status chips — 4 ประเภท */}
-        <div style={{display:'flex',gap:'5px',flexWrap:'wrap'}}>
+          {/* Status chips — แถวละอัน text-left + emoji-right + count */}
           {Object.entries(CHANGELOG_STATUS_META).map(([key,meta])=>{
             const active = selectedStatuses.has(key);
             const count = commentFilterStats.byStatus[key] || 0;
             return (
               <button key={key} type="button" onClick={()=>toggleStatus(key)}
-                style={{display:'inline-flex',alignItems:'center',gap:'4px',padding:'5px 9px',borderRadius:'999px',border:active?`1.5px solid ${meta.fg}`:'1px solid #e5e7eb',background:active?meta.bg:'#fff',color:active?meta.fg:'#6b7280',fontSize:'11px',fontWeight:600,cursor:'pointer',transition:'all 0.15s'}}>
-                <span>{meta.emoji}</span>
+                style={{display:'flex',width:'100%',boxSizing:'border-box',alignItems:'center',justifyContent:'space-between',padding:'7px 10px',borderRadius:'8px',border:active?`1.5px solid ${meta.fg}`:'1px solid #e5e7eb',background:active?meta.bg:'#fff',color:active?meta.fg:'#4b5563',fontSize:'12px',fontWeight:600,cursor:'pointer',transition:'all 0.15s'}}>
                 <span>{meta.label}</span>
-                <span style={{fontSize:'10px',opacity:0.7}}>({count})</span>
+                <span style={{display:'inline-flex',alignItems:'center',gap:'5px',fontSize:'11px',color:active?meta.fg:'#9ca3af'}}>
+                  <span>{meta.emoji}</span>
+                  <span>({count})</span>
+                </span>
               </button>
             );
           })}
-        </div>
 
-        {/* @ Mention picker */}
-        <div ref={mentionPickerRef} style={{position:'relative'}}>
+          {/* @ Mention picker — full-width, dropdown ออกจาก button ตรงๆ */}
+          <div ref={mentionPickerRef} style={{position:'relative'}}>
           <button type="button" onClick={()=>{ const next = !mentionPickerOpen; setMentionPickerOpen(next); if (next) ensureMentionUsersLoaded(); }}
-            style={{display:'inline-flex',alignItems:'center',gap:'5px',padding:'5px 10px',borderRadius:'999px',border:selectedMentionUserIds.size>0?'1.5px solid #0d9488':'1px solid #5eead4',background:selectedMentionUserIds.size>0?'#ccfbf1':'#f0fdfa',color:'#0f766e',fontSize:'11px',fontWeight:700,cursor:'pointer',transition:'all 0.15s'}}>
-            <i className="fa-solid fa-at"></i>
+            style={{display:'flex',width:'100%',boxSizing:'border-box',alignItems:'center',justifyContent:'space-between',padding:'7px 10px',borderRadius:'8px',border:selectedMentionUserIds.size>0?'1.5px solid #0d9488':'1px solid #5eead4',background:selectedMentionUserIds.size>0?'#ccfbf1':'#f0fdfa',color:'#0f766e',fontSize:'12px',fontWeight:700,cursor:'pointer',transition:'all 0.15s'}}>
             <span>แท็กผู้ใช้</span>
-            {selectedMentionUserIds.size>0 && <span style={{fontSize:'10px',background:'#0d9488',color:'#fff',padding:'1px 6px',borderRadius:'999px'}}>{selectedMentionUserIds.size}</span>}
-            <i className={`fa-solid ${mentionPickerOpen?'fa-chevron-up':'fa-chevron-down'}`} style={{fontSize:'9px'}}></i>
+            <span style={{display:'inline-flex',alignItems:'center',gap:'5px',fontSize:'11px'}}>
+              {selectedMentionUserIds.size>0 && <span style={{fontSize:'10px',background:'#0d9488',color:'#fff',padding:'1px 6px',borderRadius:'999px'}}>{selectedMentionUserIds.size}</span>}
+              <i className="fa-solid fa-at"></i>
+              <i className={`fa-solid ${mentionPickerOpen?'fa-chevron-up':'fa-chevron-down'}`} style={{fontSize:'9px'}}></i>
+            </span>
           </button>
 
           {mentionPickerOpen && (
-            <div style={{position:'absolute',top:'calc(100% + 4px)',left:0,zIndex:60,background:'#fff',border:'2px solid #0d9488',borderRadius:'10px',minWidth:'360px',maxWidth:'440px',maxHeight:'360px',overflowY:'auto',boxShadow:'0 8px 24px rgba(0,0,0,0.18)'}}>
+            <div style={{position:'absolute',top:'calc(100% + 4px)',left:0,right:0,zIndex:60,background:'#fff',border:'2px solid #0d9488',borderRadius:'10px',maxHeight:'240px',overflowY:'auto',boxShadow:'0 8px 24px rgba(0,0,0,0.18)'}}>
               {/* Search ภายใน */}
               <div style={{position:'sticky',top:0,background:'#fff',padding:'8px',borderBottom:'1px solid #f1f5f9'}}>
                 <input type="text" value={mentionQuery} onChange={e=>setMentionQuery(e.target.value)} placeholder="ค้นหาชื่อ"
@@ -8469,15 +8539,23 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
                 return filtered.map(u => {
                   const checked = selectedMentionUserIds.has(u.id);
                   const isAdminUser = u.role === 'admin';
+                  // v0.7.17.3 — 2-line layout: username บรรทัดบน, full name บรรทัดล่าง + title tooltip
                   return (
                     <label key={u.id} className={'tb-mention-filter-row' + (isAdminUser ? ' is-admin' : '')}
-                      style={{display:'flex',alignItems:'center',gap:'6px',padding:'7px 10px',cursor:'pointer',fontSize:'12px',color:'#1f2937',background:isAdminUser?'#fef3c7':(checked?'#ecfdf5':'transparent'),borderLeft:isAdminUser?'3px solid #d97706':'3px solid transparent',borderBottom:'1px solid #f1f5f9',flexWrap:'nowrap',whiteSpace:'nowrap',overflow:'hidden'}}>
-                      <input type="checkbox" checked={checked} onChange={()=>toggleMentionUser(u.id)} style={{cursor:'pointer',flexShrink:0}}/>
-                      <b style={{color:isAdminUser?'#92400e':'#0f766e',flexShrink:0}}>@{u.username}</b>
-                      {isAdminUser && <span style={{fontSize:'9px',fontWeight:800,color:'#fff',background:'#d97706',padding:'1px 5px',borderRadius:'999px',flexShrink:0}}>ADMIN</span>}
-                      <span style={{color:'#374151',fontWeight:600,fontSize:'11px',overflow:'hidden',textOverflow:'ellipsis',flex:'1 1 auto',minWidth:0}} title={u.display_name}>· {u.display_name}</span>
-                      {u.profession_label && <span style={{color:'#6b7280',fontSize:'10px',flexShrink:0}}>· {u.profession_label}</span>}
-                      <span style={{marginLeft:'4px',fontSize:'10px',color:'#9ca3af',flexShrink:0}}>({commentFilterStats.byMentionedId[u.id]||0})</span>
+                      title={`@${u.username} · ${u.display_name}${u.profession_label?' · '+u.profession_label:''}`}
+                      style={{display:'flex',flexDirection:'column',gap:'2px',padding:'7px 10px',cursor:'pointer',fontSize:'12px',color:'#1f2937',background:isAdminUser?'#fef3c7':(checked?'#ecfdf5':'transparent'),borderLeft:isAdminUser?'3px solid #d97706':'3px solid transparent',borderBottom:'1px solid #f1f5f9'}}>
+                      {/* บรรทัดบน: checkbox + @username + ADMIN + count */}
+                      <div style={{display:'flex',alignItems:'center',gap:'6px',width:'100%'}}>
+                        <input type="checkbox" checked={checked} onChange={()=>toggleMentionUser(u.id)} style={{cursor:'pointer',flexShrink:0}}/>
+                        <b style={{color:isAdminUser?'#92400e':'#0f766e',flexShrink:0}}>@{u.username}</b>
+                        {isAdminUser && <span style={{fontSize:'9px',fontWeight:800,color:'#fff',background:'#d97706',padding:'1px 5px',borderRadius:'999px',flexShrink:0}}>ADMIN</span>}
+                        <span style={{marginLeft:'auto',fontSize:'10px',color:'#9ca3af',flexShrink:0}}>({commentFilterStats.byMentionedId[u.id]||0})</span>
+                      </div>
+                      {/* บรรทัดล่าง: display_name + profession (เยื้องตาม checkbox) */}
+                      <div style={{display:'flex',alignItems:'center',gap:'4px',paddingLeft:'24px',fontSize:'11px'}}>
+                        <span style={{color:'#374151',fontWeight:600,overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis',flex:'1 1 auto',minWidth:0}}>{u.display_name}</span>
+                        {u.profession_label && <span style={{color:'#6b7280',fontSize:'10px',flexShrink:0}}>· {u.profession_label}</span>}
+                      </div>
                     </label>
                   );
                 });
@@ -8509,71 +8587,83 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
           </div>
         )}
 
-        {/* Resolved tri-state — กดซ้ำ active button เพื่อกลับเป็น 'all' */}
-        <div style={{display:'inline-flex',border:'1px solid #fbbf24',borderRadius:'8px',overflow:'hidden'}}>
+          {/* Resolved tri-state — full-width 3-button group */}
+          <div style={{display:'flex',width:'100%',border:'1px solid #fbbf24',borderRadius:'8px',overflow:'hidden'}}>
+            {[
+              { v:'all', label:'ทั้งหมด', count: null },
+              { v:'open', label:'ยังไม่จัดการ', count: commentFilterStats.openCount },
+              { v:'resolved', label:'จัดการแล้ว', count: commentFilterStats.resolvedCount },
+            ].map(({v,label,count}, i) => {
+              const active = resolvedFilter === v;
+              return (
+                <button key={v} type="button"
+                  onClick={()=>setResolvedFilter(active && v !== 'all' ? 'all' : v)}
+                  style={{flex:1,padding:'7px 4px',border:'none',borderLeft:i>0?'1px solid #fbbf24':'none',background:active?'#d97706':'#fff',color:active?'#fff':'#92400e',fontSize:'11px',fontWeight:700,cursor:'pointer',transition:'all 0.15s'}}>
+                  {label}{count !== null && <span style={{fontSize:'10px',opacity:0.8,marginLeft:'3px'}}>({count})</span>}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* v0.7.17.3 — ความคิดเห็นของฉัน + extras: สีเทาเหมือน status chips */}
+          <button type="button" onClick={()=>setOnlyMyComments(v=>!v)}
+            disabled={!commentsMeta.currentUserId}
+            title={!commentsMeta.currentUserId ? 'ต้องเข้าสู่ระบบก่อน' : 'แสดงเฉพาะความคิดเห็นของคุณ'}
+            style={{display:'flex',width:'100%',boxSizing:'border-box',alignItems:'center',justifyContent:'space-between',padding:'7px 10px',borderRadius:'8px',border:onlyMyComments?'1.5px solid #6b7280':'1px solid #e5e7eb',background:onlyMyComments?'#f3f4f6':'#fff',color:onlyMyComments?'#374151':'#4b5563',fontSize:'12px',fontWeight:600,cursor:commentsMeta.currentUserId?'pointer':'not-allowed',opacity:commentsMeta.currentUserId?1:0.5,transition:'all 0.15s'}}>
+            <span>ความคิดเห็นของฉัน</span>
+            <span style={{display:'inline-flex',alignItems:'center',gap:'5px',fontSize:'11px',color:onlyMyComments?'#374151':'#9ca3af'}}>
+              <i className="fa-solid fa-user"></i>
+              <span>({commentFilterStats.mineCount})</span>
+            </span>
+          </button>
+
           {[
-            { v:'all', label:'ทั้งหมด', count: null },
-            { v:'open', label:'ยังไม่จัดการ', count: commentFilterStats.openCount },
-            { v:'resolved', label:'จัดการแล้ว', count: commentFilterStats.resolvedCount },
-          ].map(({v,label,count}, i) => {
-            const active = resolvedFilter === v;
+            { k:'liked',      icon:'fa-solid fa-thumbs-up',     label:'ที่ฉันถูกใจ',    count: commentFilterStats.likedCount },
+            { k:'my_replies', icon:'fa-solid fa-reply',         label:'ที่ฉันตอบ',      count: commentFilterStats.myRepliesCount },
+            { k:'unread',     icon:'fa-regular fa-envelope',    label:'ยังไม่อ่าน',     count: commentFilterStats.unreadCount },
+          ].map(({k,icon,label,count})=>{
+            const active = extraFilters.has(k);
+            const disabled = !commentsMeta.currentUserId;
             return (
-              <button key={v} type="button"
-                onClick={()=>setResolvedFilter(active && v !== 'all' ? 'all' : v)}
-                style={{padding:'5px 10px',border:'none',borderLeft:i>0?'1px solid #fbbf24':'none',background:active?'#d97706':'#fff',color:active?'#fff':'#92400e',fontSize:'11px',fontWeight:700,cursor:'pointer',transition:'all 0.15s'}}>
-                {label}{count !== null && <span style={{fontSize:'10px',opacity:0.8,marginLeft:'3px'}}>({count})</span>}
+              <button key={k} type="button" onClick={()=>{ if(!disabled) toggleExtra(k); }}
+                disabled={disabled}
+                title={disabled ? 'ต้องเข้าสู่ระบบก่อน' : label}
+                style={{display:'flex',width:'100%',boxSizing:'border-box',alignItems:'center',justifyContent:'space-between',padding:'7px 10px',borderRadius:'8px',border:active?'1.5px solid #6b7280':'1px solid #e5e7eb',background:active?'#f3f4f6':'#fff',color:active?'#374151':'#4b5563',fontSize:'12px',fontWeight:600,cursor:disabled?'not-allowed':'pointer',opacity:disabled?0.5:1,transition:'all 0.15s'}}>
+                <span>{label}</span>
+                <span style={{display:'inline-flex',alignItems:'center',gap:'5px',fontSize:'11px',color:active?'#374151':'#9ca3af'}}>
+                  <i className={icon}></i>
+                  <span>({count})</span>
+                </span>
               </button>
             );
           })}
-        </div>
 
-        {/* คอมเม้นของฉัน */}
-        <button type="button" onClick={()=>setOnlyMyComments(v=>!v)}
-          disabled={!commentsMeta.currentUserId}
-          title={!commentsMeta.currentUserId ? 'ต้องเข้าสู่ระบบก่อน' : 'แสดงเฉพาะคอมเม้นของคุณ'}
-          style={{display:'inline-flex',alignItems:'center',gap:'5px',padding:'5px 10px',borderRadius:'999px',border:onlyMyComments?'1.5px solid #d97706':'1px solid #fbbf24',background:onlyMyComments?'#fef3c7':'#fffbeb',color:'#92400e',fontSize:'11px',fontWeight:700,cursor:commentsMeta.currentUserId?'pointer':'not-allowed',opacity:commentsMeta.currentUserId?1:0.5,transition:'all 0.15s'}}>
-          <i className="fa-solid fa-user"></i>
-          <span>คอมเม้นของฉัน</span>
-          <span style={{fontSize:'10px',opacity:0.7}}>({commentFilterStats.mineCount})</span>
-        </button>
-
-        {/* Extra chips: liked / my replies / unread (v0.7.14.7) */}
-        {[
-          { k:'liked',      icon:'fa-solid fa-thumbs-up',     label:'ที่ฉันถูกใจ',    count: commentFilterStats.likedCount,      fg:'#b45309', bg:'#fef3c7', border:'#d97706' },
-          { k:'my_replies', icon:'fa-solid fa-reply',         label:'ที่ฉันตอบ',      count: commentFilterStats.myRepliesCount,  fg:'#6b21a8', bg:'#f3e8ff', border:'#9333ea' },
-          { k:'unread',     icon:'fa-regular fa-envelope',    label:'ยังไม่อ่าน',     count: commentFilterStats.unreadCount,     fg:'#991b1b', bg:'#fee2e2', border:'#dc2626' },
-        ].map(({k,icon,label,count,fg,bg,border})=>{
-          const active = extraFilters.has(k);
-          const disabled = !commentsMeta.currentUserId;
-          return (
-            <button key={k} type="button" onClick={()=>{ if(!disabled) toggleExtra(k); }}
-              disabled={disabled}
-              title={disabled ? 'ต้องเข้าสู่ระบบก่อน' : label}
-              style={{display:'inline-flex',alignItems:'center',gap:'5px',padding:'5px 10px',borderRadius:'999px',border:active?`1.5px solid ${border}`:`1px solid ${border}`,background:active?bg:'#fff',color:active?fg:'#6b7280',fontSize:'11px',fontWeight:700,cursor:disabled?'not-allowed':'pointer',opacity:disabled?0.5:1,transition:'all 0.15s'}}>
-              <i className={icon}></i>
-              <span>{label}</span>
-              <span style={{fontSize:'10px',opacity:0.7}}>({count})</span>
+          {/* ปุ่มล้างค่า */}
+          {hasCommentRowFilter && (
+            <button type="button" onClick={clearCommentFilters}
+              style={{padding:'6px 10px',borderRadius:'8px',border:'1.5px solid #ef4444',background:'#fef2f2',color:'#b91c1c',fontSize:'11px',fontWeight:700,cursor:'pointer',marginTop:'2px'}}>
+              <i className="fa-solid fa-xmark" style={{marginRight:'4px'}}></i>ล้างตัวกรอง
             </button>
-          );
-        })}
-
-        {/* ปุ่มล้างค่า — เฉพาะแถบ 2 (v0.7.14.7) */}
-        {hasCommentRowFilter && (
-          <button type="button" onClick={clearCommentFilters}
-            style={{marginLeft:'auto',padding:'6px 12px',borderRadius:'8px',border:'1.5px solid #ef4444',background:'#fef2f2',color:'#b91c1c',fontSize:'11px',fontWeight:700,cursor:'pointer'}}>
-            <i className="fa-solid fa-xmark" style={{marginRight:'4px'}}></i>ล้างค่า
-          </button>
+          )}
+        </div>
         )}
-        </div>{/* /flex row */}
       </div>
 
-      </div>{/* /sticky header group */}
+      </div>) : (
+        /* ตอนพับ — เห็นแค่ไอคอน 🎚 (กดปุ่ม chevron เพื่อขยาย) */
+        <div style={{padding:'40px 8px 12px',textAlign:'center'}}>
+          <i className="fa-solid fa-sliders" style={{color:'#0d9488',fontSize:'18px'}}></i>
+        </div>
+      )}
+      </aside>
 
-      {/* ── Body — parent (main content area) จัดการ scroll เอง ── */}
-      <div>
+      {/* ── Right column: body (timeline / grouped) — scroll อิสระ ── */}
+      <div ref={rightColRef}
+        onScroll={e=>setShowBackToTop(e.currentTarget.scrollTop > 300)}
+        style={{flex:1,minWidth:0,height:'100%',overflowY:'auto',overscrollBehavior:'contain',paddingRight:'8px',position:'relative'}}>
         {view === 'timeline' ? (
-          // ─── Timeline view ───
-          <div style={{maxWidth:'780px',margin:'0 auto'}}>
+          // ─── Timeline view — ขยาย 780→936px (+20%) ───
+          <div style={{maxWidth:'936px',margin:'0 auto'}}>
             {filteredTimeline.length === 0 ? (
               <div style={{textAlign:'center',padding:'60px 20px',color:'#9ca3af'}}>
                 <i className="fa-solid fa-magnifying-glass-minus" style={{fontSize:'32px',marginBottom:'12px',display:'block'}}></i>
@@ -8602,7 +8692,7 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
                         {commentCounts[v.version] > 0 && (
                           <button type="button" tabIndex={-1} onMouseDown={e=>e.preventDefault()}
                             onClick={e=>{e.stopPropagation();setOnlyWithComments(v=>!v);}}
-                            title={`มี ${commentCounts[v.version]} ความคิดเห็น — กดเพื่อกรองเฉพาะที่มีคอมเม้น`}
+                            title={`มี ${commentCounts[v.version]} ความคิดเห็น — กดเพื่อกรองเฉพาะที่มีความคิดเห็น`}
                             style={{cursor:'pointer',display:'inline-flex',alignItems:'center',gap:'3px',fontSize:'10px',fontWeight:700,color:onlyWithComments?'#fff':'#92400e',background:onlyWithComments?'#d97706':'#fef3c7',border:onlyWithComments?'1px solid #b45309':'1px solid #fbbf24',padding:'2px 7px',borderRadius:'999px',transition:'all 0.15s'}}>
                             <i className="fa-regular fa-comment"></i>{commentCounts[v.version]}
                           </button>
@@ -8651,6 +8741,7 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
                             isAdmin={commentsMeta.isAdmin}
                             onRefresh={refreshAllComments}
                             onCountChange={n=>setCommentCount(v.version, n)}
+                            highlightCommentId={highlightCommentTarget?.version === v.version ? highlightCommentTarget.commentId : null}
                             pageFilter={{ hasFilter: hasCommentFilter, matches: commentMatchesAxes }}/>
                         </div>
                       )}
@@ -8678,7 +8769,7 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
           </div>
         ) : (
           // ─── Grouped view ───
-          <div style={{maxWidth:'880px',margin:'0 auto'}}>
+          <div style={{maxWidth:'1056px',margin:'0 auto'}}>
             {CHANGELOG.map(major => {
               const expanded = expandedMajors.has(major.major);
               const filteredVersions = major.versions.filter(matchesFilters);
@@ -8763,7 +8854,8 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
                                             currentUserId={commentsMeta.currentUserId}
                                             isAdmin={commentsMeta.isAdmin}
                                             onRefresh={refreshAllComments}
-                                            onCountChange={n=>setCommentCount(v.version, n)}/>
+                                            onCountChange={n=>setCommentCount(v.version, n)}
+                                            highlightCommentId={highlightCommentTarget?.version === v.version ? highlightCommentTarget.commentId : null}/>
                                         </div>
                                       )}
                                     </div>
@@ -8781,7 +8873,20 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
             })}
           </div>
         )}
-      </div>
+      </div>{/* /right column */}
+
+      {/* v0.7.17.3 — ปุ่มกลับขึ้นบน (Back-to-top) */}
+      {showBackToTop && (
+        <button type="button"
+          onClick={()=>rightColRef.current?.scrollTo({top:0,behavior:'smooth'})}
+          title="กลับขึ้นบนสุด"
+          style={{position:'absolute',bottom:'20px',right:'20px',zIndex:50,width:'44px',height:'44px',borderRadius:'50%',border:'none',background:'#0d9488',color:'#fff',cursor:'pointer',boxShadow:'0 4px 16px rgba(13,148,136,0.35)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'16px',transition:'all 0.2s'}}
+          onMouseEnter={e=>{e.currentTarget.style.background='#0f766e';e.currentTarget.style.transform='translateY(-2px)';}}
+          onMouseLeave={e=>{e.currentTarget.style.background='#0d9488';e.currentTarget.style.transform='translateY(0)';}}>
+          <i className="fa-solid fa-arrow-up"></i>
+        </button>
+      )}
+      </div>{/* /2-column layout */}
 
       {/* Commit detail popup */}
       {commitDetailEntry && (
@@ -8886,7 +8991,7 @@ const CHANGELOG_STATUS_META = {
   note:       { emoji:'📝', label:'บันทึก',     bg:'#f1f5f9', fg:'#334155', border:'#cbd5e1' },
 };
 
-const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ version, onCountChange, theme, initialComments, currentUserId: propsUserId, isAdmin: propsIsAdmin, onRefresh, pageFilter }) {
+const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ version, onCountChange, theme, initialComments, currentUserId: propsUserId, isAdmin: propsIsAdmin, onRefresh, pageFilter, highlightCommentId }) {
   const T = theme === 'amber'
     ? { bg:'#fffbeb', border:'#f59e0b', accent:'#92400e', accent2:'#d97706', sub:'#b45309', cardBorder:'#fbbf24', formBorder:'#f59e0b' }
     : { bg:'#f0fdfa', border:'#99f6e4', accent:'#0f766e', accent2:'#0d9488', sub:'#5eead4', cardBorder:'#ccfbf1', formBorder:'#5eead4' };
@@ -9044,11 +9149,19 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
   }, [comments, filterMode, sortMode, hideResolved]);
 
   // v0.7.17.1 — Lazy render comments (15 ก่อน + ดูเพิ่ม)
+  // v0.7.17.2 — fix: ถ้ามี highlightCommentId (กระดิ่ง navigate) ที่ตรงกับ comment ใน list → render ครบ
+  //              กัน scroll หา cmt-{id} ไม่เจอเพราะอยู่นอกช่วง lazy
   const [visibleCmtCount, setVisibleCmtCount] = React.useState(15);
   React.useEffect(() => { setVisibleCmtCount(15); }, [filterMode, sortMode, hideResolved]);
+  const hasHighlightInList = React.useMemo(() => {
+    if (!highlightCommentId) return false;
+    return visibleParents.some(c =>
+      c.id === highlightCommentId || (c.replies||[]).some(r => r.id === highlightCommentId)
+    );
+  }, [highlightCommentId, visibleParents]);
   const visibleCommentParents = React.useMemo(
-    () => visibleParents.slice(0, visibleCmtCount),
-    [visibleParents, visibleCmtCount]
+    () => hasHighlightInList ? visibleParents : visibleParents.slice(0, visibleCmtCount),
+    [visibleParents, visibleCmtCount, hasHighlightInList]
   );
 
   const load = React.useCallback(async () => {
@@ -9798,7 +9911,7 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
               </div>
             );
           })}
-          {visibleParents.length > visibleCmtCount && (
+          {!hasHighlightInList && visibleParents.length > visibleCmtCount && (
             <div style={{textAlign:'center',padding:'6px 0'}}>
               <button type="button" onClick={()=>setVisibleCmtCount(c=>c+15)}
                 style={{cursor:'pointer',padding:'6px 18px',border:'1px solid '+T.border,background:'#fff',color:T.accent,fontSize:'12px',fontWeight:700,borderRadius:'999px',transition:'all 0.15s'}}
