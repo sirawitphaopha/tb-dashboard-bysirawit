@@ -25,8 +25,8 @@ window.TB_CHANGELOG = [
       {
         version: "0.7.17.1",
         date: "2 มิ.ย. 2569",
-        commit: "pending",
-        commitFull: "pending",
+        commit: "389f161",
+        commitFull: "389f16101832e56a877b2bc8accbfe9d5516c348",
         title: "Phase 3 Cleanup + Lazy Render ทุกหน้า + Logout เร็วขึ้น 80% + ปลด CSP",
         changes: [
           { tag: "feature", text: "Lazy render 7 หน้า: รายชื่อผู้ป่วย Active / ทะเบียนจบการรักษา / ผู้ป่วยทั้งหมด / จัดการผู้ใช้ / ประวัติลบถาวร / ถังขยะ / คอมเม้นในประวัติเวอร์ชั่น — render 30-50 รายแรก + ปุ่ม 'ดูเพิ่ม' (เผื่อ multi-tenant ในอนาคต ลื่นแม้คนไข้ 500+ ราย)" },
