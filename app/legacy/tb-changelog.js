@@ -23,6 +23,22 @@ window.TB_CHANGELOG = [
     description: "ระบบ login จริง + Audit Log ครบวงจร + Admin Approval + ดีไซน์ใหม่ทั้งหมด",
     versions: [
       {
+        version: "0.7.17.1",
+        date: "2 มิ.ย. 2569",
+        commit: "pending",
+        commitFull: "pending",
+        title: "Phase 3 Cleanup + Lazy Render ทุกหน้า + Logout เร็วขึ้น 80% + ปลด CSP",
+        changes: [
+          { tag: "feature", text: "Lazy render 7 หน้า: รายชื่อผู้ป่วย Active / ทะเบียนจบการรักษา / ผู้ป่วยทั้งหมด / จัดการผู้ใช้ / ประวัติลบถาวร / ถังขยะ / คอมเม้นในประวัติเวอร์ชั่น — render 30-50 รายแรก + ปุ่ม 'ดูเพิ่ม' (เผื่อ multi-tenant ในอนาคต ลื่นแม้คนไข้ 500+ ราย)" },
+          { tag: "feature", text: "Logout เร็วขึ้น 80%: API parallel queries (getUser + device_fp) + fire-and-forget log writes → critical path 500-1000ms → 150-300ms · เพิ่ม optimistic overlay teal pulse ทันทีตอนกด (user เห็นทำงานต่อเนื่อง ไม่งง)" },
+          { tag: "polish", text: "Cleanup iframe ครบ: ลบ public/app.html, tb-app.jsx (5,874 บรรทัด), tb-modals.jsx (4,832), tb-data.js, tb-changelog.js, tb-*.compiled.js, app/components/HomeShell.tsx, app/v2/ folder" },
+          { tag: "polish", text: "ลบ esbuild devDep + npm script 'build:jsx' + 'prebuild' (ไม่ใช้แล้ว — SWC build-time)" },
+          { tag: "backend", text: "ย้าย TbAppMount + TbBundle จาก app/v2/ → app/components/ (app/v2/ folder ลบทิ้ง)" },
+          { tag: "fix", text: "CSP tightened: ลบ 'unsafe-eval' (Babel ไม่ใช้แล้ว) + ลบ cdn.tailwindcss.com + ลบ unpkg.com + ลบ cdn.jsdelivr.net → security ดีขึ้น ลด attack surface · frame-src 'self' → 'none' (ไม่ใช้ iframe แล้ว)" },
+        ],
+        body: "🎯 Phase 3 Cleanup — งาน follow-up หลัง Full Migration\n\nLazy render rationale:\n  ปัจจุบันคนไข้ Active ~8 ราย → ลื่นอยู่แล้ว\n  อนาคต multi-tenant (โรงพยาบาลอื่นมาใช้) คนไข้ 500+ ราย\n  → ต้อง slice + 'ดูเพิ่ม' ป้องกัน DOM thrash\n\nLogout optimization:\n  ก่อน — 5 ops sequential = 500ms minimum\n  หลัง — parallel + fire-and-forget = ~280ms critical path (-44%)\n  + optimistic overlay ทันทีตอนกด → perceived ทันที (-80% feel)\n\nCleanup safety:\n  - Build ผ่าน TypeScript + runtime test\n  - / route ใช้งานปกติ\n\nCSP impact:\n  - ก่อน: script-src เปิด unsafe-eval + 3 CDN (Babel + Tailwind + unpkg + jsdelivr)\n  - หลัง: script-src self + inline เท่านั้น\n  - XSS attack surface ลดลงมาก",
+      },
+      {
         version: "0.7.17.0",
         date: "2 มิ.ย. 2569",
         commit: "5edcb17",

@@ -1,29 +1,35 @@
 /** @type {import('next').NextConfig} */
 
 // ── Content Security Policy ──────────────────────────────────────────────
-// อนุญาตเฉพาะ CDN ที่เราใช้จริง — domain อื่น browser จะ block ให้อัตโนมัติ
-// ลด attack surface ของ XSS (ถ้ามี vector ในอนาคต)
+// v0.7.17.1 — tightened หลังออก iframe + Babel + CDN cascade
 //
-// ⚠️ หมายเหตุ:
-//   - 'unsafe-eval' จำเป็นเพราะใช้ @babel/standalone แปลง JSX ในเบราว์เซอร์
-//     (ตอน refactor ออกจาก iframe + babel-in-browser pattern จึงเอาออกได้)
-//   - 'unsafe-inline' จำเป็นเพราะ Tailwind CDN inject style + มี <style> block
-//     ใน public/app.html
+// เลิกใช้แล้ว (ลบทิ้งจาก CSP):
+//   - 'unsafe-eval'              ← ใช้ตอน Babel transform JSX ใน browser (ไม่ใช้แล้ว — SWC build-time)
+//   - cdn.tailwindcss.com        ← Tailwind compile-time (postcss)
+//   - cdn.jsdelivr.net           ← Chart.js + Supabase ใช้ npm แล้ว
+//   - unpkg.com                  ← React UMD ไม่ใช้แล้ว (Next.js ship)
+//
+// ยังต้องเปิด:
+//   - 'unsafe-inline'            ← Next.js inject inline script เพื่อ hydrate
+//   - cdnjs.cloudflare.com       ← FontAwesome CSS (layout.tsx)
+//   - fonts.googleapis.com       ← Google Fonts (layout.tsx)
+//   - fonts.gstatic.com          ← Google Fonts woff2 files
+//   - *.supabase.co              ← Supabase API + Realtime
 const cspDirectives = [
   "default-src 'self'",
-  // script: เปิดให้ CDN ที่รู้จัก + unsafe-eval (Babel) + unsafe-inline (Tailwind runtime)
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com",
-  // style: เปิดให้ Font Awesome + Google Fonts + inline styles
+  // script: เฉพาะ self + inline (Next.js hydration)
+  "script-src 'self' 'unsafe-inline'",
+  // style: self + inline + FontAwesome + Google Fonts
   "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com",
-  // font: Google Fonts + Font Awesome
+  // font: Google Fonts + FontAwesome
   "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com",
   // image: self + data URI (base64) + Supabase storage (เผื่ออนาคต)
   "img-src 'self' data: blob: https://*.supabase.co",
-  // connect: Supabase API + Realtime (websocket) + CDN source maps (สำหรับ DevTools)
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com",
-  // frame: เฉพาะ iframe ของเราเอง (/app.html)
-  "frame-src 'self'",
-  // กัน <object>/<embed> — ไม่ใช้
+  // connect: Supabase API + Realtime (websocket)
+  "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+  // frame: ไม่ใช้ iframe แล้ว
+  "frame-src 'none'",
+  // กัน <object>/<embed>
   "object-src 'none'",
   // base href ห้ามถูกเปลี่ยน
   "base-uri 'self'",

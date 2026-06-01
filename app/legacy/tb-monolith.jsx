@@ -2656,6 +2656,8 @@ function PharmSummaryTab({ patient, currentUser, onSoftDelete, onRequestDelete, 
 // ─────────────────────────────────────────────────────
 function TrashList({ currentUser, onRestore, onHardDelete, pendingDeleteRequests, onApproveDelete, onRejectDelete, onAcknowledgeCancelled }) {
   const [items, setItems] = useState([]);
+  // v0.7.17.1 — Lazy render
+  const [visibleTrashCount, setVisibleTrashCount] = useState(30);
   const [loading, setLoading] = useState(true);
   const [actionId, setActionId] = useState(null);     // id ที่กำลังทำงาน (loading)
   const [hardDelTarget, setHardDelTarget] = useState(null);  // patient ที่จะลบถาวร
@@ -2857,7 +2859,7 @@ function TrashList({ currentUser, onRestore, onHardDelete, pendingDeleteRequests
 
       {!loading && items.length > 0 && (
         <div className="space-y-2">
-          {items.map(p => {
+          {items.slice(0, visibleTrashCount).map(p => {
             const left = daysLeft(p.deletedAt);
             const isBusy = actionId === p.id;
             return (
@@ -2886,6 +2888,16 @@ function TrashList({ currentUser, onRestore, onHardDelete, pendingDeleteRequests
               </div>
             );
           })}
+          {items.length > visibleTrashCount && (
+            <div className="text-center pt-2">
+              <button type="button" onClick={()=>setVisibleTrashCount(c=>c+30)}
+                className="text-xs font-bold text-teal-700 hover:text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-200 px-4 py-1.5 rounded-full transition-colors">
+                <i className="fa-solid fa-chevron-down mr-1.5"></i>
+                ดูถังขยะเพิ่มอีก {Math.min(30, items.length - visibleTrashCount)} รายการ
+                <span className="text-gray-400 font-normal ml-2">({visibleTrashCount} / {items.length})</span>
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -3747,6 +3759,11 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
       return hay.includes(searchLower);
     });
 
+  // v0.7.17.1 — Lazy render สำหรับ user list (50 ก่อน + ดูเพิ่ม)
+  const [visibleUserCount, setVisibleUserCount] = useState(50);
+  useEffect(() => { setVisibleUserCount(50); }, [filter, searchLower]);
+  const visibleUsers = filtered.slice(0, visibleUserCount);
+
   // ค้นหาในหน้าประวัติ — กรอง log ตามชื่อ/username/email ของผู้ถูกกระทำ
   const hsLower = historySearch.trim().toLowerCase();
   const matchHist = (l) => {
@@ -3898,7 +3915,7 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
             <div className="col-span-2 text-right">การกระทำ</div>
           </div>
           <div className="divide-y divide-gray-100">
-            {filtered.map(p => {
+            {visibleUsers.map(p => {
               const sc = STATUS_STYLE[p.status];
               const dept = p.department === 'อื่นๆ' ? (p.department_other || 'อื่นๆ') : p.department;
               const hasReq = !!editReqByUser[p.id];
@@ -3984,7 +4001,7 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
       ) : (
         /* ── Card view: ละเอียด เหมือนเดิม ── */
         <div className="space-y-3">
-          {filtered.map(p => {
+          {visibleUsers.map(p => {
             const sc = STATUS_STYLE[p.status];
             const dept = p.department === 'อื่นๆ' ? (p.department_other || 'อื่นๆ') : p.department;
             const hasReq = !!editReqByUser[p.id];
@@ -4076,6 +4093,17 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
               </div>
             );
           })}
+        </div>
+      )}
+      {/* v0.7.17.1 — ปุ่มดูเพิ่ม (ใช้ร่วม list view + card view) */}
+      {filtered.length > visibleUserCount && (
+        <div className="text-center py-2">
+          <button type="button" onClick={()=>setVisibleUserCount(c=>c+50)}
+            className="text-xs font-bold text-teal-700 hover:text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-200 px-4 py-1.5 rounded-full transition-colors">
+            <i className="fa-solid fa-chevron-down mr-1.5"></i>
+            ดูผู้ใช้เพิ่มอีก {Math.min(50, filtered.length - visibleUserCount)} คน
+            <span className="text-gray-400 font-normal ml-2">({visibleUserCount} / {filtered.length})</span>
+          </button>
         </div>
       )}
 
@@ -4762,6 +4790,8 @@ function ActivityLogTab() {
 function AuditLogTab() {
   const [logs, setLogs] = useState([])
   const [loading, setLoading] = useState(true)
+  // v0.7.17.1 — Lazy render
+  const [visibleAuditCount, setVisibleAuditCount] = useState(50)
 
   useEffect(() => {
     (async () => {
@@ -4824,7 +4854,7 @@ function AuditLogTab() {
               </tr>
             </thead>
             <tbody>
-              {logs.map((log, i) => {
+              {logs.slice(0, visibleAuditCount).map((log, i) => {
                 const adminName = log.admin
                   ? `${log.admin.first_name || ''} ${log.admin.last_name || ''}`.trim() || 'Admin'
                   : (log.deleter_name_at_delete
@@ -4841,6 +4871,16 @@ function AuditLogTab() {
                   </tr>
                 )
               })}
+              {logs.length > visibleAuditCount && (
+                <tr><td colSpan={5} className="p-3 text-center">
+                  <button type="button" onClick={()=>setVisibleAuditCount(c=>c+50)}
+                    className="text-xs font-bold text-teal-700 hover:text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-200 px-4 py-1.5 rounded-full transition-colors">
+                    <i className="fa-solid fa-chevron-down mr-1.5"></i>
+                    ดูประวัติเพิ่มอีก {Math.min(50, logs.length - visibleAuditCount)} รายการ
+                    <span className="text-gray-400 font-normal ml-2">({visibleAuditCount} / {logs.length})</span>
+                  </button>
+                </td></tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -5490,6 +5530,11 @@ function PatientList({ patients, onAdd, onOpen, settings, dashFilter, onClearDas
     return ok && fs && applyDashFilter(p);
   });
 
+  // v0.7.17.1 — Lazy render: แสดง 50 รายแรก + ปุ่ม "ดูเพิ่ม" — เผื่อ data เยอะ (multi-tenant ในอนาคต)
+  const [visiblePtCount, setVisiblePtCount] = useState(50);
+  useEffect(() => { setVisiblePtCount(50); }, [search, filter, dashFilter]);
+  const visiblePatients = filtered.slice(0, visiblePtCount);
+
   return (
     <div className="flex flex-col gap-3 tb-fade h-full">
       {/* Column manager panel */}
@@ -5543,7 +5588,7 @@ function PatientList({ patients, onAdd, onOpen, settings, dashFilter, onClearDas
           <tbody className="divide-y divide-teal-100 text-sm">
             {filtered.length===0 ? (
               <tr><td colSpan={visibleCols.length+3} className="p-10 text-center text-gray-400"><i className="fa-solid fa-user-slash text-2xl mb-2 block text-gray-300"></i>ไม่พบผู้ป่วยที่ค้นหา</td></tr>
-            ) : filtered.map(p => (
+            ) : (<>{visiblePatients.map(p => (
               <tr key={p.id} onClick={()=>onOpen(p)}
                 className={`tb-pt-row hover:bg-teal-50/40 transition-colors cursor-pointer group ${p.status==='critical'?'border-l-4 border-l-red-400':''}`}>
                 {/* HN / ชื่อ — fixed left */}
@@ -5580,7 +5625,16 @@ function PatientList({ patients, onAdd, onOpen, settings, dashFilter, onClearDas
                   </button>
                 </td>
               </tr>
-            ))}
+            ))}{filtered.length > visiblePtCount && (
+              <tr><td colSpan={visibleCols.length+3} className="p-3 text-center">
+                <button type="button" onClick={()=>setVisiblePtCount(c=>c+50)}
+                  className="text-xs font-bold text-teal-700 hover:text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-200 px-4 py-1.5 rounded-full transition-colors">
+                  <i className="fa-solid fa-chevron-down mr-1.5"></i>
+                  ดูเพิ่มอีก {Math.min(50, filtered.length - visiblePtCount)} ราย
+                  <span className="text-gray-400 font-normal ml-2">({visiblePtCount} / {filtered.length})</span>
+                </button>
+              </td></tr>
+            )}</>)}
           </tbody>
         </table>
         <div className="p-3 bg-slate-50/50 border-t border-gray-100 text-xs text-gray-400 text-right">
@@ -5625,6 +5679,11 @@ function ArchiveList({ patients, onOpen, archiveDashFilter, onClearArchiveDashFi
       (archiveDashFilter === 'success' && ['Cured','Completed'].includes(p.outcome?.type));
     return matchSearch && matchFilter;
   });
+
+  // v0.7.17.1 — Lazy render: 50 รายแรก + ปุ่ม "ดูเพิ่ม"
+  const [visibleArcCount, setVisibleArcCount] = useState(50);
+  useEffect(() => { setVisibleArcCount(50); }, [search, archiveDashFilter]);
+  const visibleArchive = filtered.slice(0, visibleArcCount);
 
   return (
     <div className="flex flex-col gap-3 tb-fade h-full">
@@ -5713,7 +5772,7 @@ function ArchiveList({ patients, onOpen, archiveDashFilter, onClearArchiveDashFi
                 <i className="fa-solid fa-box-archive text-2xl mb-2 block text-gray-300"></i>
                 {patients.length === 0 ? 'ยังไม่มีผู้ป่วยที่จบการรักษา' : 'ไม่พบผู้ป่วยที่ค้นหา'}
               </td></tr>
-            ) : filtered.map(p => (
+            ) : (<>{visibleArchive.map(p => (
               <tr key={p.id} onClick={()=>onOpen(p)} className="tb-pt-row hover:bg-teal-50/40 transition-colors cursor-pointer group">
                 <td className="py-2 px-4 sticky left-0 bg-white group-hover:bg-teal-50/30 z-10 transition-colors">
                   <p className="font-mono text-gray-400 text-xs">{p.hn}</p>
@@ -5744,7 +5803,16 @@ function ArchiveList({ patients, onOpen, archiveDashFilter, onClearArchiveDashFi
                   </button>
                 </td>
               </tr>
-            ))}
+            ))}{filtered.length > visibleArcCount && (
+              <tr><td colSpan={visibleCols.length+5} className="p-3 text-center">
+                <button type="button" onClick={()=>setVisibleArcCount(c=>c+50)}
+                  className="text-xs font-bold text-teal-700 hover:text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-200 px-4 py-1.5 rounded-full transition-colors">
+                  <i className="fa-solid fa-chevron-down mr-1.5"></i>
+                  ดูเพิ่มอีก {Math.min(50, filtered.length - visibleArcCount)} ราย
+                  <span className="text-gray-400 font-normal ml-2">({visibleArcCount} / {filtered.length})</span>
+                </button>
+              </td></tr>
+            )}</>)}
           </tbody>
         </table>
         <div className="p-3 bg-slate-50/50 border-t border-gray-100 text-xs text-gray-400 text-right">
@@ -5763,6 +5831,10 @@ function AllPatientsPage({ patients, archivePatients, onOpen, onBack }) {
   const getOutcomeStyle = type => { const o=(window.OUTCOME_TYPES||[]).find(x=>x.value===type); return o?o.color:'text-gray-600 bg-gray-100'; };
   const getOutcomeLabel = type => { const o=(window.OUTCOME_TYPES||[]).find(x=>x.value===type); return o?o.label.split(' (')[0]:type; };
   const filtered = allPts.filter(p => { const q=search.toLowerCase(); return !q||p.name.toLowerCase().includes(q)||p.hn.includes(q)||(p.subdistrict||'').toLowerCase().includes(q); });
+  // v0.7.17.1 — Lazy render
+  const [visibleAllCount, setVisibleAllCount] = useState(50);
+  useEffect(() => { setVisibleAllCount(50); }, [search]);
+  const visibleAll = filtered.slice(0, visibleAllCount);
   return (
     <div className="flex flex-col gap-3 tb-fade h-full">
       <div className="flex items-center gap-3 flex-shrink-0">
@@ -5796,7 +5868,7 @@ function AllPatientsPage({ patients, archivePatients, onOpen, onBack }) {
           <tbody className="divide-y divide-teal-100 text-sm">
             {filtered.length === 0 ? (
               <tr><td colSpan={6} className="p-10 text-center text-gray-400"><i className="fa-solid fa-user-slash text-2xl mb-2 block text-gray-300"></i>ไม่พบผู้ป่วย</td></tr>
-            ) : filtered.map(p => (
+            ) : (<>{visibleAll.map(p => (
               <tr key={p.id} onClick={()=>onOpen(p)} className="tb-pt-row hover:bg-teal-50/40 transition-colors cursor-pointer group">
                 <td className="py-2 px-4 sticky left-0 bg-white group-hover:bg-teal-50/30 z-10 transition-colors">
                   <p className="font-mono text-gray-400 text-xs">{p.hn}</p>
@@ -5823,7 +5895,16 @@ function AllPatientsPage({ patients, archivePatients, onOpen, onBack }) {
                   </button>
                 </td>
               </tr>
-            ))}
+            ))}{filtered.length > visibleAllCount && (
+              <tr><td colSpan={6} className="p-3 text-center">
+                <button type="button" onClick={()=>setVisibleAllCount(c=>c+50)}
+                  className="text-xs font-bold text-teal-700 hover:text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-200 px-4 py-1.5 rounded-full transition-colors">
+                  <i className="fa-solid fa-chevron-down mr-1.5"></i>
+                  ดูเพิ่มอีก {Math.min(50, filtered.length - visibleAllCount)} ราย
+                  <span className="text-gray-400 font-normal ml-2">({visibleAllCount} / {filtered.length})</span>
+                </button>
+              </td></tr>
+            )}</>)}
           </tbody>
         </table>
         <div className="p-3 bg-slate-50/50 border-t border-gray-100 text-xs text-gray-400 text-right">
@@ -6607,6 +6688,8 @@ function App() {
   const [showProfile, setShowProfile] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [changelogUnseen, setChangelogUnseen] = useState(false);
+  // v0.7.17.1 — logout optimistic UI overlay
+  const [loggingOut, setLoggingOut] = useState(false);
 
   // ── ป้าย "New" บน sidebar — ดูจาก localStorage tb_changelog_last_seen ──
   useEffect(() => {
@@ -7037,8 +7120,9 @@ function App() {
       setLogoClicks(0);
       if (easterRound === 2) {
         // 🥚 ซนจริง — โดนเตะออก
+        setLoggingOut(true);
         fetch('/api/easter-egg/log', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({event_type:'kicked_out'})}).catch(()=>{});
-        fetch('/api/auth/signout', {method:'POST'}).then(()=>{ window.top.location.href='/login'; });
+        fetch('/api/auth/signout', {method:'POST'}).finally(()=>{ window.top.location.href='/login'; });
       }
       else setEasterMsgIdx(0);
     } else {
@@ -7083,6 +7167,14 @@ function App() {
 
   return (
     <div className="flex h-screen bg-teal-50 overflow-hidden">
+      {/* v0.7.17.1 — Logout optimistic overlay: เปลี่ยนหน้าทันทีตอนกด → fetch ใต้ดิน → redirect */}
+      {loggingOut && (
+        <div style={{position:'fixed',inset:0,background:'#f0fdfa',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:16,zIndex:99999,fontFamily:'Sarabun, sans-serif'}}>
+          <div style={{width:56,height:56,border:'4px solid #ccfbf1',borderTopColor:'#0d9488',borderRadius:'50%',animation:'tbSpin 0.8s linear infinite'}}/>
+          <div style={{fontSize:14,color:'#0f766e',fontWeight:600}}>กำลังออกจากระบบ...</div>
+          <style>{`@keyframes tbSpin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      )}
 
       {/* ── SIDEBAR ── */}
       {/* v0.7.15.1 — zIndex:40 กันปุ่ม chevron toggle ถูก header (zIndex:30) ทับครึ่ง */}
@@ -7154,9 +7246,9 @@ function App() {
               <p style={{fontSize:'11px',color:'#0f766e',margin:0}}>{currentUser?.profession || ''}</p>
             </div>
           </button>
-          {/* ปุ่มออกระบบ */}
+          {/* ปุ่มออกระบบ — v0.7.17.1: optimistic overlay ทันที + fetch ใต้ดิน */}
           <button
-            onClick={async ()=>{ await fetch('/api/auth/signout', {method:'POST'}); window.top.location.href='/login'; }}
+            onClick={()=>{ setLoggingOut(true); fetch('/api/auth/signout', {method:'POST'}).finally(()=>{ window.top.location.href='/login'; }); }}
             title="ออกระบบ"
             style={{width:'100%',display:'flex',alignItems:'center',padding:'7px 8px',borderRadius:'10px',cursor:'pointer',border:'none',background:'transparent',textAlign:'left',marginTop:'2px',transition:'background 0.15s'}}
             onMouseEnter={e=>{ e.currentTarget.style.background='#fef2f2'; e.currentTarget.querySelector('i').style.color='#dc2626'; e.currentTarget.querySelector('span').style.color='#dc2626'; }}
@@ -7571,7 +7663,7 @@ function RequestEditModal({ field, currentValue, onClose }) {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.17.0';
+const APP_VERSION = '0.7.17.1';
 const BUILD_DATE = '2 มิ.ย. 2569';
 function AboutModal({ onClose, onShowChangelog }) {
   const [closing, setClosing] = React.useState(false);
@@ -8951,6 +9043,14 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
     return arr;
   }, [comments, filterMode, sortMode, hideResolved]);
 
+  // v0.7.17.1 — Lazy render comments (15 ก่อน + ดูเพิ่ม)
+  const [visibleCmtCount, setVisibleCmtCount] = React.useState(15);
+  React.useEffect(() => { setVisibleCmtCount(15); }, [filterMode, sortMode, hideResolved]);
+  const visibleCommentParents = React.useMemo(
+    () => visibleParents.slice(0, visibleCmtCount),
+    [visibleParents, visibleCmtCount]
+  );
+
   const load = React.useCallback(async () => {
     if (onRefreshRef.current) { await onRefreshRef.current(); return; }
     setLoading(true); setError('');
@@ -9442,7 +9542,7 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
 
       {!loading && visibleParents.length > 0 && (
         <div style={{display:'flex',flexDirection:'column',gap:'8px',marginBottom:'12px'}}>
-          {visibleParents.map(c => {
+          {visibleCommentParents.map(c => {
             const meta = CHANGELOG_STATUS_META[c.status] || CHANGELOG_STATUS_META.feedback;
             const isOwner = c.user_id === currentUserId;
             const canDelete = isOwner || isAdmin;
@@ -9698,6 +9798,20 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
               </div>
             );
           })}
+          {visibleParents.length > visibleCmtCount && (
+            <div style={{textAlign:'center',padding:'6px 0'}}>
+              <button type="button" onClick={()=>setVisibleCmtCount(c=>c+15)}
+                style={{cursor:'pointer',padding:'6px 18px',border:'1px solid '+T.border,background:'#fff',color:T.accent,fontSize:'12px',fontWeight:700,borderRadius:'999px',transition:'all 0.15s'}}
+                onMouseEnter={e=>{e.currentTarget.style.background=T.bg;}}
+                onMouseLeave={e=>{e.currentTarget.style.background='#fff';}}>
+                <i className="fa-solid fa-chevron-down" style={{marginRight:'6px',fontSize:'10px'}}></i>
+                ดูความคิดเห็นเพิ่มอีก {Math.min(15, visibleParents.length - visibleCmtCount)} อัน
+                <span style={{marginLeft:'8px',fontSize:'10px',color:'#9ca3af',fontWeight:500}}>
+                  ({visibleCmtCount} / {visibleParents.length})
+                </span>
+              </button>
+            </div>
+          )}
         </div>
       )}
 

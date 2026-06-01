@@ -5,8 +5,6 @@
   "main": "tb-data.js",
   "scripts": {
     "dev": "next dev",
-    "build:jsx": "node node_modules/esbuild/bin/esbuild public/tb-app.jsx --loader:.jsx=jsx --jsx-factory=React.createElement --jsx-fragment=React.Fragment --outfile=public/tb-app.compiled.js && node node_modules/esbuild/bin/esbuild public/tb-modals.jsx --loader:.jsx=jsx --jsx-factory=React.createElement --jsx-fragment=React.Fragment --outfile=public/tb-modals.compiled.js",
-    "prebuild": "npm run build:jsx",
     "build": "next build",
     "start": "next start"
   },
@@ -36,7 +34,6 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "autoprefixer": "^10.5.0",
-    "esbuild": "^0.28.0",
     "postcss": "^8.5.14",
     "tailwindcss": "^3.4.19",
     "typescript": "^6.0.3"

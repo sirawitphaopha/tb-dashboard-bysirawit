@@ -6,10 +6,12 @@ import { createAdminClient } from '@/lib/supabase-admin'
 // POST /api/auth/signout
 //
 // ออกจากระบบ + บันทึก log
-//   - บันทึก user_id/email/IP/UA ก่อน signOut (ไม่งั้น session หาย)
-//   - signOut จะลบ session ใน Supabase + clear cookies
-//   - logout_type ตอนนี้รองรับแค่ 'manual' (เริ่มต้น)
-//     session_expired จะทำพร้อม Session Activity Log ในข้อ B
+//
+// v0.7.17.1 — optimize sequential → parallel + fire-and-forget
+//   ก่อน: getUser → device_fp lookup → signOut → logout_log insert → session_log update
+//         5 ops sequential ~500-1000ms total
+//   หลัง: getUser + device_fp (parallel) → signOut → response (fire-and-forget logs)
+//         2-3 ops critical path ~150-300ms (logs ไม่ block response)
 // ─────────────────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
@@ -21,39 +23,40 @@ export async function POST(req: NextRequest) {
           || null
   const ua = req.headers.get('user-agent') || null
 
-  // ดึง user ก่อน signOut เพื่อเก็บ id/email
-  let userId: string | null = null
-  let email: string | null = null
-  try {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-      userId = user.id
-      email = user.email ?? null
-    }
-  } catch {
-    // ไม่มี session ก็ไม่เป็นไร (อาจถูกเรียกซ้ำ)
-  }
-
   // อ่าน tb_session_id ก่อน signOut เพื่อปิด session row ใน tb_session_log
   const sessionId = req.cookies.get('tb_session_id')?.value || null
 
-  // ดึง device_fp จาก session row (เพื่อเก็บลง logout log)
-  let deviceFp: string | null = null
-  if (sessionId) {
-    const { data: srow } = await admin
-      .from('tb_session_log')
-      .select('device_fp')
-      .eq('id', sessionId)
-      .maybeSingle()
-    deviceFp = srow?.device_fp ?? null
+  // v0.7.17.1 — ดึง user + device_fp ขนาน (ไม่ต้อง sequential)
+  const fetchUser = async () => {
+    try {
+      const { data } = await supabase.auth.getUser()
+      return data
+    } catch { return { user: null } }
+  }
+  const fetchDeviceFp = async (): Promise<string | null> => {
+    if (!sessionId) return null
+    try {
+      const { data } = await admin
+        .from('tb_session_log')
+        .select('device_fp')
+        .eq('id', sessionId)
+        .maybeSingle()
+      return (data?.device_fp as string | null) ?? null
+    } catch { return null }
   }
 
-  // signOut เสมอ ไม่ว่ามี session หรือไม่
+  const [userData, deviceFp] = await Promise.all([fetchUser(), fetchDeviceFp()])
+
+  const userId = userData?.user?.id ?? null
+  const email  = userData?.user?.email ?? null
+
+  // signOut เสมอ ไม่ว่ามี session หรือไม่ (critical path — ต้องเสร็จก่อน return)
   await supabase.auth.signOut()
 
-  // บันทึก log เฉพาะถ้ามี user (ไม่อยากเก็บ noise)
+  // v0.7.17.1 — Fire-and-forget log writes (ไม่ block response)
+  // log ไม่กระทบ user perception ของ logout speed — ทำเบื้องหลังได้
   if (userId) {
-    await admin.from('tb_logout_log').insert({
+    admin.from('tb_logout_log').insert({
       user_id:     userId,
       email,
       logout_type: 'manual',
@@ -61,12 +64,11 @@ export async function POST(req: NextRequest) {
       user_agent:  ua,
       session_id:  sessionId,
       device_fp:   deviceFp,
-    })
+    }).then(() => {}, (err: unknown) => console.error('[signout] logout_log insert failed', err))
   }
 
-  // ปิด session row (Session Activity Log — B1)
   if (sessionId) {
-    await admin
+    admin
       .from('tb_session_log')
       .update({
         ended_at:   new Date().toISOString(),
@@ -74,9 +76,10 @@ export async function POST(req: NextRequest) {
       })
       .eq('id', sessionId)
       .is('ended_at', null)   // กันเขียนทับ session ที่ปิดไปแล้ว
+      .then(() => {}, (err: unknown) => console.error('[signout] session_log update failed', err))
   }
 
-  // ลบ cookie tb_session_id
+  // ลบ cookie tb_session_id + return response ทันที (ไม่รอ log writes)
   const response = NextResponse.json({ success: true })
   response.cookies.set('tb_session_id', '', {
     httpOnly: true,

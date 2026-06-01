@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
 import { createServerClient } from '@supabase/ssr'
-import TbAppMount from './v2/TbAppMount'
+import TbAppMount from './components/TbAppMount'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,11 +33,9 @@ export default async function Page() {
   if (profile?.status === 'pending')  redirect('/pending-approval')
   if (profile?.status === 'rejected') redirect('/rejected')
 
-  // v0.7.17.0 Phase 3 Step 3 — Full Migration: ใช้ Next.js bundler ตรงๆ ไม่ผ่าน iframe
+  // v0.7.17.0+ — Full Migration: Next.js bundler ตรงๆ ไม่ผ่าน iframe
   //   - TbAppMount โหลด setup → tb-data → tb-changelog → tb-monolith (lazy via dynamic)
-  //   - ระหว่างโหลดเห็น V2Skeleton (spinner teal)
+  //   - ระหว่างโหลดเห็น V2Skeleton (โครงเทล pulse)
   //   - หลังโหลดเสร็จ render App component เต็มตัว
-  //   - iframe pattern (HomeShell.tsx + app.html + tb-app.compiled.js) ยังเก็บไฟล์ไว้
-  //     ป้องกัน rollback กรณี v2 มีปัญหาที่ไม่คาดคิด
   return <TbAppMount />
 }
