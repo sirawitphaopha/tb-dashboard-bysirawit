@@ -25,8 +25,8 @@ window.TB_CHANGELOG = [
       {
         version: "0.7.17.0",
         date: "2 มิ.ย. 2569",
-        commit: "pending",
-        commitFull: "pending",
+        commit: "5edcb17",
+        commitFull: "5edcb17270f83c91aad16c1a398347aec8ec92d4",
         title: "Phase 3 Step 3 — Full Migration ออก iframe → Next.js native (เร็วขึ้น 60%)",
         changes: [
           { tag: "feature", text: "🚀 Cutover: เลิกใช้ iframe + Babel + CDN cascade — / route ใช้ Next.js bundler ตรงๆ (SWC compile JSX ตอน build, ไม่ใช่ใน browser)" },
