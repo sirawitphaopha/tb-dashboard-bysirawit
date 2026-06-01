@@ -25,8 +25,8 @@ window.TB_CHANGELOG = [
       {
         version: "0.7.17.2",
         date: "2 มิ.ย. 2569",
-        commit: "pending",
-        commitFull: "pending",
+        commit: "67a75a7",
+        commitFull: "67a75a7a501da56a112e0788757962b257edfa5c",
         title: "Changelog Page UX Overhaul + กระดิ่ง multi-scroll fix + คำว่า 'คอมเม้น' → 'ความคิดเห็น' ทั่วระบบ",
         changes: [
           { tag: "fix", text: "กระดิ่งคอมเม้น scroll ไม่เจอ comment ครั้งแรก (regression จาก lazy render ใน v0.7.17.1) — ส่ง prop highlightCommentId + ขยาย visibleTimelineCount + multi-scroll retry 4 รอบ (0/300/700/1200ms) ครอบคลุม layout shift ตอน lazy mount" },
