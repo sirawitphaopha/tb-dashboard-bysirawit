@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import PasswordEye from '@/components/PasswordEye'
+import LoginSpinner from '../components/LoginSpinner'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -11,7 +12,18 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  // v0.7.17.0 — redirecting state: หลัง POST login สำเร็จ → แสดงโครงแดชบอร์ดทันที
+  //  user รู้สึกเหมือนเข้าแล้ว ไม่ต้องรอ router.push + page mount + dynamic chunk
+  //  (Optimistic UI — psychological perceived speed)
+  const [redirecting, setRedirecting] = useState(false)
   const [error, setError] = useState('')
+
+  // v0.7.17.0 — prefetch / route ตอน login page mount
+  //  → browser โหลด bundle ของ / ไว้ใน background
+  //  → ตอน router.push('/') จริงๆ — ไม่ต้องโหลด bundle ใหม่ → instant
+  useEffect(() => {
+    router.prefetch('/')
+  }, [router])
 
   // รหัสประจำเครื่อง (device fingerprint) — สุ่มครั้งแรก เก็บถาวรใน localStorage
   // ไม่เปลี่ยนแม้ logout/login ใหม่ → ใช้แยกเครื่องในหน้าบันทึกกิจกรรม
@@ -46,6 +58,10 @@ export default function LoginPage() {
         return
       }
 
+      // v0.7.17.0 — Optimistic UI: ทันทีที่ login สำเร็จ → แสดงโครงแดชบอร์ดทันที
+      //  (ก่อน) user รอ spinner login + new page mount + chunk load ทั้งหมด ~4 วิ
+      //  (หลัง) user เห็นโครงแดชบอร์ดทันที — perceived wait ลดเหลือ 0
+      setRedirecting(true)
       // Cookie ถูกตั้งจากฝั่ง server แล้ว — แค่ refresh ให้ middleware/component อ่านใหม่
       router.push('/')
       router.refresh()
@@ -53,6 +69,14 @@ export default function LoginPage() {
       setError('เกิดข้อผิดพลาด กรุณาลองใหม่')
       setLoading(false)
     }
+  }
+
+  // v0.7.17.0 — ขั้น 1 ของ 2-stage loading (Login → Dashboard):
+  //   1. LoginSpinner (วงกลม teal หมุน) — แสดงระหว่าง redirect ~0.5-1 วิ
+  //   2. V2Skeleton (โครง sidebar+KPI pulse) — แสดงตอน / page mount + chunk load
+  //   3. ของจริงเด้งขึ้น
+  if (redirecting) {
+    return <LoginSpinner label="เข้าสู่ระบบสำเร็จ กำลังเปิดแดชบอร์ด..." />
   }
 
   return (
@@ -143,7 +167,7 @@ export default function LoginPage() {
         <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #f3f4f6' }}>
           <p style={{ fontSize: '11px', color: '#9ca3af', margin: '0 0 2px 0' }}>พัฒนาโดย เภสัชกร สิรวิชญ์ เผ่าผา</p>
           <p style={{ fontSize: '11px', color: '#9ca3af', margin: '0 0 4px 0' }}>โรงพยาบาลปรางค์กู่</p>
-          <p style={{ fontSize: '11px', color: '#d1d5db', margin: '0 0 4px 0' }}>Version 0.7.16.1 · <span style={{ color: '#fbbf24', fontWeight: 600 }}>ยังไม่เผยแพร่</span></p>
+          <p style={{ fontSize: '11px', color: '#d1d5db', margin: '0 0 4px 0' }}>Version 0.7.17.0 · <span style={{ color: '#fbbf24', fontWeight: 600 }}>ยังไม่เผยแพร่</span></p>
           <p style={{ fontSize: '11px', color: '#d1d5db', margin: 0 }}>© 2026 TB JOURNEY &amp; CARE</p>
         </div>
       </div>

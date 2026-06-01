@@ -161,6 +161,22 @@
     .tb-pt-row:hover {
       transform: translateY(-3px);
     }
+    /* v0.7.17.0 — Changelog optimization: ลด jank ตอน sidebar collapse */
+    /* ปัญหา: ตอนแถบซ้ายย่อ (width 260→72) main flex-1 ขยาย → text reflow ทุกการ์ด → กระตุก */
+    /* แก้: 3 ชั้น — content-visibility (skip นอกจอ) + contain (กั้น layout) + text-rendering speed */
+    .cl-version-row {
+      contain: layout style paint;
+      content-visibility: auto;
+      contain-intrinsic-size: 0 120px;
+    }
+    .cm-card,
+    .cm-card-reply {
+      contain: layout style;
+    }
+    .cl-version-row .cm-card-text,
+    .cl-version-row .cm-card-text-reply {
+      text-rendering: optimizeSpeed;
+    }
   </style>
 </head>
 <body class="bg-slate-100 overflow-hidden">

@@ -18,17 +18,184 @@ body {
   background: #94a3b8;
 }
 
-.tb-fade {
-  animation: tbFadeIn 0.25s ease;
+.tb-fade { animation: tbFadeIn 0.25s ease; }
+@keyframes tbFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes tbFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+/* ════════════════════════════════════════════════════════════════════════
+ * v0.7.17.0 Phase 3 — global animations จาก public/app.html ย้ายเข้ามา
+ * (ก่อนหน้านี้อยู่ใน <style> tag ใน app.html) เพื่อใช้กับ Next.js route ตรงๆ
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/* ── Modal entrance animations (A-D) ── */
+.modal-A { animation: modalFadeScale 0.9s cubic-bezier(0.16,1,0.3,1); }
+@keyframes modalFadeScale {
+  from { opacity: 0; transform: scale(0.96) translateY(35px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+.modal-A-out { animation: modalFadeScaleOut 0.6s cubic-bezier(0.4,0,1,1) forwards; }
+@keyframes modalFadeScaleOut {
+  from { opacity: 1; transform: scale(1) translateY(0); }
+  to   { opacity: 0; transform: scale(0.96) translateY(35px); }
+}
+.modal-overlay-out { animation: ovFadeOut 0.6s ease forwards; }
+@keyframes ovFadeOut { from { opacity: 1; } to { opacity: 0; } }
+.modal-A-out-fast        { animation: modalFadeScaleOut 0.25s ease forwards; }
+.modal-overlay-out-fast  { animation: ovFadeOut 0.25s ease forwards; }
+.modal-B { animation: modalSlideUp 0.34s cubic-bezier(0.34,1.56,0.64,1); }
+@keyframes modalSlideUp {
+  from { opacity: 0; transform: translateY(40px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.modal-C { animation: modalPop 0.42s cubic-bezier(0.34,1.56,0.64,1); }
+@keyframes modalPop {
+  from { opacity: 0; transform: scale(0.6); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.modal-D { animation: modalFadeOnly 0.3s ease; }
+@keyframes modalFadeOnly {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Toast animations */
+.modal-toast     { animation: modalToastIn  0.32s cubic-bezier(0.16,1,0.3,1); }
+.modal-toast-out { animation: modalToastOut 0.28s ease forwards; }
+@keyframes modalToastIn {
+  from { opacity: 0; transform: translateY(24px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+@keyframes modalToastOut {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-14px); }
+}
+
+/* Notification */
+.notif-modal { animation: notifExpand 0.3s cubic-bezier(0.34,1.56,0.64,1); }
+@keyframes notifExpand {
+  from { opacity: 0; transform: scale(0.7) translateY(-20px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* Wiggle (hover) */
+@keyframes tbWiggle {
+  0%, 100% { transform: translateX(0) scale(1); }
+  15%  { transform: translateX(-3px) scale(1.04); }
+  35%  { transform: translateX(3px)  scale(1.04); }
+  55%  { transform: translateX(-2px) scale(1.02); }
+  75%  { transform: translateX(2px)  scale(1.02); }
+  90%  { transform: translateX(-1px) scale(1); }
+}
+.tb-wiggle:hover { animation: tbWiggle 0.45s ease; cursor: pointer; }
+
+/* Pulse badge */
+@keyframes tbPulseBadge {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239,68,68,0.6); }
+  50%      { transform: scale(1.12); box-shadow: 0 0 0 6px rgba(239,68,68,0); }
+}
+.tb-pulse-badge { animation: tbPulseBadge 1.4s ease-in-out infinite; }
+
+/* Comment flash (กระดิ่ง → comment) */
+@keyframes commentFlash {
+  0%   { background: #fff; box-shadow: 0 0 0 0 rgba(13,148,136,0.0); }
+  15%  { background: #ccfbf1; box-shadow: 0 0 0 6px rgba(13,148,136,0.35); }
+  40%  { background: #fef3c7; box-shadow: 0 0 0 12px rgba(245,158,11,0.25); }
+  70%  { background: #ccfbf1; box-shadow: 0 0 0 6px rgba(13,148,136,0.15); }
+  100% { background: #fff; box-shadow: 0 0 0 0 rgba(13,148,136,0.0); }
+}
+.comment-flash { animation: commentFlash 2.4s ease-out 1; }
+
+/* Mention filter dropdown row */
+.tb-mention-filter-row:hover { background-color: #ccfbf1 !important; }
+.tb-mention-filter-row.is-admin:hover { background-color: #fcd34d !important; }
+
+/* Comment card classes (v0.7.15.5) */
+.cm-card {
+  border-radius: 8px;
+  padding: 10px 12px;
+  min-width: 0;
+  transition: all 0.2s;
+}
+.cm-card-reply {
+  border-radius: 6px;
+  padding: 8px 10px;
+  transition: all 0.2s;
+}
+.cm-card-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+.cm-card-text {
+  font-size: 18px;
+  color: #0f766e;
+  font-weight: 600;
+  margin: 6px 0 0;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  letter-spacing: -0.2px;
+}
+.cm-card-text-reply {
+  font-size: 16px;
+  color: #0f766e;
+  font-weight: 600;
+  margin: 4px 0 0;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  letter-spacing: -0.2px;
+}
+
+/* Dashboard card hover */
+.tb-dash-card {
+  transition: transform 0.22s cubic-bezier(0.34,1.56,0.64,1),
+              box-shadow 0.22s cubic-bezier(0.34,1.56,0.64,1),
+              border-color 0.15s ease;
+}
+.tb-dash-card:hover {
+  transform: translateY(-4px) scale(1.015);
+  box-shadow: 0 10px 28px rgba(13,148,136,0.15) !important;
+  border-color: #2dd4bf !important;
+}
+
+/* Patient row — browser-native virtual scroll */
+.tb-pt-row {
+  transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1);
+  content-visibility: auto;
+  contain-intrinsic-size: 0 60px;
+}
+.tb-pt-row:hover { transform: translateY(-3px); }
+
+/* v0.7.17.0 — Changelog optimization: ลด jank ตอน sidebar collapse
+ * ปัญหา: ตอนแถบซ้ายย่อ (width 260→72) main flex-1 ขยาย → ตัวอักษรในการ์ดคอมเม้น
+ *        ทุกใบต้องคำนวณการตัดบรรทัดใหม่ → กระตุกเห็นชัดบนหน้า Changelog (text เยอะ)
+ *
+ * 3 ชั้นป้องกัน:
+ *   1. content-visibility: auto → browser skip render กล่องที่อยู่นอกจอ
+ *   2. contain: layout style paint → กั้น inner layout/paint ไม่ให้ reflow ลามถึงกัน
+ *   3. text-rendering: optimizeSpeed → ลด text shaping cost (ยอม trade-off คุณภาพนิดๆ)
+ */
+.cl-version-row {
+  contain: layout style paint;
+  content-visibility: auto;
+  contain-intrinsic-size: 0 120px;
+}
+
+/* Comment card containment — แต่ละการ์ดเป็นอิสระ ไม่กระทบกัน */
+.cm-card,
+.cm-card-reply {
+  contain: layout style;
+}
+
+/* Changelog page wrapper — ลด text-rendering cost ทั้งหน้า */
+.cl-version-row .cm-card-text,
+.cl-version-row .cm-card-text-reply {
+  text-rendering: optimizeSpeed;
 }
