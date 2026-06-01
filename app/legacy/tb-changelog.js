@@ -25,8 +25,8 @@ window.TB_CHANGELOG = [
       {
         version: "0.7.17.4",
         date: "1 มิ.ย. 2569",
-        commit: "PENDING",
-        commitFull: "PENDING",
+        commit: "be8562d",
+        commitFull: "be8562db962041cfd05915c8ae0d0ec2914c4845",
         title: "Changelog ครบถ้วน — เติมปุ่มบันทึกฉบับเต็มที่ขาด + แก้ tag ที่ไม่ขึ้น + sync เนื้อหาตรง commit GitHub ทุกเวอร์ชั่น",
         changes: [
           { tag: "bug", text: "เติมปุ่ม \"บันทึกฉบับเต็ม\" ให้ v0.7.14.4 / v0.7.14.5 / v0.7.14.6 ที่ขาดไป (เดิมไม่มี field body → ปุ่มไม่ขึ้น) — ดึง commit body จริงจาก git มาใส่" },
