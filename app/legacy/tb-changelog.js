@@ -24,7 +24,7 @@ window.TB_CHANGELOG = [
     versions: [
       {
         version: "0.7.17.3",
-        date: "2 มิ.ย. 2569",
+        date: "1 มิ.ย. 2569",
         commit: "6ca9ec8",
         commitFull: "6ca9ec8e0d04bb33ae06b6fbbb3013033f0bf3e6",
         title: "Phase 4A+4B — Activity Log default 30 วัน + Session History pagination/filter + ScrollNav + Boot flow ลื่นขึ้น",
@@ -56,7 +56,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.17.2",
-        date: "2 มิ.ย. 2569",
+        date: "1 มิ.ย. 2569",
         commit: "67a75a7",
         commitFull: "67a75a7a501da56a112e0788757962b257edfa5c",
         title: "Changelog Page UX Overhaul + กระดิ่ง multi-scroll fix + คำว่า 'คอมเม้น' → 'ความคิดเห็น' ทั่วระบบ",
@@ -79,7 +79,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.17.1",
-        date: "2 มิ.ย. 2569",
+        date: "1 มิ.ย. 2569",
         commit: "389f161",
         commitFull: "389f16101832e56a877b2bc8accbfe9d5516c348",
         title: "Phase 3 Cleanup + Lazy Render ทุกหน้า + Logout เร็วขึ้น 80% + ปลด CSP",
@@ -95,7 +95,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.17.0",
-        date: "2 มิ.ย. 2569",
+        date: "1 มิ.ย. 2569",
         commit: "5edcb17",
         commitFull: "5edcb17270f83c91aad16c1a398347aec8ec92d4",
         title: "Phase 3 Step 3 — Full Migration ออก iframe → Next.js native (เร็วขึ้น 60%)",
