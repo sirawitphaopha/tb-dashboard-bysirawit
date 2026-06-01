@@ -7675,7 +7675,7 @@ function RequestEditModal({ field, currentValue, onClose }) {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.17.3';
+const APP_VERSION = '0.7.17.4';
 const BUILD_DATE = '2 มิ.ย. 2569';
 function AboutModal({ onClose, onShowChangelog }) {
   const [closing, setClosing] = React.useState(false);
@@ -8693,7 +8693,7 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
                       <div style={{width:'12px',height:'12px',borderRadius:'50%',background:color,boxShadow:`0 0 0 3px ${color}22`}}></div>
                       <div style={{width:'2px',flex:1,background:'#e5e7eb',marginTop:'4px'}}></div>
                     </div>
-                    <div style={{flex:1,background:'#fff',border:'1px solid #e5e7eb',borderRadius:'14px',padding:'14px 16px',boxShadow:'0 1px 3px rgba(0,0,0,0.04)'}}>
+                    <div style={{flex:1,background:isLatest?'#fffbeb':'#fff',border:isLatest?'2px solid #fbbf24':'1px solid #e5e7eb',borderRadius:'14px',padding:'14px 16px',boxShadow:isLatest?'0 2px 14px rgba(251,191,36,0.28)':'0 1px 3px rgba(0,0,0,0.04)'}}>
                       <div style={{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',marginBottom:'6px'}}>
                         <span style={{fontWeight:800,fontSize:'15px',color}}>v{highlightMatch(v.version)}</span>
                         <span style={{fontSize:'11px',color:'#9ca3af'}}>{v.date}</span>

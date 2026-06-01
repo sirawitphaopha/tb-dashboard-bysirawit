@@ -54,6 +54,14 @@ const nextConfig = {
         source: '/:path*',
         headers: securityHeaders,
       },
+      // ── HTML document: ห้าม cache (กัน browser จำ HTML เก่าที่ชี้ไป chunk ที่หายหลัง rebuild) ──
+      // ยกเว้น /_next/static/* และ /_next/image (พวกนี้ content-hash → cache immutable ได้)
+      {
+        source: '/((?!_next/static|_next/image|favicon).*)',
+        headers: [
+          { key: 'Cache-Control', value: 'no-store, must-revalidate' },
+        ],
+      },
     ];
   },
 };
