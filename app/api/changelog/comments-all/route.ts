@@ -37,6 +37,14 @@ export async function GET(req: NextRequest) {
 
     const isAdmin = callerProfile?.role === 'admin'
 
+    // avatar (live) ของผู้เขียนทุกคน — join profiles ด้วย user_id (display_name/profession เป็น snapshot บน row แต่ avatar เอาปัจจุบัน)
+    const userIds = [...new Set((comments || []).map((c: any) => c.user_id).filter(Boolean))]
+    const { data: avatarRows } = userIds.length
+      ? await admin.from('profiles').select('id, avatar_url, avatar_updated_at').in('id', userIds)
+      : { data: [] as any[] }
+    const avatarMap: Record<string, { url: string | null; at: string | null }> = {}
+    for (const a of avatarRows || []) avatarMap[a.id] = { url: a.avatar_url, at: a.avatar_updated_at }
+
     // นับ likes per comment + เช็ค liked_by_me
     const likesCount: Record<string, number> = {}
     const likedByMe: Record<string, boolean> = {}
@@ -56,6 +64,8 @@ export async function GET(req: NextRequest) {
         comment_text: safeText,
         likes_count: likesCount[c.id] || 0,
         liked_by_me: !!likedByMe[c.id],
+        avatar_url: avatarMap[c.user_id]?.url || null,
+        avatar_updated_at: avatarMap[c.user_id]?.at || null,
       }
       if (c.parent_comment_id) {
         if (!repliesByParent[c.parent_comment_id]) repliesByParent[c.parent_comment_id] = []

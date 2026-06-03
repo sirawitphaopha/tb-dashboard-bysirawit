@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     const admin = createAdminClient()
     let query = admin
       .from('profiles')
-      .select('id, username, first_name, last_name, title, profession, role, status')
+      .select('id, username, first_name, last_name, title, profession, role, status, avatar_url, avatar_updated_at')
       .eq('status', 'approved')
       .limit(20)
 
@@ -44,6 +44,8 @@ export async function GET(req: NextRequest) {
         display_name: displayName,
         profession_label: professionTitleLabel(p.profession, p.title || ''),
         role: p.role === 'admin' ? 'admin' : 'user',
+        avatar_url: p.avatar_url || null,
+        avatar_updated_at: p.avatar_updated_at || null,
       }
     }).filter((u: any) => u.username)  // skip user ที่ไม่มี username (mention ไม่ได้)
       // เรียง admin มาก่อน (เน้นให้เห็น)

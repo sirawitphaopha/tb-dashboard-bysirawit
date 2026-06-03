@@ -3927,9 +3927,12 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
                 <div key={p.id} ref={el => { if (el) userRefs.current[p.id] = el; }}
                   className={'px-4 py-3 transition-colors ' + (flashing ? 'bg-amber-100 ring-2 ring-amber-400 ring-inset' : hasReq ? 'bg-amber-50/40' : 'hover:bg-teal-50/40')}>
                 <div className="grid grid-cols-12 gap-3 items-center text-sm">
-                  <div className="col-span-3 min-w-0">
-                    <p className="font-bold text-teal-900 truncate">{p.first_name} {p.last_name} {p.role === 'admin' && <span className="text-xs">👑</span>}</p>
-                    <p className="text-xs text-gray-400 truncate">@{p.username} · {p.email || '—'}</p>
+                  <div className="col-span-3 min-w-0 flex items-center gap-2">
+                    <AvatarCircle urlKey={p.avatar_url} updatedAt={p.avatar_updated_at} name={`${p.first_name||''} ${p.last_name||''}`} fallback={(((p.first_name||'')[0]||'')+((p.last_name||'')[0]||'')).toUpperCase()||'?'} size={34} />
+                    <div className="min-w-0">
+                      <p className="font-bold text-teal-900 truncate">{p.first_name} {p.last_name} {p.role === 'admin' && <span className="text-xs">👑</span>}</p>
+                      <p className="text-xs text-gray-400 truncate">@{p.username} · {p.email || '—'}</p>
+                    </div>
                   </div>
                   <div className="col-span-2 text-xs text-gray-600 truncate">
                     <p>{PROFESSION_LABELS_TH[p.profession] || p.profession}</p>
@@ -4013,17 +4016,20 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
               <div key={p.id} ref={el => { if (el) userRefs.current[p.id] = el; }}
                 className={'bg-white rounded-2xl p-5 shadow-sm border transition-all ' + (flashing ? 'border-amber-400 ring-2 ring-amber-400' : hasReq ? 'border-amber-200' : 'border-gray-100 hover:border-teal-200 hover:shadow-md')}>
                 <div className="flex items-start justify-between gap-4 mb-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <h3 className="text-base font-bold text-teal-900">{p.first_name} {p.last_name}</h3>
-                      <span className="text-xs font-bold px-2 py-0.5 rounded-md" style={{ background:sc.bg, color:sc.fg }}>{sc.label}</span>
-                      {p.role === 'admin' && <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-purple-100 text-purple-800">👑 Admin</span>}
-                      {hasReq && <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-amber-200 text-amber-800"><i className="fa-solid fa-pen-clip mr-1"></i>{editReqByUser[p.id].length} คำขอแก้ไข</span>}
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    <AvatarCircle urlKey={p.avatar_url} updatedAt={p.avatar_updated_at} name={`${p.first_name||''} ${p.last_name||''}`} fallback={(((p.first_name||'')[0]||'')+((p.last_name||'')[0]||'')).toUpperCase()||'?'} size={42} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <h3 className="text-base font-bold text-teal-900">{p.first_name} {p.last_name}</h3>
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-md" style={{ background:sc.bg, color:sc.fg }}>{sc.label}</span>
+                        {p.role === 'admin' && <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-purple-100 text-purple-800">👑 Admin</span>}
+                        {hasReq && <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-amber-200 text-amber-800"><i className="fa-solid fa-pen-clip mr-1"></i>{editReqByUser[p.id].length} คำขอแก้ไข</span>}
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        {PROFESSION_LABELS_TH[p.profession] || p.profession}
+                        {p.license_number && ` · ${p.license_number}`}
+                      </p>
                     </div>
-                    <p className="text-xs text-gray-500">
-                      {PROFESSION_LABELS_TH[p.profession] || p.profession}
-                      {p.license_number && ` · ${p.license_number}`}
-                    </p>
                   </div>
                   <div className="flex gap-2 flex-shrink-0 flex-wrap justify-end">
                     {filter === 'approved' && (
@@ -6856,6 +6862,8 @@ function App() {
           fullName:    `${shown} ${p.first_name || ''} ${p.last_name || ''}`.trim(),
           profession:  prof.label,
           avatar:      shown,
+          avatarUrl:   p.avatar_url || null,
+          avatarUpdatedAt: p.avatar_updated_at || null,
           role:        p.role,
         });
       })
@@ -7250,7 +7258,7 @@ function App() {
             onMouseEnter={e=>e.currentTarget.style.background='#f0fdfa'}
             onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
             <span style={{width:'36px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginLeft:sidebarOpen?'0':'10px',transition:'margin-left 0.2s ease'}}>
-              <div style={{width:'32px',height:'32px',borderRadius:'50%',background:'#0f766e',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:(currentUser?.avatar||'').length>3?'8px':'11px'}}>{currentUser?.avatar || '?'}</div>
+              <AvatarCircle urlKey={currentUser?.avatarUrl} updatedAt={currentUser?.avatarUpdatedAt} fallback={currentUser?.avatar || '?'} name={currentUser?.fullName} size={32} fontSize={(currentUser?.avatar||'').length>3?8:11} />
             </span>
             <div style={{overflow:'hidden',maxWidth:sidebarOpen?'160px':'0px',opacity:sidebarOpen?1:0,transition:'max-width 0.2s ease,opacity 0.15s ease',whiteSpace:'nowrap'}}>
               <p style={{fontWeight:700,fontSize:'12px',color:'#1f2937',margin:0}}>{currentUser?.fullName || '—'}</p>
@@ -7676,7 +7684,7 @@ function RequestEditModal({ field, currentValue, onClose }) {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.18.0';
+const APP_VERSION = '0.7.18.1';
 const BUILD_DATE = '3 มิ.ย. 2569';
 function AboutModal({ onClose, onShowChangelog }) {
   const [closing, setClosing] = React.useState(false);
@@ -8559,6 +8567,7 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
                       {/* บรรทัดบน: checkbox + @username + ADMIN + count */}
                       <div style={{display:'flex',alignItems:'center',gap:'6px',width:'100%'}}>
                         <input type="checkbox" checked={checked} onChange={()=>toggleMentionUser(u.id)} style={{cursor:'pointer',flexShrink:0}}/>
+                        <AvatarCircle urlKey={u.avatar_url} updatedAt={u.avatar_updated_at} name={u.display_name} fallback={u.profession_label || ((u.username||'@')[0]||'@').toUpperCase()} size={20} fontSize={8} />
                         <b style={{color:isAdminUser?'#92400e':'#0f766e',flexShrink:0}}>@{u.username}</b>
                         {isAdminUser && <span style={{fontSize:'9px',fontWeight:800,color:'#fff',background:'#d97706',padding:'1px 5px',borderRadius:'999px',flexShrink:0}}>ADMIN</span>}
                         <span style={{marginLeft:'auto',fontSize:'10px',color:'#9ca3af',flexShrink:0}}>({commentFilterStats.byMentionedId[u.id]||0})</span>
@@ -9188,14 +9197,14 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
   // v0.7.14.7 — หา snapshot ของ user ปัจจุบันจาก comment เก่า (display_name + profession_label)
   const findMySnapshot = () => {
     for (const c of comments) {
-      if (c.user_id === currentUserId) return { display_name: c.display_name, profession_label: c.profession_label, role: c.role };
+      if (c.user_id === currentUserId) return { display_name: c.display_name, profession_label: c.profession_label, role: c.role, avatar_url: c.avatar_url || null, avatar_updated_at: c.avatar_updated_at || null };
       if (Array.isArray(c.replies)) {
         for (const r of c.replies) {
-          if (r.user_id === currentUserId) return { display_name: r.display_name, profession_label: r.profession_label, role: r.role };
+          if (r.user_id === currentUserId) return { display_name: r.display_name, profession_label: r.profession_label, role: r.role, avatar_url: r.avatar_url || null, avatar_updated_at: r.avatar_updated_at || null };
         }
       }
     }
-    return { display_name: 'คุณ', profession_label: '', role: isAdmin ? 'admin' : 'user' };
+    return { display_name: 'คุณ', profession_label: '', role: isAdmin ? 'admin' : 'user', avatar_url: null, avatar_updated_at: null };
   };
 
   const handleSubmit = async (e) => {
@@ -9214,6 +9223,8 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
       display_name: me.display_name,
       profession_label: me.profession_label,
       role: me.role,
+      avatar_url: me.avatar_url,
+      avatar_updated_at: me.avatar_updated_at,
       comment_text: t,
       status: draftStatus,
       created_at: new Date().toISOString(),
@@ -9363,6 +9374,8 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
       display_name: me.display_name,
       profession_label: me.profession_label,
       role: me.role,
+      avatar_url: me.avatar_url,
+      avatar_updated_at: me.avatar_updated_at,
       comment_text: t,
       status: replyStatus,
       created_at: new Date().toISOString(),
@@ -9673,9 +9686,7 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
             return (
               <div key={c.id} id={'cmt-'+c.id} className="cm-card" style={{background:(pageFilter?.hasFilter && pageFilter.matches(c))?'#fef3c7':'#fff',border:'1.5px solid '+((pageFilter?.hasFilter && pageFilter.matches(c))?'#fbbf24':T.cardBorder),borderLeft:`3px solid ${meta.fg}`,opacity:isDeleted?0.85:(c._pending?0.7:1)}}>
                 <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'6px',flexWrap:'wrap'}}>
-                  <div style={{minWidth:'34px',height:'26px',padding:'0 8px',borderRadius:'999px',background:meta.bg,color:meta.fg,border:`1px solid ${meta.border}`,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:800,fontSize:'11px',flexShrink:0,lineHeight:1}}>
-                    {c.profession_label || initials(c.display_name)}
-                  </div>
+                  <AvatarCircle urlKey={c.avatar_url} updatedAt={c.avatar_updated_at} fallback={c.profession_label || initials(c.display_name)} name={c.display_name} size={28} fontSize={11} />
                   <span style={{fontWeight:700,fontSize:'12px',color:'#1f2937'}}>{c.display_name}</span>
                   {c.role === 'admin' && <span style={{fontSize:'9px',fontWeight:700,color:'#0f766e',background:'#ccfbf1',padding:'1px 6px',borderRadius:'999px'}}>ADMIN</span>}
                   <span style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 8px',borderRadius:'999px',background:meta.bg,color:meta.fg,border:`1px solid ${meta.border}`,fontSize:'10px',fontWeight:700}}>{meta.emoji} {meta.label}</span>
@@ -9778,10 +9789,13 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
                           return (
                             <div key={u.id} onClick={()=>applyMention(u,'edit')} onMouseDown={e=>e.preventDefault()}
                               onMouseEnter={()=>setMentionState(prev => prev ? {...prev, idx: i} : prev)}
-                              style={{padding:'7px 10px',cursor:'pointer',borderRadius:'5px',fontSize:'13px',color:'#1f2937',background:rowBg,borderBottom:'1px solid #f1f5f9',borderLeft:isAdminUser?'3px solid #d97706':'3px solid transparent',transition:'background 0.12s ease'}}>
-                              <b style={{color:isAdminUser?'#92400e':'#0f766e'}}>@{u.username}</b>
-                              {isAdminUser && <span style={{marginLeft:'5px',fontSize:'9px',fontWeight:800,color:'#fff',background:'#d97706',padding:'1px 6px',borderRadius:'999px'}}>ADMIN</span>}
-                              <span style={{color:'#374151',fontWeight:600,marginLeft:'4px'}}>· {u.display_name}</span>
+                              style={{display:'flex',alignItems:'center',gap:'7px',padding:'7px 10px',cursor:'pointer',borderRadius:'5px',fontSize:'13px',color:'#1f2937',background:rowBg,borderBottom:'1px solid #f1f5f9',borderLeft:isAdminUser?'3px solid #d97706':'3px solid transparent',transition:'background 0.12s ease'}}>
+                              <AvatarCircle urlKey={u.avatar_url} updatedAt={u.avatar_updated_at} name={u.display_name} fallback={u.profession_label || ((u.username||'@')[0]||'@').toUpperCase()} size={22} fontSize={9} />
+                              <span style={{minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                                <b style={{color:isAdminUser?'#92400e':'#0f766e'}}>@{u.username}</b>
+                                {isAdminUser && <span style={{marginLeft:'5px',fontSize:'9px',fontWeight:800,color:'#fff',background:'#d97706',padding:'1px 6px',borderRadius:'999px'}}>ADMIN</span>}
+                                <span style={{color:'#374151',fontWeight:600,marginLeft:'4px'}}>· {u.display_name}</span>
+                              </span>
                             </div>
                           );
                         })}
@@ -9830,10 +9844,13 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
                           return (
                             <div key={u.id} onClick={()=>applyMention(u,'reply')} onMouseDown={e=>e.preventDefault()}
                               onMouseEnter={()=>setMentionState(prev => prev ? {...prev, idx: i} : prev)}
-                              style={{padding:'7px 10px',cursor:'pointer',borderRadius:'5px',fontSize:'13px',color:'#1f2937',background:rowBg,borderBottom:'1px solid #f1f5f9',borderLeft:isAdminUser?'3px solid #d97706':'3px solid transparent',transition:'background 0.12s ease'}}>
-                              <b style={{color:isAdminUser?'#92400e':'#0f766e'}}>@{u.username}</b>
-                              {isAdminUser && <span style={{marginLeft:'5px',fontSize:'9px',fontWeight:800,color:'#fff',background:'#d97706',padding:'1px 6px',borderRadius:'999px'}}>ADMIN</span>}
-                              <span style={{color:'#374151',fontWeight:600,marginLeft:'4px'}}>· {u.display_name}</span>
+                              style={{display:'flex',alignItems:'center',gap:'7px',padding:'7px 10px',cursor:'pointer',borderRadius:'5px',fontSize:'13px',color:'#1f2937',background:rowBg,borderBottom:'1px solid #f1f5f9',borderLeft:isAdminUser?'3px solid #d97706':'3px solid transparent',transition:'background 0.12s ease'}}>
+                              <AvatarCircle urlKey={u.avatar_url} updatedAt={u.avatar_updated_at} name={u.display_name} fallback={u.profession_label || ((u.username||'@')[0]||'@').toUpperCase()} size={22} fontSize={9} />
+                              <span style={{minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                                <b style={{color:isAdminUser?'#92400e':'#0f766e'}}>@{u.username}</b>
+                                {isAdminUser && <span style={{marginLeft:'5px',fontSize:'9px',fontWeight:800,color:'#fff',background:'#d97706',padding:'1px 6px',borderRadius:'999px'}}>ADMIN</span>}
+                                <span style={{color:'#374151',fontWeight:600,marginLeft:'4px'}}>· {u.display_name}</span>
+                              </span>
                             </div>
                           );
                         })}
@@ -9863,7 +9880,7 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
                       return (
                         <div key={r.id} id={'cmt-'+r.id} className="cm-card-reply" style={{background:(pageFilter?.hasFilter && pageFilter.matches(r))?'#fef3c7':'#fff',border:'1px solid '+((pageFilter?.hasFilter && pageFilter.matches(r))?'#fbbf24':T.cardBorder),borderLeft:`2px solid ${rmeta.fg}`,opacity:rIsDeleted?0.75:(r._pending?0.7:1)}}>
                           <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'4px',flexWrap:'wrap'}}>
-                            <div style={{minWidth:'30px',height:'22px',padding:'0 6px',borderRadius:'999px',background:rmeta.bg,color:rmeta.fg,border:`1px solid ${rmeta.border}`,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:800,fontSize:'10px',flexShrink:0,lineHeight:1}}>{r.profession_label || initials(r.display_name)}</div>
+                            <AvatarCircle urlKey={r.avatar_url} updatedAt={r.avatar_updated_at} fallback={r.profession_label || initials(r.display_name)} name={r.display_name} size={22} fontSize={10} />
                             <span style={{fontWeight:700,fontSize:'11.5px',color:'#1f2937'}}>{r.display_name}</span>
                             {r.role === 'admin' && <span style={{fontSize:'9px',fontWeight:700,color:'#0f766e',background:'#ccfbf1',padding:'1px 5px',borderRadius:'999px'}}>ADMIN</span>}
                             {rIsDeleted && <span style={{fontSize:'9px',fontWeight:700,color:'#991b1b',background:'#fee2e2',border:'1px solid #fca5a5',padding:'1px 5px',borderRadius:'999px'}}><i className="fa-solid fa-trash" style={{fontSize:'7px'}}></i> ลบแล้ว</span>}
@@ -9962,11 +9979,14 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
                 return (
                   <div key={u.id} onClick={()=>applyMention(u,'draft')} onMouseDown={e=>e.preventDefault()}
                     onMouseEnter={()=>setMentionState(prev => prev ? {...prev, idx: i} : prev)}
-                    style={{padding:'7px 10px',cursor:'pointer',borderRadius:'5px',fontSize:'13px',color:'#1f2937',background:rowBg,borderBottom:'1px solid #f1f5f9',borderLeft:isAdminUser?'3px solid #d97706':'3px solid transparent',transition:'background 0.12s ease'}}>
-                    <b style={{color:isAdminUser?'#92400e':'#0f766e'}}>@{u.username}</b>
-                    {isAdminUser && <span style={{marginLeft:'5px',fontSize:'9px',fontWeight:800,color:'#fff',background:'#d97706',padding:'1px 6px',borderRadius:'999px'}}>ADMIN</span>}
-                    <span style={{color:'#374151',fontWeight:600,marginLeft:'4px'}}>· {u.display_name}</span>
-                    {u.profession_label && <span style={{color:'#6b7280',fontSize:'11px'}}> · {u.profession_label}</span>}
+                    style={{display:'flex',alignItems:'center',gap:'7px',padding:'7px 10px',cursor:'pointer',borderRadius:'5px',fontSize:'13px',color:'#1f2937',background:rowBg,borderBottom:'1px solid #f1f5f9',borderLeft:isAdminUser?'3px solid #d97706':'3px solid transparent',transition:'background 0.12s ease'}}>
+                    <AvatarCircle urlKey={u.avatar_url} updatedAt={u.avatar_updated_at} name={u.display_name} fallback={u.profession_label || ((u.username||'@')[0]||'@').toUpperCase()} size={22} fontSize={9} />
+                    <span style={{minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                      <b style={{color:isAdminUser?'#92400e':'#0f766e'}}>@{u.username}</b>
+                      {isAdminUser && <span style={{marginLeft:'5px',fontSize:'9px',fontWeight:800,color:'#fff',background:'#d97706',padding:'1px 6px',borderRadius:'999px'}}>ADMIN</span>}
+                      <span style={{color:'#374151',fontWeight:600,marginLeft:'4px'}}>· {u.display_name}</span>
+                      {u.profession_label && <span style={{color:'#6b7280',fontSize:'11px'}}> · {u.profession_label}</span>}
+                    </span>
                   </div>
                 );
               })}
@@ -10908,6 +10928,38 @@ function SessionsPanel({ onBack }) {
   );
 }
 
+// ── Avatar helpers (v0.7.18.x) ────────────────────────────────────────────
+// สร้าง public URL ของรูป avatar จาก key ที่เก็บใน DB · มี fallback domain (กันกรณี
+// NEXT_PUBLIC_R2_AVATAR_URL ไม่ถูก inline ตอน build บน Cloudflare Worker)
+function r2AvatarUrl(key, updatedAt) {
+  if (!key) return null;
+  const base = (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_R2_AVATAR_URL) || 'https://img.tbjourney.care';
+  const v = updatedAt ? new Date(updatedAt).getTime() : '';
+  return `${base}/${key}?v=${v}`;
+}
+// สีวงกลม fallback แบบคงที่ตามชื่อ (คนละคนสีไม่ซ้ำ เหมือน Slack/Google) — แยกคนง่ายขึ้น
+function colorFromName(name) {
+  const palette = ['#0f766e','#b45309','#be123c','#1d4ed8','#7e22ce','#0e7490','#15803d','#c2410c','#9d174d','#4338ca','#0369a1','#a16207'];
+  const s = name || '';
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return palette[h % palette.length];
+}
+// วงกลม avatar ใช้ซ้ำได้ — มีรูป → แสดงรูป · ไม่มี/รูปเสีย → ตัวอักษรย่อ (สีตามชื่อ)
+function AvatarCircle({ urlKey, updatedAt, fallback, name, size = 32, fontSize, bg, onClick, title, style }) {
+  const [err, setErr] = React.useState(false);
+  React.useEffect(() => { setErr(false); }, [urlKey, updatedAt]);   // เปลี่ยนรูป → reset error
+  const url = !err ? r2AvatarUrl(urlKey, updatedAt) : null;
+  const fs = fontSize || Math.max(8, Math.round(size * 0.36));
+  const circleBg = bg || colorFromName(name || fallback);
+  return (
+    <div onClick={onClick} title={title}
+      style={{ width: size, height: size, borderRadius: '50%', overflow: 'hidden', background: circleBg, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: fs, flexShrink: 0, cursor: onClick ? 'pointer' : 'default', ...(style || {}) }}>
+      {url ? <img src={url} onError={() => setErr(true)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (fallback || '?')}
+    </div>
+  );
+}
+
 // ── Avatar crop + upload (v0.7.18.0) ──────────────────────────────────────
 function loadImageEl(src) {
   return new Promise((resolve, reject) => {
@@ -11244,12 +11296,8 @@ function UserProfileModal({ onClose }) {
       setAvatarErr('เปิดรูปต้นฉบับไม่สำเร็จ ลองอัปรูปใหม่');
     }
   };
-  const avatarPublicUrl = form && form.avatarUrl
-    ? `${process.env.NEXT_PUBLIC_R2_AVATAR_URL}/${form.avatarUrl}?v=${form.avatarUpdatedAt ? new Date(form.avatarUpdatedAt).getTime() : ''}`
-    : null;
-  const avatarOriginalPublicUrl = form && form.avatarOriginalUrl
-    ? `${process.env.NEXT_PUBLIC_R2_AVATAR_URL}/${form.avatarOriginalUrl}?v=${form.avatarUpdatedAt ? new Date(form.avatarUpdatedAt).getTime() : ''}`
-    : null;
+  const avatarPublicUrl = form ? r2AvatarUrl(form.avatarUrl, form.avatarUpdatedAt) : null;
+  const avatarOriginalPublicUrl = form ? r2AvatarUrl(form.avatarOriginalUrl, form.avatarUpdatedAt) : null;
 
   // Map DB profile → form ที่ modal ใช้
   const mapDb = (db) => {
