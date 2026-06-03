@@ -15,6 +15,8 @@
 //   - fonts.googleapis.com       ← Google Fonts (layout.tsx)
 //   - fonts.gstatic.com          ← Google Fonts woff2 files
 //   - *.supabase.co              ← Supabase API + Realtime
+//   - *.r2.cloudflarestorage.com ← อัปรูปขึ้น R2 (presigned PUT) [v0.7.18.0]
+//   - img.tbjourney.care         ← แสดงรูป avatar จาก R2 (custom domain) [v0.7.18.0]
 const cspDirectives = [
   "default-src 'self'",
   // script: เฉพาะ self + inline (Next.js hydration)
@@ -23,10 +25,10 @@ const cspDirectives = [
   "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com",
   // font: Google Fonts + FontAwesome
   "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com",
-  // image: self + data URI (base64) + Supabase storage (เผื่ออนาคต)
-  "img-src 'self' data: blob: https://*.supabase.co",
-  // connect: Supabase API + Realtime (websocket)
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+  // image: self + data URI (base64) + Supabase storage + R2 avatar (custom domain)
+  "img-src 'self' data: blob: https://*.supabase.co https://img.tbjourney.care",
+  // connect: Supabase API + Realtime (websocket) + R2 upload (presigned PUT) + R2 อ่านรูปต้นฉบับ (ครอบใหม่ → fetch เป็น blob กัน canvas tainted)
+  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.r2.cloudflarestorage.com https://img.tbjourney.care",
   // frame: ไม่ใช้ iframe แล้ว
   "frame-src 'none'",
   // กัน <object>/<embed>

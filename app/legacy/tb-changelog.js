@@ -23,6 +23,99 @@ window.TB_CHANGELOG = [
     description: "ระบบ login จริง + Audit Log ครบวงจร + Admin Approval + ดีไซน์ใหม่ทั้งหมด",
     versions: [
       {
+        version: "0.7.18.0",
+        date: "3 มิ.ย. 2569",
+        commit: "pending",
+        commitFull: "pending",
+        title: "ระบบรูปโปรไฟล์ (Avatar) ครบวงจร + วางรากฐาน Cloudflare R2 + เครื่องมือดูรูปสไตล์ Windows Photos",
+        changes: [
+          { tag: "feature", text: "ระบบอัปโหลดรูปโปรไฟล์ (avatar) ครบวงจร + วางรากฐาน Cloudflare R2 — เริ่มจาก avatar ก่อนต่อยอดระบบเก็บภาพ CXR ในอนาคต" },
+          { tag: "feature", text: "ครอบรูปวงกลม + ซูม/เลื่อน (react-easy-crop) · objectFit cover วงกลมเต็มขอบทุกด้าน ไม่ว่ารูปแนวตั้ง/แนวนอน · ซูมออกเห็นรูปทั้งใบ + ลากอิสระ · เส้นกริด 9 ช่อง + เส้นแบ่งครึ่งกลาง ช่วยจัดองค์ประกอบ" },
+          { tag: "feature", text: "เก็บ 2 ไฟล์ — รูปครอบจัตุรัส 512px (โชว์ avatar เล็ก) + รูปต้นฉบับ max 1920 ด้านยาว (สำหรับกดดูเต็ม) · WebP คุณภาพ 100% · ไม่ขยายเกินความละเอียดจริง" },
+          { tag: "feature", text: "กดที่รูป → เครื่องมือดูรูปสไตล์ Windows Photos: เปิดแบบขยายจากตำแหน่งรูปเดิม + ลากเลื่อน + สโครลเมาส์ซูม + แถบเลื่อนซูม (10-800%) + ปุ่มย่อ/ขยาย/พอดีหน้าจอ + หมุนซ้าย-ขวา + เลือกขนาด % · กดปรับ % แล้วดึงรูปกลับกึ่งกลางอัตโนมัติ (กันหลุดกรอบ)" },
+          { tag: "feature", text: "แผงข้อมูลรูป (info) สีธีมเทล + ปุ่มปิด — ชื่อไฟล์ / ขนาดภาพ / ขนาดไฟล์ / ฟอร์แมต / ซูม % / องศาหมุน / วันที่อัปเดต / แหล่งเก็บ" },
+          { tag: "feature", text: "ครอบใหม่จากรูปต้นฉบับเดิมได้ (ไม่ต้องอัปไฟล์ใหม่) — ปุ่ม 'ครอบใหม่' ในโปรไฟล์ ดึงรูปต้นฉบับมาครอบวงใหม่" },
+          { tag: "feature", text: "ลบรูป → popup ยืนยันพร้อมคำเตือน · แสดง avatar เป็นวงกลมทุกขนาด (ตัวอักษรย่อถ้าไม่มีรูป)" },
+          { tag: "backend", text: "lib/r2.ts — sign presigned PUT/DELETE ผ่าน aws4fetch (เบา เหมาะ edge/Workers) · 3 API route ใหม่: presign (คืน 2 ลิงก์ ครอบ+ต้นฉบับ) / confirm (บันทึก avatar_url + avatar_original_url) / DELETE (ลบ 2 ไฟล์ + ล้าง DB) · เพิ่มคอลัมน์ avatar_url, avatar_updated_at, avatar_original_url" },
+          { tag: "security", text: "ประมวลผลรูปฝั่ง client (Canvas) → ลบ EXIF/GPS อัตโนมัติ · presigned PUT หมดอายุ 5 นาที · key ผูกกับ user.id (อัปทับคนอื่นไม่ได้) · เพดานไฟล์ 50MB · บล็อกคลิกขวากันเซฟ (เบื้องต้น)" },
+          { tag: "security", text: "CSP — เพิ่มโดเมน R2 (*.r2.cloudflarestorage.com) ใน connect-src สำหรับ presigned upload + img.tbjourney.care ใน img-src/connect-src สำหรับแสดง/อ่านรูป" },
+          { tag: "bug", text: "แก้ Failed to fetch ตอนอัป — CSP ไม่มีโดเมน R2 (บล็อกก่อนยิงไฟล์ออกจากเบราว์เซอร์)" },
+          { tag: "bug", text: "แก้ canvas tainted ตอนครอบใหม่ — ดึงรูปต้นฉบับเป็น blob (object URL same-origin) แทนใส่ URL ตรง (เลี่ยง cache no-cors ที่ <img> โหลดไว้)" },
+          { tag: "bug", text: "แก้ขนาดไฟล์ไม่ขึ้นในแผง info — fetch ขนาดด้วย URL เติม query เลี่ยง cache ที่ <img> โหลดไว้แบบ no-cors (URL เดิมจะ Failed to fetch)" },
+          { tag: "backend", text: "npm: + aws4fetch + react-easy-crop" },
+        ],
+        body: `🎯 เป้าหมาย
+ระบบอัปโหลดรูปโปรไฟล์ (avatar) ครบวงจร + วางรากฐาน Cloudflare R2 ให้ครบ (storage + API + image processing + upload flow) เพื่อต่อยอดระบบเก็บภาพเอกซเรย์ปอด (CXR) ในอนาคตโดยไม่ต้องรื้อทำใหม่ · Scope รอบนี้: avatar อย่างเดียว (อัป + แสดง + ดูเต็ม + ครอบใหม่ + ลบ)
+
+═══════════════════════════════════════════════════════════════════════════
+✅ Frontend (app/legacy/tb-monolith.jsx)
+═══════════════════════════════════════════════════════════════════════════
+- หน้าครอบรูป (AvatarCropModal): react-easy-crop วงกลม + zoom slider
+  • objectFit cover → วงกลมครอบเต็มขอบทุกด้าน (รูปแนวตั้ง/นอนก็เต็ม)
+  • minZoom 0.4 + restrictPosition false → ซูมออกเห็นรูปทั้งใบ + ลากอิสระ ดันขอบบนเข้าวงได้
+  • เส้นกริด rule of thirds (9 ช่อง) + เส้นแบ่งครึ่งกลาง (เข้มกว่า) ช่วยจัดองค์ประกอบ
+  • เติมพื้นขาวเวลาซูมออกจนรูปไม่เต็มกรอบ (กันขอบดำ/โปร่งใส)
+- เครื่องมือดูรูป (AvatarLightbox) สไตล์ Windows Photos:
+  • เปิดแบบขยายจากตำแหน่งวงกลม avatar (transform 4 ฟังก์ชันชุดเดียว → ลื่น)
+  • ลากเลื่อน (pan) + สโครลเมาส์ซูม + แถบเลื่อนซูม 10-800%
+  • ปุ่ม: หมุนซ้าย / หมุนขวา / พอดีหน้าจอ / ย่อ / ขยาย / เลือก % (dropdown)
+  • กดปุ่ม/แถบ/เลือก % → ดึงรูปกลับกึ่งกลางอัตโนมัติ (กันรูปหลุดกรอบ)
+  • แผง info สีธีมเทล + ปุ่มปิด: ชื่อไฟล์ / ขนาดภาพ / ขนาดไฟล์ / ฟอร์แมต / % / องศาหมุน / วันที่ / แหล่งเก็บ
+  • บล็อกคลิกขวา + ห้ามลากรูป (กันเซฟเบื้องต้น)
+- UserProfileModal: วงกลม avatar (img ถ้ามี / ตัวอักษรย่อถ้าไม่มี) + ปุ่มกล้อง + ครอบใหม่ + ลบรูป (popup ยืนยัน)
+
+═══════════════════════════════════════════════════════════════════════════
+✅ Backend
+═══════════════════════════════════════════════════════════════════════════
+- lib/r2.ts: AwsClient (aws4fetch) sign presigned PUT URL + r2Delete
+- app/api/profile/avatar/presign — POST → คืน 2 presigned PUT URL (key ครอบ + keyOrig ต้นฉบับ)
+- app/api/profile/avatar/confirm — POST → update avatar_url (+ avatar_original_url ถ้า hasOriginal)
+- app/api/profile/avatar (DELETE) — ลบ 2 ไฟล์ใน R2 + ล้าง avatar_url/avatar_original_url
+- DB: profiles + avatar_url, avatar_updated_at, avatar_original_url (scripts/add-avatar-column.sql + add-avatar-original-column.sql)
+- key ผูกกับ user.id: avatars/<uid>.webp (ครอบ) + avatars/<uid>_orig.webp (ต้นฉบับ) → 1 user 2 ไฟล์ overwrite ไม่มี orphan
+
+═══════════════════════════════════════════════════════════════════════════
+🔒 Security / CSP (next.config.js)
+═══════════════════════════════════════════════════════════════════════════
+- connect-src += https://*.r2.cloudflarestorage.com (presigned upload) + https://img.tbjourney.care (อ่านรูปต้นฉบับเป็น blob)
+- img-src += https://img.tbjourney.care (แสดงรูป avatar)
+- Canvas re-encode WebP → ฆ่า EXIF/GPS + payload · presigned หมดอายุ 5 นาที + content-type webp · เพดานไฟล์ 50MB
+
+═══════════════════════════════════════════════════════════════════════════
+🐛 บั๊กที่เจอ + แก้ (ระหว่างพัฒนา)
+═══════════════════════════════════════════════════════════════════════════
+1. Failed to fetch ตอนอัป — CSP ไม่มีโดเมน R2 → เพิ่มใน connect-src
+2. วงกลมครอบไม่เต็มขอบ — เปลี่ยนกรอบเป็นจัตุรัส (paddingBottom 100%) + objectFit cover
+3. ขอบบนรูปเข้าวงไม่ได้ — เปิด minZoom 0.4 + restrictPosition false (ซูมออก/ลากอิสระ)
+4. canvas tainted ตอนครอบใหม่ — ดึงรูปต้นฉบับเป็น blob (object URL same-origin)
+5. ขนาดไฟล์ไม่ขึ้นในแผง info — <img> โหลด URL แบบ no-cors ทำ cache ชน → fetch URL เดิม Failed to fetch · แก้: fetch ด้วย URL เติม query
+
+═══════════════════════════════════════════════════════════════════════════
+📁 ไฟล์ที่แตะ
+═══════════════════════════════════════════════════════════════════════════
+- app/legacy/tb-monolith.jsx (crop modal + lightbox viewer + profile avatar)
+- app/legacy/tb-changelog.js (entry นี้)
+- app/login/page.tsx (version)
+- app/api/profile/avatar/{presign,confirm}/route.ts + route.ts (DELETE) [ใหม่]
+- lib/r2.ts [ใหม่]
+- next.config.js (CSP)
+- scripts/add-avatar-column.sql + add-avatar-original-column.sql [ใหม่]
+- package.json (+ aws4fetch, react-easy-crop)
+
+═══════════════════════════════════════════════════════════════════════════
+📝 Version + Build
+═══════════════════════════════════════════════════════════════════════════
+- APP_VERSION 0.7.17.4 → 0.7.18.0 · BUILD_DATE 3 มิ.ย. 2569
+- WebP คุณภาพ 100% (lossy) ทั้งรูปครอบ + ต้นฉบับ — AVIF ดอง (เบราว์เซอร์บีบ AVIF ฝั่ง client ไม่ได้ ต้องทำ server-side ตอน CXR)
+
+═══════════════════════════════════════════════════════════════════════════
+🔁 ต่อไป
+═══════════════════════════════════════════════════════════════════════════
+- Step 4: แสดง avatar 4 จุด (sidebar current user + comment author + reply author + profile)
+- ตั้ง env R2 บน Cloudflare Pages (NEXT_PUBLIC_R2_AVATAR_URL = Build · R2_* = Runtime)
+- Roadmap: CXR + ตู้ปิด (private R2) + AVIF server-side + รูปแนบใน comment`,
+      },
+      {
         version: "0.7.17.4",
         date: "1 มิ.ย. 2569",
         commit: "be8562d",

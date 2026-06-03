@@ -24,6 +24,7 @@
 
 import * as React from 'react'
 import { createPortal } from 'react-dom'
+import Cropper from 'react-easy-crop'
 import V2Skeleton from '../components/V2Skeleton'
 const { useState, useEffect, useRef } = React
 
@@ -7675,8 +7676,8 @@ function RequestEditModal({ field, currentValue, onClose }) {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.17.4';
-const BUILD_DATE = '2 มิ.ย. 2569';
+const APP_VERSION = '0.7.18.0';
+const BUILD_DATE = '3 มิ.ย. 2569';
 function AboutModal({ onClose, onShowChangelog }) {
   const [closing, setClosing] = React.useState(false);
   const handleClose = () => { if (closing) return; setClosing(true); setTimeout(onClose, 580); };
@@ -10907,6 +10908,241 @@ function SessionsPanel({ onBack }) {
   );
 }
 
+// ── Avatar crop + upload (v0.7.18.0) ──────────────────────────────────────
+function loadImageEl(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';   // ให้ดึงรูปจาก R2 มาวาด canvas ได้ (ใช้ตอน "ครอบใหม่" จากรูปต้นฉบับ)
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+// ครอบ + ย่อเป็น WebP จัตุรัส (EXIF/GPS หายอัตโนมัติ เพราะวาดลง canvas ใหม่)
+// เก็บเป็น "สี่เหลี่ยม" เต็มกรอบครอบ (รวมมุม/ผมที่อยู่นอกวงกลม) → avatar เล็กแสดงเป็นวงกลมด้วย CSS
+// รูปครอบนี้ใช้แสดง avatar เล็กเท่านั้น (≤90px) → เก็บแค่ 512px พอ · รูปกดดูเต็มใช้ "ต้นฉบับ" แทน
+// out = min(outMax, ความละเอียดจริงของบริเวณที่ครอบ) → ไม่ขยายเกินรูปจริง (กันรูปแตก)
+async function cropToWebp(src, pixels, outMax = 512) {
+  const img = await loadImageEl(src);
+  const out = Math.max(1, Math.min(outMax, Math.round(pixels.width)));
+  const canvas = document.createElement('canvas');
+  canvas.width = out; canvas.height = out;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';        // พื้นขาว — โผล่เฉพาะตอนซูมออกจนรูปไม่เต็มกรอบ (กันขอบดำ/โปร่งใส)
+  ctx.fillRect(0, 0, out, out);
+  ctx.drawImage(img, pixels.x, pixels.y, pixels.width, pixels.height, 0, 0, out, out);
+  return new Promise(resolve => canvas.toBlob(resolve, 'image/webp', 1.0));  // WebP 100%
+}
+// ย่อรูป "ต้นฉบับ" คงสัดส่วนเดิม (max maxEdge ด้านยาว, ไม่ขยายเกินรูปจริง) → สำหรับกดดูเต็ม/ซูม
+async function resizeToWebp(src, maxEdge = 1920) {
+  const img = await loadImageEl(src);
+  let w = img.naturalWidth, h = img.naturalHeight;
+  const scale = Math.min(1, maxEdge / Math.max(w, h));
+  w = Math.max(1, Math.round(w * scale)); h = Math.max(1, Math.round(h * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+  return new Promise(resolve => canvas.toBlob(resolve, 'image/webp', 1.0));  // WebP 100%
+}
+
+function AvatarCropModal({ src, uploading, error, onCancel, onConfirm }) {
+  const [crop, setCrop]   = React.useState({ x: 0, y: 0 });
+  const [zoom, setZoom]   = React.useState(1);
+  const [pixels, setPixels] = React.useState(null);
+  const onComplete = React.useCallback((_, p) => setPixels(p), []);
+  return createPortal(
+    <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',zIndex:10000,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={uploading?undefined:onCancel}>
+      <div className="modal-A" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'400px',overflow:'hidden',boxShadow:'0 25px 60px rgba(0,0,0,0.3)'}}>
+        <div style={{padding:'16px 20px',borderBottom:'1px solid #f3f4f6'}}>
+          <p style={{fontSize:'15px',fontWeight:700,color:'#0f766e',margin:0}}><i className="fa-solid fa-crop-simple" style={{marginRight:'8px'}}></i>ปรับรูปโปรไฟล์</p>
+          <p style={{fontSize:'12px',color:'#9ca3af',margin:'4px 0 0'}}>ลากเลื่อน และซูม — ซูมออกเพื่อเห็นรูปทั้งใบ</p>
+        </div>
+        {/* กรอบจัตุรัส (paddingBottom 100%) + objectFit cover → วงกลมครอบเต็มขอบทุกด้าน
+            ไม่ว่ารูปแนวตั้ง/แนวนอน (cover = รูปเต็มกรอบเสมอ เหมือน avatar LINE/FB) */}
+        <div style={{position:'relative',width:'100%',paddingBottom:'100%',background:'#1f2937'}}>
+          <div style={{position:'absolute',inset:0}}>
+            <Cropper image={src} crop={crop} zoom={zoom} aspect={1} cropShape="round" showGrid={false}
+              objectFit="cover" minZoom={0.4} restrictPosition={false}
+              onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={onComplete}/>
+          </div>
+          {/* เส้นช่วยจัดองค์ประกอบ: rule of thirds (9 ช่อง) + เส้นแบ่งครึ่งกลาง (เข้มกว่า) */}
+          <div style={{position:'absolute',inset:0,pointerEvents:'none'}}>
+            <div style={{position:'absolute',top:0,bottom:0,left:'33.33%',width:'1px',background:'rgba(255,255,255,0.30)'}}/>
+            <div style={{position:'absolute',top:0,bottom:0,left:'66.66%',width:'1px',background:'rgba(255,255,255,0.30)'}}/>
+            <div style={{position:'absolute',left:0,right:0,top:'33.33%',height:'1px',background:'rgba(255,255,255,0.30)'}}/>
+            <div style={{position:'absolute',left:0,right:0,top:'66.66%',height:'1px',background:'rgba(255,255,255,0.30)'}}/>
+            <div style={{position:'absolute',top:0,bottom:0,left:'50%',width:'1px',background:'rgba(255,255,255,0.55)'}}/>
+            <div style={{position:'absolute',left:0,right:0,top:'50%',height:'1px',background:'rgba(255,255,255,0.55)'}}/>
+          </div>
+        </div>
+        <div style={{padding:'14px 20px'}}>
+          <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'14px'}}>
+            <i className="fa-solid fa-magnifying-glass-minus" style={{color:'#9ca3af',fontSize:'12px'}}></i>
+            <input type="range" min={0.4} max={3} step={0.05} value={zoom} disabled={uploading}
+              onChange={e=>setZoom(Number(e.target.value))} style={{flex:1,accentColor:'#0d9488'}}/>
+            <i className="fa-solid fa-magnifying-glass-plus" style={{color:'#9ca3af',fontSize:'12px'}}></i>
+          </div>
+          {error && <p style={{fontSize:'12px',color:'#dc2626',margin:'0 0 10px',textAlign:'center'}}><i className="fa-solid fa-circle-exclamation" style={{marginRight:'5px'}}></i>{error}</p>}
+          <div style={{display:'flex',gap:'10px'}}>
+            <button onClick={onCancel} disabled={uploading}
+              style={{flex:1,padding:'11px',borderRadius:'10px',background:'#f3f4f6',color:'#4b5563',fontWeight:700,fontSize:'13px',border:'none',cursor:uploading?'not-allowed':'pointer'}}>ยกเลิก</button>
+            <button onClick={()=>pixels && onConfirm(pixels)} disabled={uploading || !pixels}
+              style={{flex:1,padding:'11px',borderRadius:'10px',background:uploading?'#5eead4':'#0d9488',color:'#fff',fontWeight:700,fontSize:'13px',border:'none',cursor:uploading?'wait':'pointer'}}>
+              {uploading ? <><i className="fa-solid fa-spinner fa-spin" style={{marginRight:'6px'}}></i>กำลังอัปโหลด</> : <><i className="fa-solid fa-check" style={{marginRight:'6px'}}></i>ใช้รูปนี้</>}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+// ── ดูรูปโปรไฟล์เต็ม (lightbox) — เครื่องมือดูรูปสไตล์ Windows Photos ──────────
+// แสดง "รูปต้นฉบับ" · เปิดแบบขยายจากตำแหน่งรูป · ลาก + สโครลซูม + หมุน + เลือก % + info (nerd)
+function AvatarLightbox({ src, originRect, info, onClose }) {
+  const [open, setOpen]   = React.useState(false);
+  const [scale, setScale] = React.useState(1);
+  const [tx, setTx]       = React.useState(0);
+  const [ty, setTy]       = React.useState(0);
+  const [rot, setRot]     = React.useState(0);
+  const [dragging, setDragging] = React.useState(false);
+  const [showInfo, setShowInfo] = React.useState(false);
+  const [zoomMenu, setZoomMenu] = React.useState(false);
+  const [dim, setDim]     = React.useState(null);   // {w,h} ขนาดภาพจริง
+  const [bytes, setBytes] = React.useState(null);   // ขนาดไฟล์
+  const drag = React.useRef(null);
+  const clamp = (s) => Math.max(0.1, Math.min(8, s));
+  const doClose = () => { setOpen(false); setTimeout(onClose, 320); };
+  React.useEffect(() => {
+    const id = requestAnimationFrame(() => requestAnimationFrame(() => setOpen(true)));
+    const onKey = (e) => { if (e.key === 'Escape') doClose(); };
+    window.addEventListener('keydown', onKey);
+    // ขนาดไฟล์: fetch ด้วย URL เติม query ให้ต่างจากที่ <img> โหลด (no-cors)
+    // ไม่งั้น cache ชนกัน → fetch เดิมจะ "Failed to fetch" → ขนาดไฟล์ไม่ขึ้น
+    const metaUrl = src + (src.includes('?') ? '&' : '?') + '_meta=1';
+    fetch(metaUrl).then(r => r.blob()).then(b => setBytes(b.size)).catch(()=>{});
+    return () => { cancelAnimationFrame(id); window.removeEventListener('keydown', onKey); };
+  }, []);
+  const onWheel = (e) => { e.preventDefault(); setScale(s => clamp(s * (e.deltaY < 0 ? 1.12 : 0.89))); };
+  const onMouseDown = (e) => { e.preventDefault(); drag.current = { x: e.clientX, y: e.clientY, tx, ty }; setDragging(true); };
+  const onMouseMove = (e) => { if (!drag.current) return; setTx(drag.current.tx + (e.clientX - drag.current.x)); setTy(drag.current.ty + (e.clientY - drag.current.y)); };
+  const endDrag = () => { drag.current = null; setDragging(false); };
+  const stop = (e) => e && e.stopPropagation();
+  const fit = (e) => { stop(e); setScale(1); setTx(0); setTy(0); setRot(0); };
+  const zoomTo = (s) => { setScale(clamp(s)); setTx(0); setTy(0); };  // ซูมผ่านปุ่ม/แถบ/% → ดึงกลับกึ่งกลาง (กันรูปหลุดกรอบ)
+  const pct = Math.round(scale * 100);
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
+  const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
+  // เปิด: ขยายจากตำแหน่งวงกลม avatar เดิม (ใช้ transform 4 ฟังก์ชันชุดเดียวกัน → เลื่อนลื่น)
+  let sx = 0, sy = 0, ss = 0.2;
+  if (originRect) { sx = (originRect.left + originRect.width/2) - vw/2; sy = (originRect.top + originRect.height/2) - vh/2; ss = Math.max(0.12, Math.min(0.4, originRect.width / 520)); }
+  const startT = `translate(-50%,-50%) translate(${sx}px,${sy}px) scale(${ss}) rotate(0deg)`;
+  const liveT  = `translate(-50%,-50%) translate(${tx}px,${ty}px) scale(${scale}) rotate(${rot}deg)`;
+  const bar = { width:'40px',height:'40px',borderRadius:'10px',background:'rgba(255,255,255,0.12)',color:'#fff',border:'none',cursor:'pointer',fontSize:'15px',display:'flex',alignItems:'center',justifyContent:'center' };
+  const fmtBytes = (b) => b==null ? '—' : (b<1024 ? b+' B' : b<1048576 ? (b/1024).toFixed(1)+' KB' : (b/1048576).toFixed(2)+' MB');
+  return createPortal(
+    <div onMouseMove={onMouseMove} onMouseUp={endDrag} onMouseLeave={endDrag}
+      style={{position:'fixed',inset:0,zIndex:10001,background:`rgba(10,15,25,${open?0.95:0})`,transition:'background 0.32s ease',overflow:'hidden'}}>
+      {/* คลิกพื้นหลัง = ปิด */}
+      <div onClick={doClose} style={{position:'absolute',inset:0,cursor:'zoom-out'}}/>
+      <img src={src} alt="" draggable={false}
+        onLoad={e=>setDim({ w:e.target.naturalWidth, h:e.target.naturalHeight })}
+        onWheel={onWheel} onMouseDown={onMouseDown} onClick={stop} onContextMenu={e=>e.preventDefault()}
+        style={{position:'absolute',top:'50%',left:'50%',maxWidth:'90vw',maxHeight:'84vh',objectFit:'contain',userSelect:'none',
+          transform: open ? liveT : startT,
+          opacity: open?1:0, transition: dragging ? 'opacity 0.3s ease' : 'transform 0.36s cubic-bezier(0.16,1,0.3,1), opacity 0.3s ease',
+          cursor: dragging ? 'grabbing' : 'grab', boxShadow:'0 25px 80px rgba(0,0,0,0.6)'}}/>
+
+      {/* มุมขวาบน: info + ปิด */}
+      <div style={{position:'fixed',top:'18px',right:'18px',display:'flex',gap:'10px',opacity:open?1:0,transition:'opacity 0.3s'}}>
+        <button onClick={e=>{stop(e);setShowInfo(v=>!v);}} title="ข้อมูลรูป" style={{...bar, background: showInfo?'rgba(13,148,136,0.85)':'rgba(255,255,255,0.12)'}}><i className="fa-solid fa-circle-info"></i></button>
+        <button onClick={doClose} title="ปิด" style={bar}><i className="fa-solid fa-xmark"></i></button>
+      </div>
+
+      {/* แผง info (nerd) — สีธีมเว็บ (เทล) + ปุ่มปิด */}
+      {showInfo && (
+        <div onClick={stop} style={{position:'fixed',top:0,right:0,bottom:0,width:'312px',background:'#fff',boxShadow:'-12px 0 40px rgba(0,0,0,0.35)',overflowY:'auto',display:'flex',flexDirection:'column'}}>
+          <div style={{background:'linear-gradient(160deg,#0f766e,#14b8a6)',padding:'18px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
+            <p style={{fontSize:'15px',fontWeight:700,margin:0,color:'#fff'}}><i className="fa-solid fa-circle-info" style={{marginRight:'8px'}}></i>ข้อมูลรูป</p>
+            <button onClick={e=>{stop(e);setShowInfo(false);}} title="ปิด" style={{width:'30px',height:'30px',borderRadius:'8px',background:'rgba(255,255,255,0.22)',color:'#fff',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}><i className="fa-solid fa-xmark"></i></button>
+          </div>
+          <div style={{padding:'6px 20px 20px'}}>
+            {[
+              ['ชื่อไฟล์', info && info.name ? info.name : '—'],
+              ['ขนาดภาพ', dim ? `${dim.w} × ${dim.h} px` : '—'],
+              ['ขนาดไฟล์', fmtBytes(bytes)],
+              ['ฟอร์แมต', 'WebP · คุณภาพ 100%'],
+              ['ซูมปัจจุบัน', pct + '%'],
+              ['หมุน', (rot % 360) + '°'],
+              ['อัปเดตล่าสุด', info && info.updatedAt ? new Date(info.updatedAt).toLocaleString('th-TH') : '—'],
+              ['แหล่งเก็บ', 'Cloudflare R2 · img.tbjourney.care'],
+            ].map(([k,v]) => (
+              <div key={k} style={{padding:'11px 0',borderBottom:'1px solid #f1f5f9'}}>
+                <p style={{fontSize:'10px',color:'#9ca3af',margin:'0 0 3px',textTransform:'uppercase',letterSpacing:'0.5px'}}>{k}</p>
+                <p style={{fontSize:'13px',color:'#0f766e',fontWeight:600,margin:0,wordBreak:'break-all'}}>{v}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* แถบควบคุมล่าง (สไตล์ Windows Photos) */}
+      <div onClick={stop} style={{position:'fixed',bottom:'22px',left:'50%',transform:'translateX(-50%)',display:'flex',alignItems:'center',gap:'7px',background:'rgba(17,24,39,0.88)',backdropFilter:'blur(6px)',borderRadius:'14px',padding:'8px 12px',opacity:open?1:0,transition:'opacity 0.3s',boxShadow:'0 10px 30px rgba(0,0,0,0.4)'}}>
+        <button onClick={e=>{stop(e);setRot(r=>r-90);}} title="หมุนซ้าย" style={bar}><i className="fa-solid fa-rotate-left"></i></button>
+        <button onClick={e=>{stop(e);setRot(r=>r+90);}} title="หมุนขวา" style={bar}><i className="fa-solid fa-rotate-right"></i></button>
+        <button onClick={fit} title="พอดีหน้าจอ" style={bar}><i className="fa-solid fa-expand"></i></button>
+        <div style={{width:'1px',height:'24px',background:'rgba(255,255,255,0.15)'}}/>
+        <button onClick={e=>{stop(e);zoomTo(scale*0.8);}} title="ย่อ" style={bar}><i className="fa-solid fa-magnifying-glass-minus"></i></button>
+        {/* แถบเลื่อนซูม (สไตล์ Windows) — 10%–800% */}
+        <input type="range" min={0.1} max={8} step={0.01} value={scale}
+          onChange={e=>{stop(e);zoomTo(Number(e.target.value));}} onMouseDown={stop}
+          title="เลื่อนปรับขนาด"
+          style={{width:'130px',accentColor:'#14b8a6',cursor:'pointer'}}/>
+        <button onClick={e=>{stop(e);zoomTo(scale*1.25);}} title="ขยาย" style={bar}><i className="fa-solid fa-magnifying-glass-plus"></i></button>
+        <div style={{width:'1px',height:'24px',background:'rgba(255,255,255,0.15)'}}/>
+        <div style={{position:'relative'}}>
+          <button onClick={e=>{stop(e);setZoomMenu(v=>!v);}} title="เลือกขนาด" style={{...bar,width:'auto',padding:'0 12px',fontSize:'13px',fontWeight:700,gap:'6px'}}>{pct}% <i className="fa-solid fa-chevron-down" style={{fontSize:'9px'}}></i></button>
+          {zoomMenu && (
+            <div style={{position:'absolute',bottom:'48px',right:'0',background:'rgba(17,24,39,0.98)',borderRadius:'10px',padding:'6px',boxShadow:'0 10px 30px rgba(0,0,0,0.5)',display:'flex',flexDirection:'column',minWidth:'92px'}}>
+              {[800,400,200,100,75,50,25,10].map(p => (
+                <button key={p} onClick={e=>{stop(e);zoomTo(p/100);setZoomMenu(false);}}
+                  style={{background:pct===p?'rgba(13,148,136,0.6)':'transparent',color:'#fff',border:'none',padding:'7px 12px',borderRadius:'6px',cursor:'pointer',fontSize:'13px',textAlign:'center'}}>{p}%</button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+// ── popup ยืนยันลบรูปโปรไฟล์ ──────────────────────────────────────────────
+function AvatarDeleteConfirm({ uploading, error, onCancel, onConfirm }) {
+  return createPortal(
+    <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={uploading?undefined:onCancel}>
+      <div className="modal-A" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'360px',overflow:'hidden',boxShadow:'0 25px 60px rgba(0,0,0,0.3)'}}>
+        <div style={{padding:'24px 22px 18px',textAlign:'center'}}>
+          <div style={{width:'52px',height:'52px',borderRadius:'50%',background:'#fee2e2',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 14px'}}>
+            <i className="fa-solid fa-trash-can" style={{color:'#dc2626',fontSize:'20px'}}></i>
+          </div>
+          <p style={{fontSize:'16px',fontWeight:700,color:'#111827',margin:'0 0 8px'}}>ลบรูปโปรไฟล์</p>
+          <p style={{fontSize:'13px',color:'#6b7280',margin:0,lineHeight:1.6}}>รูปโปรไฟล์จะถูกลบถาวร และกลับไปแสดงเป็นตัวอักษรย่อ หากต้องการรูปเดิมต้องอัปโหลดใหม่</p>
+          {error && <p style={{fontSize:'12px',color:'#dc2626',margin:'12px 0 0'}}><i className="fa-solid fa-circle-exclamation" style={{marginRight:'5px'}}></i>{error}</p>}
+        </div>
+        <div style={{display:'flex',gap:'10px',padding:'0 20px 20px'}}>
+          <button onClick={onCancel} disabled={uploading} style={{flex:1,padding:'11px',borderRadius:'10px',background:'#f3f4f6',color:'#4b5563',fontWeight:700,fontSize:'13px',border:'none',cursor:uploading?'not-allowed':'pointer'}}>ยกเลิก</button>
+          <button onClick={onConfirm} disabled={uploading} style={{flex:1,padding:'11px',borderRadius:'10px',background:uploading?'#fca5a5':'#dc2626',color:'#fff',fontWeight:700,fontSize:'13px',border:'none',cursor:uploading?'wait':'pointer'}}>
+            {uploading ? <><i className="fa-solid fa-spinner fa-spin" style={{marginRight:'6px'}}></i>กำลังลบ</> : <><i className="fa-solid fa-trash-can" style={{marginRight:'6px'}}></i>ลบรูป</>}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 function UserProfileModal({ onClose }) {
   const [form, setForm]                 = React.useState(null);
   const [loading, setLoading]           = React.useState(true);
@@ -10916,14 +11152,104 @@ function UserProfileModal({ onClose }) {
   const [saving, setSaving]             = React.useState(false);
   const [warnClose, setWarnClose]       = React.useState(false);
   const [editErr, setEditErr]           = React.useState('');  // ข้อความเตือนใต้ช่องที่กำลังแก้ (แทน popup)
-  const [showAvatarSoon, setShowAvatarSoon] = React.useState(false);  // ป้าย "เร็วๆ นี้" ตอนกดไอคอนกล้อง (ฟีเจอร์อัปโหลดรูป)
   const [mode, setMode]                 = React.useState('profile');  // 'profile' | 'changePassword' | 'sessions'
+  // v0.7.18.0 — avatar upload
+  const [cropSrc, setCropSrc]                 = React.useState(null);  // dataURL รูปที่เลือก รอครอบ
+  const [uploadingAvatar, setUploadingAvatar] = React.useState(false);
+  const [avatarErr, setAvatarErr]             = React.useState('');
+  const [lightbox, setLightbox]               = React.useState(null);  // {src} ดูรูปเต็ม (รูปต้นฉบับ)
+  const [confirmDelAvatar, setConfirmDelAvatar] = React.useState(false);  // popup ยืนยันลบรูป
+  const [cropFromOriginal, setCropFromOriginal] = React.useState(false);  // กำลัง "ครอบใหม่" จากรูปต้นฉบับ (ไม่ต้องอัปต้นฉบับซ้ำ)
+  const avatarInputRef = React.useRef(null);
+  const avatarCircleRef = React.useRef(null);  // วงกลม avatar (ใช้คำนวณตำแหน่งตอนเปิด lightbox)
   const {close: animClose, modalCls, overlayCls} = useModalAnim(onClose);
 
   const handleClose = () => {
     if (editingKey !== null) { setWarnClose(true); return; }
     animClose();
   };
+
+  // v0.7.18.0 — เลือกไฟล์รูป → เปิดหน้าครอบ
+  const pickAvatarFile = (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';  // reset เผื่อเลือกไฟล์เดิมซ้ำ
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { setAvatarErr('กรุณาเลือกไฟล์รูปภาพ'); return; }
+    if (file.size > 50 * 1024 * 1024) { setAvatarErr('ไฟล์ใหญ่เกิน 50MB'); return; }
+    setAvatarErr('');
+    const reader = new FileReader();
+    reader.onload = () => setCropSrc(reader.result);
+    reader.readAsDataURL(file);
+  };
+  // ครอบเสร็จ → ย่อ WebP → อัปโหลด
+  // อัปครั้งแรก: เก็บ 2 ไฟล์ (รูปครอบ 512 + รูปต้นฉบับ max 1920) · "ครอบใหม่": อัปแค่รูปครอบ (ต้นฉบับเดิมคงไว้)
+  const handleCropConfirm = async (pixels) => {
+    setUploadingAvatar(true); setAvatarErr('');
+    try {
+      const isRecrop = cropFromOriginal;
+      const croppedBlob = await cropToWebp(cropSrc, pixels, 512);   // รูปครอบ (โชว์ avatar เล็ก)
+      const originalBlob = isRecrop ? null : await resizeToWebp(cropSrc, 1920);  // รูปต้นฉบับ (กดดูเต็ม)
+      const pres = await fetch('/api/profile/avatar/presign', { method: 'POST' });
+      const presData = await pres.json();
+      if (!pres.ok) throw new Error(presData.error || 'ขอลิงก์อัปโหลดไม่สำเร็จ');
+      const put = await fetch(presData.uploadUrl, { method: 'PUT', body: croppedBlob, headers: { 'content-type': 'image/webp' } });
+      if (!put.ok) throw new Error('อัปโหลดรูปไม่สำเร็จ');
+      if (originalBlob) {
+        const put2 = await fetch(presData.uploadUrlOrig, { method: 'PUT', body: originalBlob, headers: { 'content-type': 'image/webp' } });
+        if (!put2.ok) throw new Error('อัปโหลดรูปต้นฉบับไม่สำเร็จ');
+      }
+      const conf = await fetch('/api/profile/avatar/confirm', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ hasOriginal: !isRecrop }),
+      });
+      const confData = await conf.json();
+      if (!conf.ok) throw new Error(confData.error || 'บันทึกรูปไม่สำเร็จ');
+      setForm(f => ({ ...f, avatarUrl: confData.key, avatarOriginalUrl: confData.keyOrig || f.avatarOriginalUrl, avatarUpdatedAt: confData.avatar_updated_at }));
+      setCropSrc(null); setCropFromOriginal(false);
+    } catch (err) {
+      setAvatarErr(err.message || 'เกิดข้อผิดพลาด');
+    }
+    setUploadingAvatar(false);
+  };
+  // ลบรูปจริง → กลับเป็นตัวอักษรย่อ (เรียกหลังยืนยันใน popup)
+  const doDeleteAvatar = async () => {
+    setUploadingAvatar(true); setAvatarErr('');
+    try {
+      const res = await fetch('/api/profile/avatar', { method: 'DELETE' });
+      if (!res.ok) throw new Error('ลบรูปไม่สำเร็จ');
+      setForm(f => ({ ...f, avatarUrl: null, avatarOriginalUrl: null, avatarUpdatedAt: null }));
+      setConfirmDelAvatar(false);
+    } catch (err) { setAvatarErr(err.message || 'ลบรูปไม่สำเร็จ'); }
+    setUploadingAvatar(false);
+  };
+  // กดที่รูป → เปิด popup ดูรูปเต็ม (ใช้รูปต้นฉบับ ถ้าไม่มีค่อย fallback รูปครอบ)
+  const openLightbox = () => {
+    const url = avatarOriginalPublicUrl || avatarPublicUrl;
+    if (!url) return;
+    const rect = avatarCircleRef.current ? avatarCircleRef.current.getBoundingClientRect() : null;
+    const key = (form && (form.avatarOriginalUrl || form.avatarUrl)) || '';
+    setLightbox({ src: url, rect, info: { name: key.split('/').pop(), updatedAt: form && form.avatarUpdatedAt } });
+  };
+  // "ครอบใหม่" → ดึงรูปต้นฉบับเป็น blob (object URL = same-origin) เข้าหน้าครอบ
+  // ใช้ fetch→blob แทนใส่ URL ตรงๆ เพื่อกัน canvas tainted (เบราว์เซอร์ cache รูปแบบไม่มี CORS ไว้ตอนแสดง popup)
+  const startRecrop = async () => {
+    if (!avatarOriginalPublicUrl) return;
+    setAvatarErr('');
+    try {
+      const res = await fetch(avatarOriginalPublicUrl, { cache: 'no-store' });
+      if (!res.ok) throw new Error('โหลดรูปต้นฉบับไม่สำเร็จ');
+      const objUrl = URL.createObjectURL(await res.blob());
+      setCropFromOriginal(true); setCropSrc(objUrl);
+    } catch (err) {
+      setAvatarErr('เปิดรูปต้นฉบับไม่สำเร็จ ลองอัปรูปใหม่');
+    }
+  };
+  const avatarPublicUrl = form && form.avatarUrl
+    ? `${process.env.NEXT_PUBLIC_R2_AVATAR_URL}/${form.avatarUrl}?v=${form.avatarUpdatedAt ? new Date(form.avatarUpdatedAt).getTime() : ''}`
+    : null;
+  const avatarOriginalPublicUrl = form && form.avatarOriginalUrl
+    ? `${process.env.NEXT_PUBLIC_R2_AVATAR_URL}/${form.avatarOriginalUrl}?v=${form.avatarUpdatedAt ? new Date(form.avatarUpdatedAt).getTime() : ''}`
+    : null;
 
   // Map DB profile → form ที่ modal ใช้
   const mapDb = (db) => {
@@ -10946,6 +11272,9 @@ function UserProfileModal({ onClose }) {
       licenseNumber:  licenseDigits,
       hospitalName:   db.hospital_name,
       hospitalType:   db.hospital_type,
+      avatarUrl:      db.avatar_url || null,
+      avatarOriginalUrl: db.avatar_original_url || null,
+      avatarUpdatedAt: db.avatar_updated_at || null,
     };
   };
 
@@ -11100,18 +11429,49 @@ function UserProfileModal({ onClose }) {
 
             <div style={{textAlign:'center',marginTop:'10px'}}>
               <div style={{position:'relative',width:'90px',margin:'0 auto 16px'}}>
-                <div style={{width:'90px',height:'90px',borderRadius:'50%',background:'rgba(255,255,255,0.2)',border:'3px solid rgba(255,255,255,0.3)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:800,fontSize:(shownTitle||'').length>3?'15px':'22px'}}>
-                  {shownTitle}
+                <div ref={avatarCircleRef} onClick={openLightbox} title={avatarPublicUrl ? 'กดดูรูปเต็ม' : undefined}
+                  style={{width:'90px',height:'90px',borderRadius:'50%',background:'rgba(255,255,255,0.2)',border:'3px solid rgba(255,255,255,0.3)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:800,fontSize:(shownTitle||'').length>3?'15px':'22px',overflow:'hidden',cursor:avatarPublicUrl?'zoom-in':'default'}}>
+                  {avatarPublicUrl
+                    ? <img src={avatarPublicUrl} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+                    : shownTitle}
                 </div>
-                <button onClick={()=>setShowAvatarSoon(true)} title="อัปโหลดรูปโปรไฟล์ (เร็วๆ นี้)"
+                <button onClick={()=>avatarInputRef.current && avatarInputRef.current.click()} title="เปลี่ยนรูปโปรไฟล์"
                   style={{position:'absolute',bottom:'0',right:'0',width:'30px',height:'30px',borderRadius:'50%',background:'#fff',border:'2px solid #14b8a6',color:'#0f766e',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 2px 6px rgba(0,0,0,0.15)'}}>
                   <i className="fa-solid fa-camera" style={{fontSize:'12px'}}></i>
                 </button>
+                <input ref={avatarInputRef} type="file" accept="image/*" onChange={pickAvatarFile} style={{display:'none'}}/>
               </div>
-              {showAvatarSoon && (
-                <p style={{fontSize:'11px',color:'#fef3c7',background:'rgba(0,0,0,0.15)',borderRadius:'8px',padding:'5px 10px',margin:'0 0 12px',display:'inline-block'}}>
-                  <i className="fa-solid fa-clock" style={{marginRight:'5px'}}></i>อัปโหลดรูปโปรไฟล์ — เร็วๆ นี้ (กำลังพัฒนา)
+              {avatarPublicUrl && (
+                <div style={{display:'flex',gap:'8px',justifyContent:'center',margin:'0 0 12px'}}>
+                  {avatarOriginalPublicUrl && (
+                    <button onClick={startRecrop} disabled={uploadingAvatar}
+                      style={{fontSize:'11px',color:'#fff',background:'rgba(0,0,0,0.18)',border:'none',borderRadius:'8px',padding:'4px 12px',cursor:uploadingAvatar?'not-allowed':'pointer'}}>
+                      <i className="fa-solid fa-crop-simple" style={{marginRight:'5px',fontSize:'10px'}}></i>ครอบใหม่
+                    </button>
+                  )}
+                  <button onClick={()=>setConfirmDelAvatar(true)} disabled={uploadingAvatar}
+                    style={{fontSize:'11px',color:'#fff',background:'rgba(0,0,0,0.18)',border:'none',borderRadius:'8px',padding:'4px 12px',cursor:uploadingAvatar?'not-allowed':'pointer'}}>
+                    <i className="fa-solid fa-trash-can" style={{marginRight:'5px',fontSize:'10px'}}></i>ลบรูป
+                  </button>
+                </div>
+              )}
+              {avatarErr && !cropSrc && (
+                <p style={{fontSize:'11px',color:'#fecaca',background:'rgba(0,0,0,0.15)',borderRadius:'8px',padding:'5px 10px',margin:'0 0 12px',display:'inline-block'}}>
+                  <i className="fa-solid fa-circle-exclamation" style={{marginRight:'5px'}}></i>{avatarErr}
                 </p>
+              )}
+              {cropSrc && (
+                <AvatarCropModal src={cropSrc} uploading={uploadingAvatar} error={avatarErr}
+                  onCancel={()=>{ if(!uploadingAvatar){ setCropSrc(null); setAvatarErr(''); } }}
+                  onConfirm={handleCropConfirm}/>
+              )}
+              {lightbox && (
+                <AvatarLightbox src={lightbox.src} originRect={lightbox.rect} info={lightbox.info} onClose={()=>setLightbox(null)}/>
+              )}
+              {confirmDelAvatar && (
+                <AvatarDeleteConfirm uploading={uploadingAvatar} error={avatarErr}
+                  onCancel={()=>{ if(!uploadingAvatar){ setConfirmDelAvatar(false); setAvatarErr(''); } }}
+                  onConfirm={doDeleteAvatar}/>
               )}
               <p style={{fontWeight:800,fontSize:'18px',color:'#fff',margin:0,lineHeight:1.3}}>{shownTitle} {fullName}</p>
               <p style={{fontSize:'13px',color:'rgba(255,255,255,0.85)',margin:'5px 0 0'}}>{prof.label}</p>
