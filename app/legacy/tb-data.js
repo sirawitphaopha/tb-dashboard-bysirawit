@@ -946,6 +946,12 @@ window.rejectDeleteRequest = async (requestId, reviewedBy, note) => {
 // v0.7.14.5 — ดึง notifications ทั้ง read + unread (จำกัด 50 ล่าสุด)
 // ที่อ่านแล้วจะแสดงในกระดิ่งแบบจาง + ไม่นับใน badge unread
 window.loadUserNotifications = async () => {
+  // ผ่าน API (admin client) เพื่อแนบ avatar ของคนที่มาตอบ/mention (RLS กัน user อ่าน avatar คนอื่น)
+  try {
+    const r = await fetch('/api/notifications');
+    if (r.ok) { const d = await r.json(); return d.notifications || []; }
+  } catch {}
+  // fallback: ดึงตรง (ไม่มี avatar) เผื่อ API ล่ม
   const { data } = await window._sb
     .from('tb_notifications')
     .select('*')

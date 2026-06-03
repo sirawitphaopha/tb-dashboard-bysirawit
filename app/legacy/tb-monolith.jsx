@@ -170,9 +170,11 @@ function useNotifHelpers(alerts,patients,readAlerts,onRead,onOpen,onClose,onNavT
       <div key={a.id+i} onClick={()=>handleClick(a)} className={'p-4 transition-colors '+cols[effectiveType]+' '+bg+((a.patientId||a.navTarget)?' cursor-pointer':'')+' hover:bg-teal-50'}>
         <div className="flex justify-between items-start gap-2">
           <div className="flex-1 min-w-0 flex items-start gap-2.5">
-            {isAdmin && <div className="w-8 h-8 rounded-xl bg-teal-600 text-white flex items-center justify-center flex-shrink-0 mt-0.5"><i className="fa-solid fa-user-shield text-sm"></i></div>}
+            {a.actorName
+              ? <AvatarCircle urlKey={a.actorAvatarUrl} updatedAt={a.actorAvatarAt} name={a.actorName} colorKey={a.actorId} fallback={nameInitials(a.actorName)} size={32} style={{marginTop:'2px'}} />
+              : (isAdmin && <div className="w-8 h-8 rounded-xl bg-teal-600 text-white flex items-center justify-center flex-shrink-0 mt-0.5"><i className="fa-solid fa-user-shield text-sm"></i></div>)}
             <div className="flex-1 min-w-0">
-              {isAdmin && <p className="text-xs font-bold text-teal-700 uppercase tracking-wide mb-0.5">Admin · จัดการผู้ใช้</p>}
+              {isAdmin && !a.actorName && <p className="text-xs font-bold text-teal-700 uppercase tracking-wide mb-0.5">Admin · จัดการผู้ใช้</p>}
               {a.patient&&<p className="font-bold text-xs text-gray-700 mb-0.5">{a.patient}</p>}
               <p className={'text-sm '+(isRead?'text-gray-400':(isAdmin?'text-teal-900 font-bold':'text-gray-700 font-medium'))}>{a.msg}</p>
               <p className="text-xs text-gray-400 mt-1">{a.time}</p>
@@ -3928,7 +3930,7 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
                   className={'px-4 py-3 transition-colors ' + (flashing ? 'bg-amber-100 ring-2 ring-amber-400 ring-inset' : hasReq ? 'bg-amber-50/40' : 'hover:bg-teal-50/40')}>
                 <div className="grid grid-cols-12 gap-3 items-center text-sm">
                   <div className="col-span-3 min-w-0 flex items-center gap-2">
-                    <AvatarCircle urlKey={p.avatar_url} updatedAt={p.avatar_updated_at} name={`${p.first_name||''} ${p.last_name||''}`} fallback={(((p.first_name||'')[0]||'')+((p.last_name||'')[0]||'')).toUpperCase()||'?'} size={34} />
+                    <AvatarCircle urlKey={p.avatar_url} updatedAt={p.avatar_updated_at} colorKey={p.id} name={`${p.first_name||''} ${p.last_name||''}`} fallback={(((p.first_name||'')[0]||'')+((p.last_name||'')[0]||'')).toUpperCase()||'?'} size={34} />
                     <div className="min-w-0">
                       <p className="font-bold text-teal-900 truncate">{p.first_name} {p.last_name} {p.role === 'admin' && <span className="text-xs">👑</span>}</p>
                       <p className="text-xs text-gray-400 truncate">@{p.username} · {p.email || '—'}</p>
@@ -4017,7 +4019,7 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
                 className={'bg-white rounded-2xl p-5 shadow-sm border transition-all ' + (flashing ? 'border-amber-400 ring-2 ring-amber-400' : hasReq ? 'border-amber-200' : 'border-gray-100 hover:border-teal-200 hover:shadow-md')}>
                 <div className="flex items-start justify-between gap-4 mb-3">
                   <div className="flex items-start gap-3 flex-1 min-w-0">
-                    <AvatarCircle urlKey={p.avatar_url} updatedAt={p.avatar_updated_at} name={`${p.first_name||''} ${p.last_name||''}`} fallback={(((p.first_name||'')[0]||'')+((p.last_name||'')[0]||'')).toUpperCase()||'?'} size={42} />
+                    <AvatarCircle urlKey={p.avatar_url} updatedAt={p.avatar_updated_at} colorKey={p.id} name={`${p.first_name||''} ${p.last_name||''}`} fallback={(((p.first_name||'')[0]||'')+((p.last_name||'')[0]||'')).toUpperCase()||'?'} size={42} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <h3 className="text-base font-bold text-teal-900">{p.first_name} {p.last_name}</h3>
@@ -6968,6 +6970,10 @@ function App() {
       navTarget: isComment ? 'changelog' : null,
       commentVersion: isComment ? n.comment_version : null,
       commentId: isComment ? n.comment_id : null,
+      actorName: isComment ? (n.note || null) : null,
+      actorId: isComment ? (n.actor_id || null) : null,
+      actorAvatarUrl: isComment ? (n.actor_avatar_url || null) : null,
+      actorAvatarAt: isComment ? (n.actor_avatar_updated_at || null) : null,
       msg: n.type === 'delete_approved'         ? `Admin อนุมัติลบ "${n.patient_name}" แล้ว`
          : n.type === 'delete_rejected'         ? `Admin ไม่อนุมัติลบ "${n.patient_name}"${n.note ? ` — ${n.note}` : ''}`
          : n.type === 'delete_restored'         ? `Admin กู้คืน "${n.patient_name}" จากถังขยะแล้ว`
@@ -7258,7 +7264,7 @@ function App() {
             onMouseEnter={e=>e.currentTarget.style.background='#f0fdfa'}
             onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
             <span style={{width:'36px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginLeft:sidebarOpen?'0':'10px',transition:'margin-left 0.2s ease'}}>
-              <AvatarCircle urlKey={currentUser?.avatarUrl} updatedAt={currentUser?.avatarUpdatedAt} fallback={currentUser?.avatar || '?'} name={currentUser?.fullName} size={32} fontSize={(currentUser?.avatar||'').length>3?8:11} />
+              <AvatarCircle urlKey={currentUser?.avatarUrl} updatedAt={currentUser?.avatarUpdatedAt} fallback={currentUser?.avatar || '?'} name={currentUser?.fullName} colorKey={currentUser?.id} size={32} fontSize={(currentUser?.avatar||'').length>3?8:11} />
             </span>
             <div style={{overflow:'hidden',maxWidth:sidebarOpen?'160px':'0px',opacity:sidebarOpen?1:0,transition:'max-width 0.2s ease,opacity 0.15s ease',whiteSpace:'nowrap'}}>
               <p style={{fontWeight:700,fontSize:'12px',color:'#1f2937',margin:0}}>{currentUser?.fullName || '—'}</p>
@@ -7684,7 +7690,7 @@ function RequestEditModal({ field, currentValue, onClose }) {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.18.1';
+const APP_VERSION = '0.7.18.2';
 const BUILD_DATE = '3 มิ.ย. 2569';
 function AboutModal({ onClose, onShowChangelog }) {
   const [closing, setClosing] = React.useState(false);
@@ -8567,7 +8573,7 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
                       {/* บรรทัดบน: checkbox + @username + ADMIN + count */}
                       <div style={{display:'flex',alignItems:'center',gap:'6px',width:'100%'}}>
                         <input type="checkbox" checked={checked} onChange={()=>toggleMentionUser(u.id)} style={{cursor:'pointer',flexShrink:0}}/>
-                        <AvatarCircle urlKey={u.avatar_url} updatedAt={u.avatar_updated_at} name={u.display_name} fallback={u.profession_label || ((u.username||'@')[0]||'@').toUpperCase()} size={20} fontSize={8} />
+                        <AvatarCircle urlKey={u.avatar_url} updatedAt={u.avatar_updated_at} name={u.display_name} colorKey={u.id} fallback={nameInitials(u.display_name)} size={20} fontSize={8} />
                         <b style={{color:isAdminUser?'#92400e':'#0f766e',flexShrink:0}}>@{u.username}</b>
                         {isAdminUser && <span style={{fontSize:'9px',fontWeight:800,color:'#fff',background:'#d97706',padding:'1px 5px',borderRadius:'999px',flexShrink:0}}>ADMIN</span>}
                         <span style={{marginLeft:'auto',fontSize:'10px',color:'#9ca3af',flexShrink:0}}>({commentFilterStats.byMentionedId[u.id]||0})</span>
@@ -9686,7 +9692,7 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
             return (
               <div key={c.id} id={'cmt-'+c.id} className="cm-card" style={{background:(pageFilter?.hasFilter && pageFilter.matches(c))?'#fef3c7':'#fff',border:'1.5px solid '+((pageFilter?.hasFilter && pageFilter.matches(c))?'#fbbf24':T.cardBorder),borderLeft:`3px solid ${meta.fg}`,opacity:isDeleted?0.85:(c._pending?0.7:1)}}>
                 <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'6px',flexWrap:'wrap'}}>
-                  <AvatarCircle urlKey={c.avatar_url} updatedAt={c.avatar_updated_at} fallback={c.profession_label || initials(c.display_name)} name={c.display_name} size={28} fontSize={11} />
+                  <AvatarCircle urlKey={c.avatar_url} updatedAt={c.avatar_updated_at} fallback={nameInitials(c.display_name)} name={c.display_name} colorKey={c.user_id} size={28} fontSize={11} />
                   <span style={{fontWeight:700,fontSize:'12px',color:'#1f2937'}}>{c.display_name}</span>
                   {c.role === 'admin' && <span style={{fontSize:'9px',fontWeight:700,color:'#0f766e',background:'#ccfbf1',padding:'1px 6px',borderRadius:'999px'}}>ADMIN</span>}
                   <span style={{display:'inline-flex',alignItems:'center',gap:'3px',padding:'2px 8px',borderRadius:'999px',background:meta.bg,color:meta.fg,border:`1px solid ${meta.border}`,fontSize:'10px',fontWeight:700}}>{meta.emoji} {meta.label}</span>
@@ -9790,7 +9796,7 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
                             <div key={u.id} onClick={()=>applyMention(u,'edit')} onMouseDown={e=>e.preventDefault()}
                               onMouseEnter={()=>setMentionState(prev => prev ? {...prev, idx: i} : prev)}
                               style={{display:'flex',alignItems:'center',gap:'7px',padding:'7px 10px',cursor:'pointer',borderRadius:'5px',fontSize:'13px',color:'#1f2937',background:rowBg,borderBottom:'1px solid #f1f5f9',borderLeft:isAdminUser?'3px solid #d97706':'3px solid transparent',transition:'background 0.12s ease'}}>
-                              <AvatarCircle urlKey={u.avatar_url} updatedAt={u.avatar_updated_at} name={u.display_name} fallback={u.profession_label || ((u.username||'@')[0]||'@').toUpperCase()} size={22} fontSize={9} />
+                              <AvatarCircle urlKey={u.avatar_url} updatedAt={u.avatar_updated_at} name={u.display_name} colorKey={u.id} fallback={nameInitials(u.display_name)} size={22} fontSize={9} />
                               <span style={{minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
                                 <b style={{color:isAdminUser?'#92400e':'#0f766e'}}>@{u.username}</b>
                                 {isAdminUser && <span style={{marginLeft:'5px',fontSize:'9px',fontWeight:800,color:'#fff',background:'#d97706',padding:'1px 6px',borderRadius:'999px'}}>ADMIN</span>}
@@ -9845,7 +9851,7 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
                             <div key={u.id} onClick={()=>applyMention(u,'reply')} onMouseDown={e=>e.preventDefault()}
                               onMouseEnter={()=>setMentionState(prev => prev ? {...prev, idx: i} : prev)}
                               style={{display:'flex',alignItems:'center',gap:'7px',padding:'7px 10px',cursor:'pointer',borderRadius:'5px',fontSize:'13px',color:'#1f2937',background:rowBg,borderBottom:'1px solid #f1f5f9',borderLeft:isAdminUser?'3px solid #d97706':'3px solid transparent',transition:'background 0.12s ease'}}>
-                              <AvatarCircle urlKey={u.avatar_url} updatedAt={u.avatar_updated_at} name={u.display_name} fallback={u.profession_label || ((u.username||'@')[0]||'@').toUpperCase()} size={22} fontSize={9} />
+                              <AvatarCircle urlKey={u.avatar_url} updatedAt={u.avatar_updated_at} name={u.display_name} colorKey={u.id} fallback={nameInitials(u.display_name)} size={22} fontSize={9} />
                               <span style={{minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
                                 <b style={{color:isAdminUser?'#92400e':'#0f766e'}}>@{u.username}</b>
                                 {isAdminUser && <span style={{marginLeft:'5px',fontSize:'9px',fontWeight:800,color:'#fff',background:'#d97706',padding:'1px 6px',borderRadius:'999px'}}>ADMIN</span>}
@@ -9880,7 +9886,7 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
                       return (
                         <div key={r.id} id={'cmt-'+r.id} className="cm-card-reply" style={{background:(pageFilter?.hasFilter && pageFilter.matches(r))?'#fef3c7':'#fff',border:'1px solid '+((pageFilter?.hasFilter && pageFilter.matches(r))?'#fbbf24':T.cardBorder),borderLeft:`2px solid ${rmeta.fg}`,opacity:rIsDeleted?0.75:(r._pending?0.7:1)}}>
                           <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'4px',flexWrap:'wrap'}}>
-                            <AvatarCircle urlKey={r.avatar_url} updatedAt={r.avatar_updated_at} fallback={r.profession_label || initials(r.display_name)} name={r.display_name} size={22} fontSize={10} />
+                            <AvatarCircle urlKey={r.avatar_url} updatedAt={r.avatar_updated_at} fallback={nameInitials(r.display_name)} name={r.display_name} colorKey={r.user_id} size={22} fontSize={10} />
                             <span style={{fontWeight:700,fontSize:'11.5px',color:'#1f2937'}}>{r.display_name}</span>
                             {r.role === 'admin' && <span style={{fontSize:'9px',fontWeight:700,color:'#0f766e',background:'#ccfbf1',padding:'1px 5px',borderRadius:'999px'}}>ADMIN</span>}
                             {rIsDeleted && <span style={{fontSize:'9px',fontWeight:700,color:'#991b1b',background:'#fee2e2',border:'1px solid #fca5a5',padding:'1px 5px',borderRadius:'999px'}}><i className="fa-solid fa-trash" style={{fontSize:'7px'}}></i> ลบแล้ว</span>}
@@ -9980,7 +9986,7 @@ const ChangelogCommentSection = React.memo(function ChangelogCommentSection({ ve
                   <div key={u.id} onClick={()=>applyMention(u,'draft')} onMouseDown={e=>e.preventDefault()}
                     onMouseEnter={()=>setMentionState(prev => prev ? {...prev, idx: i} : prev)}
                     style={{display:'flex',alignItems:'center',gap:'7px',padding:'7px 10px',cursor:'pointer',borderRadius:'5px',fontSize:'13px',color:'#1f2937',background:rowBg,borderBottom:'1px solid #f1f5f9',borderLeft:isAdminUser?'3px solid #d97706':'3px solid transparent',transition:'background 0.12s ease'}}>
-                    <AvatarCircle urlKey={u.avatar_url} updatedAt={u.avatar_updated_at} name={u.display_name} fallback={u.profession_label || ((u.username||'@')[0]||'@').toUpperCase()} size={22} fontSize={9} />
+                    <AvatarCircle urlKey={u.avatar_url} updatedAt={u.avatar_updated_at} name={u.display_name} colorKey={u.id} fallback={nameInitials(u.display_name)} size={22} fontSize={9} />
                     <span style={{minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
                       <b style={{color:isAdminUser?'#92400e':'#0f766e'}}>@{u.username}</b>
                       {isAdminUser && <span style={{marginLeft:'5px',fontSize:'9px',fontWeight:800,color:'#fff',background:'#d97706',padding:'1px 6px',borderRadius:'999px'}}>ADMIN</span>}
@@ -10937,24 +10943,45 @@ function r2AvatarUrl(key, updatedAt) {
   const v = updatedAt ? new Date(updatedAt).getTime() : '';
   return `${base}/${key}?v=${v}`;
 }
-// สีวงกลม fallback แบบคงที่ตามชื่อ (คนละคนสีไม่ซ้ำ เหมือน Slack/Google) — แยกคนง่ายขึ้น
-function colorFromName(name) {
-  const palette = ['#0f766e','#b45309','#be123c','#1d4ed8','#7e22ce','#0e7490','#15803d','#c2410c','#9d174d','#4338ca','#0369a1','#a16207'];
-  const s = name || '';
+// ตัดคำนำหน้า (นาย/นาง/ภญ. ฯลฯ) — ถ้ามี 3 คำขึ้นไป เอา 2 คำท้าย (ชื่อ+นามสกุล) → key มาตรฐานเดียวทุกที่
+function normName(name) {
+  let p = (name || '').trim().split(/\s+/).filter(Boolean);
+  if (p.length > 2) p = p.slice(-2);
+  return p.join(' ');
+}
+// ตัวอักษรย่อจากชื่อ (ตัดคำนำหน้าแล้ว) — เช่น "นาย Sirawit2 Phaopha2" → "SP" (ตรงกันทุกที่)
+function nameInitials(name) {
+  const p = normName(name).split(/\s+/).filter(Boolean);
+  if (p.length === 0) return '?';
+  if (p.length === 1) return p[0].slice(0, 2).toUpperCase();
+  return (p[0][0] + p[1][0]).toUpperCase();
+}
+// คู่สี pastel (พื้นอ่อน + ตัวอักษรเข้มอ่านง่าย) — hash จาก key
+// key ควรเป็น user_id (คงที่ → คนเดียวกันสีเดียวกันเป๊ะทุกหน้า) · ถ้าไม่มีค่อย fallback ใช้ชื่อ
+const AVATAR_PALETTE = [
+  { bg: '#ccfbf1', fg: '#0f766e' }, { bg: '#fef3c7', fg: '#b45309' }, { bg: '#fce7f3', fg: '#be185d' },
+  { bg: '#dbeafe', fg: '#1d4ed8' }, { bg: '#f3e8ff', fg: '#7e22ce' }, { bg: '#cffafe', fg: '#0e7490' },
+  { bg: '#dcfce7', fg: '#15803d' }, { bg: '#ffedd5', fg: '#c2410c' }, { bg: '#fee2e2', fg: '#b91c1c' },
+  { bg: '#e0e7ff', fg: '#4338ca' }, { bg: '#e0f2fe', fg: '#0369a1' }, { bg: '#fef9c3', fg: '#a16207' },
+];
+function colorFromName(key) {
+  const s = (key == null ? '' : String(key)).toLowerCase();
   let h = 0;
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-  return palette[h % palette.length];
+  return AVATAR_PALETTE[h % AVATAR_PALETTE.length];
 }
-// วงกลม avatar ใช้ซ้ำได้ — มีรูป → แสดงรูป · ไม่มี/รูปเสีย → ตัวอักษรย่อ (สีตามชื่อ)
-function AvatarCircle({ urlKey, updatedAt, fallback, name, size = 32, fontSize, bg, onClick, title, style }) {
+// วงกลม avatar ใช้ซ้ำได้ — มีรูป → แสดงรูป · ไม่มี/รูปเสีย → ตัวอักษรย่อ (พื้น pastel + ตัวอักษรสีเข้ม)
+// colorKey = user_id (ถ้ามี → สีตรงกันทุกที่) · bg = override (พื้นทึบ + ตัวอักษรขาว) ถ้าจำเป็น
+function AvatarCircle({ urlKey, updatedAt, fallback, name, colorKey, size = 32, fontSize, bg, onClick, title, style }) {
   const [err, setErr] = React.useState(false);
   React.useEffect(() => { setErr(false); }, [urlKey, updatedAt]);   // เปลี่ยนรูป → reset error
   const url = !err ? r2AvatarUrl(urlKey, updatedAt) : null;
   const fs = fontSize || Math.max(8, Math.round(size * 0.36));
-  const circleBg = bg || colorFromName(name || fallback);
+  const key = (colorKey != null && colorKey !== '') ? String(colorKey) : normName(name || fallback || '');
+  const pair = colorFromName(key);
   return (
     <div onClick={onClick} title={title}
-      style={{ width: size, height: size, borderRadius: '50%', overflow: 'hidden', background: circleBg, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: fs, flexShrink: 0, cursor: onClick ? 'pointer' : 'default', ...(style || {}) }}>
+      style={{ width: size, height: size, borderRadius: '50%', overflow: 'hidden', background: bg || pair.bg, color: bg ? '#fff' : pair.fg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: fs, flexShrink: 0, cursor: onClick ? 'pointer' : 'default', ...(style || {}) }}>
       {url ? <img src={url} onError={() => setErr(true)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (fallback || '?')}
     </div>
   );
