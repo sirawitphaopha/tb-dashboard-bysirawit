@@ -25,8 +25,8 @@ window.TB_CHANGELOG = [
       {
         version: "0.7.19.1",
         date: "4 มิ.ย. 2569",
-        commit: "pending",
-        commitFull: "pending",
+        commit: "bf162f6",
+        commitFull: "bf162f6",
         title: "ยกเครื่องระบบรูปภาพผู้ป่วยรอบใหญ่ — รองรับไฟล์หลากหลาย + ตัวดูรูประดับเว็บดัง + คลังรูป",
         changes: [
           { tag: "feature", text: "รองรับไฟล์ภาพหลากหลาย — JPG/PNG/WebP/AVIF/GIF/BMP + HEIC/HEIF (iPhone) + TIFF → แปลงเป็น WebP อัตโนมัติ · GIF เคลื่อนไหวเก็บไฟล์ต้นฉบับ (คงการเคลื่อนไหว) · ไม่รับ RAW/DICOM" },
