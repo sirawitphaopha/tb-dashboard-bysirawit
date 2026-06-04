@@ -25,8 +25,8 @@ window.TB_CHANGELOG = [
       {
         version: "0.7.19.0",
         date: "4 มิ.ย. 2569",
-        commit: "pending",
-        commitFull: "pending",
+        commit: "e79c733",
+        commitFull: "e79c733",
         title: "ระบบรูปภาพผู้ป่วย (CXR / Lab / เอกสาร) ครบวงจร + ตัวดูรูปยกเครื่องใหม่",
         changes: [
           { tag: "feature", text: "ระบบรูปภาพผู้ป่วยครบวงจร — แท็บ \"รูปภาพ\" ในโปรไฟล์ผู้ป่วย (อัป/แกลเลอรี/ดูเต็ม/ลบ) + หน้า \"คลังรูปภาพ\" รวมทุกผู้ป่วย (สไตล์ Google Photos แยกหมวด/จัดกลุ่มตามผู้ป่วย) + เทียบ CXR 2 ช่วงเวลาแบบ side-by-side" },
