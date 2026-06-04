@@ -229,3 +229,24 @@ body {
 .cl-version-row .cm-card-text-reply {
   text-rendering: optimizeSpeed;
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+ * v0.7.19.0 — ตัวดูรูป (lightbox) + แกลเลอรีรูปผู้ป่วย
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/* แถบโหลดด้านบน (indeterminate) ระหว่างรอรูปเต็มโหลด */
+.tb-lb-bar {
+  width: 35%;
+  border-radius: 0 3px 3px 0;
+  animation: tbLbBar 1.05s ease-in-out infinite;
+}
+@keyframes tbLbBar {
+  0%   { transform: translateX(-120%); }
+  100% { transform: translateX(420%); }
+}
+
+/* ทัมเนลแกลเลอรี: hover → ภาพซูมนิดๆ + ขึ้นไอคอนแว่นขยาย (สื่อว่ากดดูได้) */
+.tb-img-thumb img { transition: transform 0.4s cubic-bezier(0.16,1,0.3,1); }
+.tb-img-thumb:hover img { transform: scale(1.08); }
+.tb-img-zoomicon { opacity: 0; transition: opacity 0.2s ease; }
+.tb-img-thumb:hover .tb-img-zoomicon { opacity: 1; }
