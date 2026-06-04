@@ -25,8 +25,8 @@ window.TB_CHANGELOG = [
       {
         version: "0.7.19.2",
         date: "4 มิ.ย. 2569",
-        commit: "pending",
-        commitFull: "pending",
+        commit: "0080b87",
+        commitFull: "0080b87",
         title: "Polish ระบบรูปภาพรอบใหญ่ — HEIC ปลอดภัย + ตัวดูรูป + เปลี่ยนหมวดย่อจริง + Realtime + ลบทันที",
         changes: [
           { tag: "feature", text: "HEIC/HEIF อัปโหลดได้แล้ว (เปลี่ยน heic2any → heic-to/csp ที่ไม่ใช้ eval) — ใช้แค่ wasm-unsafe-eval · CSP ยังเข้ม ไม่ต้องเปิด unsafe-eval" },
