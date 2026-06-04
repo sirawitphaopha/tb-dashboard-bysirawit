@@ -34,3 +34,35 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     return NextResponse.json({ error: e.message || 'error' }, { status: 500 })
   }
 }
+
+// PATCH /api/patient/images/[id] — แก้หมวด/หมายเหตุ/ชื่อ (เจ้าของหรือ admin) · ไม่แตะไฟล์/คุณภาพ
+const ALLOWED_TYPES = ['cxr', 'lab', 'document', 'other']
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params
+    const { user, isApproved, isAdmin, admin } = await getRequester(req)
+    if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    if (!isApproved) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+
+    const { data: im } = await admin
+      .from('tb_patient_images')
+      .select('uploaded_by, deleted_at')
+      .eq('id', id)
+      .maybeSingle()
+    if (!im || im.deleted_at) return NextResponse.json({ error: 'not found' }, { status: 404 })
+    if (im.uploaded_by !== user.id && !isAdmin) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+
+    const b = await req.json().catch(() => ({} as any))
+    const upd: any = {}
+    if (typeof b.type === 'string' && ALLOWED_TYPES.includes(b.type)) upd.type = b.type
+    if ('note' in b) upd.note = b.note || null
+    if ('title' in b) upd.title = b.title || null
+    if (!Object.keys(upd).length) return NextResponse.json({ error: 'no changes' }, { status: 400 })
+
+    const { error } = await admin.from('tb_patient_images').update(upd).eq('id', id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ success: true })
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message || 'error' }, { status: 500 })
+  }
+}

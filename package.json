@@ -24,12 +24,14 @@
     "@supabase/supabase-js": "^2.105.4",
     "aws4fetch": "^1.0.20",
     "chart.js": "^4.4.0",
+    "heic2any": "^0.0.4",
     "next": "^16.2.6",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-easy-crop": "^5.5.7",
     "resend": "^6.12.3",
-    "ua-parser-js": "^2.0.10"
+    "ua-parser-js": "^2.0.10",
+    "utif": "^3.1.0"
   },
   "devDependencies": {
     "@types/node": "^25.6.2",

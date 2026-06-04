@@ -19,8 +19,8 @@
 //   - img.tbjourney.care         ← แสดงรูป avatar จาก R2 (custom domain) [v0.7.18.0]
 const cspDirectives = [
   "default-src 'self'",
-  // script: เฉพาะ self + inline (Next.js hydration)
-  "script-src 'self' 'unsafe-inline'",
+  // script: self + inline (Next.js hydration) + wasm (heic2any ถอดรหัส HEIC/HEIF ใช้ WebAssembly)
+  "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'",
   // style: self + inline + FontAwesome + Google Fonts
   "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com",
   // font: Google Fonts + FontAwesome
@@ -28,7 +28,9 @@ const cspDirectives = [
   // image: self + data URI (base64) + Supabase storage + R2 avatar (custom domain) + R2 รูปผู้ป่วย (signed GET)
   "img-src 'self' data: blob: https://*.supabase.co https://img.tbjourney.care https://*.r2.cloudflarestorage.com",
   // connect: Supabase API + Realtime (websocket) + R2 upload (presigned PUT) + R2 อ่านรูปต้นฉบับ (ครอบใหม่ → fetch เป็น blob กัน canvas tainted)
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.r2.cloudflarestorage.com https://img.tbjourney.care",
+  "connect-src 'self' blob: https://*.supabase.co wss://*.supabase.co https://*.r2.cloudflarestorage.com https://img.tbjourney.care",
+  // worker: heic2any อาจสร้าง Web Worker จาก blob (ถอดรหัส HEIC)
+  "worker-src 'self' blob:",
   // frame: ไม่ใช้ iframe แล้ว
   "frame-src 'none'",
   // กัน <object>/<embed>

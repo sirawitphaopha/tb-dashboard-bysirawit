@@ -2188,21 +2188,36 @@ function CXRComparePanel({ src, dateLabel }) {
   const [scale, setScale] = React.useState(1);
   const [tx, setTx] = React.useState(0);
   const [ty, setTy] = React.useState(0);
+  const [dragging, setDragging] = React.useState(false);
+  const boxRef = React.useRef(null);
   const drag = React.useRef(null);
   const clamp = (s) => Math.max(0.3, Math.min(8, s));
+  // ซูมยึดจุดเมาส์ + ไม่ลอยตอนสุดสเกล (ระบบเดียวกับตัวดูรูปหลัก)
+  const zoomAt = (clientX, clientY, ns) => {
+    const el = boxRef.current; if (!el) { setScale(ns); return; }
+    const r = el.getBoundingClientRect();
+    const k = ns / scale;
+    const mx = clientX - (r.left + r.width / 2), my = clientY - (r.top + r.height / 2);
+    let nx, ny;
+    if (ns <= 1.0001) { nx = 0; ny = 0; }
+    else { nx = tx * k + mx * (1 - k); ny = ty * k + my * (1 - k); }
+    setScale(ns); setTx(nx); setTy(ny);
+  };
+  const reset = () => { setScale(1); setTx(0); setTy(0); };
   return (
     <div style={{flex:1,minWidth:0,position:'relative',background:'#0b0f19',borderRadius:'12px',overflow:'hidden',display:'flex',flexDirection:'column'}}>
-      <div style={{flex:1,position:'relative',overflow:'hidden',cursor: drag.current?'grabbing':'grab'}}
-        onWheel={e=>{e.preventDefault();setScale(s=>clamp(s*(e.deltaY<0?1.12:0.89)));}}
-        onMouseDown={e=>{drag.current={x:e.clientX,y:e.clientY,tx,ty};}}
+      <div ref={boxRef} style={{flex:1,position:'relative',overflow:'hidden',cursor: dragging?'grabbing':'grab'}}
+        onWheel={e=>{e.preventDefault();zoomAt(e.clientX,e.clientY,clamp(scale*(e.deltaY<0?1.12:0.89)));}}
+        onDoubleClick={e=>{ if(scale>1.2) reset(); else zoomAt(e.clientX,e.clientY,2.5); }}
+        onMouseDown={e=>{e.preventDefault();drag.current={x:e.clientX,y:e.clientY,tx,ty};setDragging(true);}}
         onMouseMove={e=>{if(!drag.current)return;setTx(drag.current.tx+(e.clientX-drag.current.x));setTy(drag.current.ty+(e.clientY-drag.current.y));}}
-        onMouseUp={()=>drag.current=null} onMouseLeave={()=>drag.current=null}>
+        onMouseUp={()=>{drag.current=null;setDragging(false);}} onMouseLeave={()=>{drag.current=null;setDragging(false);}}>
         <img src={src} alt="" draggable={false} onContextMenu={e=>e.preventDefault()}
-          style={{position:'absolute',top:'50%',left:'50%',maxWidth:'100%',maxHeight:'100%',objectFit:'contain',userSelect:'none',transform:`translate(-50%,-50%) translate(${tx}px,${ty}px) scale(${scale})`}}/>
+          style={{position:'absolute',top:'50%',left:'50%',maxWidth:'100%',maxHeight:'100%',objectFit:'contain',userSelect:'none',transform:`translate(-50%,-50%) translate(${tx}px,${ty}px) scale(${scale})`,transition: dragging?'none':'transform 0.15s ease-out'}}/>
       </div>
       <div style={{padding:'6px 10px',background:'rgba(255,255,255,0.06)',color:'#cbd5e1',fontSize:'12px',textAlign:'center',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-        <span>{dateLabel}</span>
-        <button onClick={()=>{setScale(1);setTx(0);setTy(0);}} style={{fontSize:'11px',background:'rgba(255,255,255,0.12)',color:'#fff',border:'none',borderRadius:'6px',padding:'3px 8px',cursor:'pointer'}}>รีเซ็ต</button>
+        <span>{dateLabel} · <span style={{color:'#94a3b8'}}>สโครลซูม · ดับเบิลคลิก</span></span>
+        <button onClick={reset} style={{fontSize:'11px',background:'rgba(255,255,255,0.12)',color:'#fff',border:'none',borderRadius:'6px',padding:'3px 8px',cursor:'pointer'}}>รีเซ็ต</button>
       </div>
     </div>
   );
@@ -2223,75 +2238,117 @@ function CXRCompareModal({ left, right, onClose }) {
   );
 }
 
+// cache รูป (กันโหลดใหม่ตอนเปิดแท็บซ้ำ — ใช้ลิงก์เดิม เบราว์เซอร์ cache ทัมเนลได้) · สดภายใน 5 นาที
+const _patImgCache = {};        // patientId → { data, ts }
+const _libImgCache = { data: null, ts: 0 };
+const CACHE_TTL = 300000;
+function invalidateImgCaches(){ _libImgCache.ts = 0; for (const k in _patImgCache) if (_patImgCache[k]) _patImgCache[k].ts = 0; }
 // ── แท็บรูปภาพในโปรไฟล์ผู้ป่วย (CXR/Lab/Document) ───────────────────────────
 function PatientImagesTab({ patient, currentUser, locked }) {
-  const [images, setImages]   = React.useState(null);
-  const [loading, setLoading] = React.useState(true);
+  const _c0 = _patImgCache[patient.id];
+  const [images, setImages]   = React.useState(_c0 ? _c0.data : null);
+  const [loading, setLoading] = React.useState(!_c0);
   const [err, setErr]         = React.useState('');
   const [uploading, setUploading] = React.useState(false);
   const [upProgress, setUpProgress] = React.useState(0);
   const [upPhase, setUpPhase] = React.useState('');   // 'compress' | 'upload' | 'save'
   const [upType, setUpType]   = React.useState('cxr');
   const [upNote, setUpNote]   = React.useState('');
+  const [pendingUpload, setPendingUpload] = React.useState(null);  // {file, previewUrl, isAnimated, dims, origMime} รอยืนยันอัป
+  const [preparing, setPreparing] = React.useState(false);         // กำลังถอดรหัสไฟล์ (HEIC/TIFF ช้านิด)
   const [filter, setFilter]   = React.useState('all');
+  const [sortBy, setSortBy]   = React.useState('new');
+  const [dateFrom, setDateFrom] = React.useState('');
+  const [dateTo, setDateTo]     = React.useState('');
   const [lightbox, setLightbox] = React.useState(null);
   const [delTarget, setDelTarget] = React.useState(null);
   const [deleting, setDeleting] = React.useState(false);
+  const [editTarget, setEditTarget] = React.useState(null);   // รูปที่กำลังแก้หมวด
+  const [editType, setEditType]   = React.useState('cxr');
+  const [editNote, setEditNote]   = React.useState('');
+  const [savingEdit, setSavingEdit] = React.useState(false);
   const [compareMode, setCompareMode] = React.useState(false);
   const [compareSel, setCompareSel]   = React.useState([]);
   const [compare, setCompare] = React.useState(null);
   const fileRef = React.useRef(null);
   const isAdmin = currentUser?.role === 'admin';
 
-  const load = React.useCallback(async () => {
-    setLoading(true); setErr('');
+  const load = React.useCallback(async (force) => {
+    const c = _patImgCache[patient.id];
+    if (c && !force && (Date.now() - c.ts < CACHE_TTL)) { setImages(c.data); setLoading(false); return; }  // cache สด → ไม่ยิงซ้ำ
+    if (!c) setLoading(true);
+    setErr('');
     try {
       const r = await fetch('/api/patient/images?patientId=' + encodeURIComponent(patient.id));
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'โหลดรูปไม่สำเร็จ');
+      _patImgCache[patient.id] = { data: d.images || [], ts: Date.now() };
       setImages(d.images || []);
-    } catch (e) { setErr(e.message); setImages([]); }
+    } catch (e) { setErr(e.message); if (!c) setImages([]); }
     setLoading(false);
   }, [patient.id]);
   React.useEffect(() => { load(); }, [load]);
 
+  // เลือกไฟล์ → ถอดรหัส (HEIC/TIFF/อื่นๆ) → เปิดพรีวิวก่อน (กันอัปผิดหมวด/ผิดไฟล์)
   const pickFile = async (e) => {
     const file = e.target.files && e.target.files[0];
     e.target.value = '';
     if (!file) return;
-    if (!file.type.startsWith('image/')) { setErr('รองรับเฉพาะไฟล์รูป (PNG/JPEG/WebP/BMP) — TIFF/DICOM ยังไม่รองรับ'); return; }
+    setErr('');
+    const name = (file.name || '').toLowerCase();
+    const okExt = /\.(jpe?g|png|webp|avif|gif|bmp|heic|heif|tiff?)$/.test(name);
+    if (!file.type.startsWith('image/') && !okExt) { setErr('รองรับไฟล์รูป: JPG/PNG/WebP/AVIF/GIF/BMP/HEIC/TIFF — ไม่รองรับ RAW/DICOM'); return; }
     if (file.size > 50 * 1024 * 1024) { setErr('ไฟล์ใหญ่เกิน 50MB'); return; }
+    setPreparing(true);
+    try {
+      const animated = await isAnimatedGif(file);
+      const previewUrl = animated ? URL.createObjectURL(file) : await decodeImageToDataURL(file);
+      let dims = { width: 0, height: 0 };
+      try { const im = await loadImageEl(previewUrl); dims = { width: im.naturalWidth, height: im.naturalHeight }; } catch {}
+      setPendingUpload({ file, previewUrl, isAnimated: animated, dims, origMime: file.type || ('image/' + name.split('.').pop()) });
+    } catch (e2) { setErr('เปิดไฟล์นี้ไม่ได้ (อาจเป็นไฟล์เสีย/ไม่รองรับ): ' + (e2.message || '')); }
+    setPreparing(false);
+  };
+
+  // ยืนยันในพรีวิว → บีบ + อัปจริง (GIF เคลื่อนไหว = เก็บต้นฉบับคงการเคลื่อนไหว)
+  const doUpload = async () => {
+    const pu = pendingUpload; if (!pu) return;
     setUploading(true); setErr(''); setUpPhase('compress'); setUpProgress(0);
     try {
-      const src = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(file); });
-      // บีบตามหมวด: CXR คมชัด (4096px/92%) · รูปปกติเล็กกว่า บีบหนักกว่า (1920px/85%)
       const isCxr = upType === 'cxr';
-      const { blob, width, height } = await compressToWebp(src, isCxr ? 0.92 : 0.85, isCxr ? 4096 : 1920);
-      const thumb = await compressToWebp(src, 0.7, 400);   // รูปย่อ ~400px สำหรับแกลเลอรี (โหลดเร็ว)
+      let mainBlob, width, height, ext, mime;
+      if (pu.isAnimated) {
+        mainBlob = pu.file; ext = 'gif'; mime = 'image/gif'; width = pu.dims.width; height = pu.dims.height;
+      } else {
+        const c = await compressToWebp(pu.previewUrl, isCxr ? 0.92 : 0.85, isCxr ? 4096 : 1920);
+        mainBlob = c.blob; width = c.width; height = c.height; ext = 'webp'; mime = 'image/webp';
+      }
+      const thumb = await compressToWebp(pu.previewUrl, 0.7, 400);   // ทัมเนล (GIF = เฟรมแรก)
       setUpPhase('upload');
-      const pres = await fetch('/api/patient/images/presign', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ patientId: patient.id }) });
+      const pres = await fetch('/api/patient/images/presign', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ patientId: patient.id, ext }) });
       const pd = await pres.json();
       if (!pres.ok) throw new Error(pd.error || 'ขอลิงก์อัปไม่สำเร็จ');
-      await putWithProgress(pd.uploadUrl, blob, setUpProgress);   // รูปเต็ม (รายงาน %)
+      await putWithProgress(pd.uploadUrl, mainBlob, setUpProgress, mime);   // รูปเต็ม (รายงาน %)
       if (pd.uploadUrlThumb) { try { await fetch(pd.uploadUrlThumb, { method: 'PUT', body: thumb.blob, headers: { 'content-type': 'image/webp' } }); } catch {} }
       setUpPhase('save');
       const conf = await fetch('/api/patient/images/confirm', { method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ patientId: patient.id, key: pd.key, thumbKey: pd.thumbKey, type: upType, note: upNote || null, size: blob.size, width, height, mime: 'image/webp', origSize: file.size, origMime: file.type }) });
+        body: JSON.stringify({ patientId: patient.id, key: pd.key, thumbKey: pd.thumbKey, type: upType, note: upNote || null, size: mainBlob.size, width, height, mime, origSize: pu.file.size, origMime: pu.origMime, device: detectDevice() }) });
       const cd = await conf.json();
       if (!conf.ok) throw new Error(cd.error || 'บันทึกไม่สำเร็จ');
-      setUpNote(''); await load();
+      if (pu.isAnimated) { try { URL.revokeObjectURL(pu.previewUrl); } catch {} }
+      setUpNote(''); setPendingUpload(null); invalidateImgCaches(); await load(true);
     } catch (e) { setErr(e.message || 'เกิดข้อผิดพลาด'); }
     setUploading(false); setUpPhase(''); setUpProgress(0);
   };
+  const cancelUpload = () => { if (pendingUpload?.isAnimated) { try { URL.revokeObjectURL(pendingUpload.previewUrl); } catch {} } setPendingUpload(null); };
 
   const freshUrl = async (im) => {
     try { const r = await fetch(`/api/patient/images/${im.id}/url`); if (r.ok) { const d = await r.json(); if (d.url) return d.url; } } catch {}
     return im.url;
   };
-  const openImage = (im, rect) => {   // เปิดทันที: ใช้ลิงก์ใน list + รูปย่อ (เบลอ) → ไม่ต้องรอ fetch
-    const meta = PATIENT_IMG_TYPES[im.type] || PATIENT_IMG_TYPES.other;
-    const name = meta.label + ' · ' + (im.title || (im.storage_key||'').split('/').pop());
-    setLightbox({ src: im.url, thumb: im.thumbUrl, id: im.id, rect, info: patientImgInfo(im, meta, name) });
+  const openImage = (im, rect) => {   // เปิดด้วย index → ลูกศรเลื่อนรูปถัดไป/ก่อนหน้าได้
+    const idx = shown.findIndex(x => x.id === im.id);
+    if (idx >= 0) setLightbox({ idx, rect });
   };
   const doDelete = async () => {
     if (!delTarget) return;
@@ -2299,9 +2356,20 @@ function PatientImagesTab({ patient, currentUser, locked }) {
     try {
       const r = await fetch('/api/patient/images/' + delTarget.id, { method: 'DELETE' });
       if (!r.ok) { const d = await r.json(); throw new Error(d.error || 'ลบไม่สำเร็จ'); }
-      setDelTarget(null); await load();
+      setDelTarget(null); invalidateImgCaches(); await load(true);
     } catch (e) { setErr(e.message); }
     setDeleting(false);
+  };
+  const openEdit = (im) => { setEditTarget(im); setEditType(im.type); setEditNote(im.note || ''); setErr(''); };
+  const doEdit = async () => {
+    if (!editTarget) return;
+    setSavingEdit(true);
+    try {
+      const r = await fetch('/api/patient/images/' + editTarget.id, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: editType, note: editNote || null }) });
+      if (!r.ok) { const d = await r.json(); throw new Error(d.error || 'แก้ไขไม่สำเร็จ'); }
+      setEditTarget(null); invalidateImgCaches(); await load(true);
+    } catch (e) { setErr(e.message); }
+    setSavingEdit(false);
   };
   const toggleSel = (im) => setCompareSel(s => s.includes(im.id) ? s.filter(x=>x!==im.id) : (s.length<2 ? [...s,im.id] : [s[1],im.id]));
   const openCompare = async () => {
@@ -2311,7 +2379,7 @@ function PatientImagesTab({ patient, currentUser, locked }) {
     setCompare({ left:a, right:b });
   };
 
-  const shown = (images || []).filter(im => filter==='all' || im.type===filter);
+  const shown = (images || []).filter(im => (filter==='all' || im.type===filter) && imgInRange(im, dateFrom, dateTo)).sort(imgSortCmp(sortBy));
   const cxrCount = (images || []).filter(im => im.type==='cxr').length;
   const fmtSize = (b) => b==null?'':(b<1048576?(b/1024).toFixed(0)+' KB':(b/1048576).toFixed(1)+' MB');
 
@@ -2324,26 +2392,12 @@ function PatientImagesTab({ patient, currentUser, locked }) {
             {Object.entries(PATIENT_IMG_TYPES).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
           </select>
           <input value={upNote} onChange={e=>setUpNote(e.target.value)} placeholder="หมายเหตุ (ไม่บังคับ)" style={{flex:'1 1 160px',minWidth:0,padding:'8px 10px',borderRadius:'8px',border:'1px solid #d1d5db',fontSize:'13px'}}/>
-          <button onClick={()=>fileRef.current&&fileRef.current.click()} disabled={uploading}
-            style={{padding:'8px 16px',borderRadius:'8px',background:uploading?'#5eead4':'#0d9488',color:'#fff',fontWeight:700,fontSize:'13px',border:'none',cursor:uploading?'wait':'pointer'}}>
-            {uploading ? <><i className="fa-solid fa-spinner fa-spin" style={{marginRight:'6px'}}></i>กำลังอัป...</> : <><i className="fa-solid fa-cloud-arrow-up" style={{marginRight:'6px'}}></i>อัปรูป</>}
+          <button onClick={()=>fileRef.current&&fileRef.current.click()} disabled={preparing||uploading}
+            style={{padding:'8px 16px',borderRadius:'8px',background:(preparing||uploading)?'#5eead4':'#0d9488',color:'#fff',fontWeight:700,fontSize:'13px',border:'none',cursor:(preparing||uploading)?'wait':'pointer'}}>
+            {preparing ? <><i className="fa-solid fa-spinner fa-spin" style={{marginRight:'6px'}}></i>กำลังเปิดไฟล์...</> : <><i className="fa-solid fa-cloud-arrow-up" style={{marginRight:'6px'}}></i>เลือกรูป</>}
           </button>
-          <input ref={fileRef} type="file" accept="image/*" onChange={pickFile} style={{display:'none'}}/>
-          <span style={{fontSize:'11px',color:'#9ca3af',flexBasis:'100%'}}>รองรับ PNG/JPEG/WebP/BMP · CXR: คมชัด ≤4096px/92% · Lab/เอกสาร: ≤1920px/85% (เล็กกว่า) · ≤50MB</span>
-          {uploading && (
-            <div style={{flexBasis:'100%'}}>
-              {upPhase==='upload' ? (
-                <div>
-                  <div style={{height:'8px',background:'#e5e7eb',borderRadius:'999px',overflow:'hidden'}}>
-                    <div style={{height:'100%',width:upProgress+'%',background:'linear-gradient(90deg,#0d9488,#14b8a6)',borderRadius:'999px',transition:'width 0.2s ease'}}/>
-                  </div>
-                  <p style={{fontSize:'11px',color:'#0f766e',fontWeight:700,margin:'5px 0 0'}}><i className="fa-solid fa-cloud-arrow-up" style={{marginRight:'6px'}}></i>กำลังอัปโหลด {upProgress}%</p>
-                </div>
-              ) : (
-                <p style={{fontSize:'11px',color:'#0f766e',fontWeight:700,margin:0}}><i className="fa-solid fa-spinner fa-spin" style={{marginRight:'6px'}}></i>{upPhase==='compress'?'กำลังบีบอัดรูป...':'กำลังบันทึก...'}</p>
-              )}
-            </div>
-          )}
+          <input ref={fileRef} type="file" accept="image/*,.heic,.heif,.tif,.tiff,.avif,.bmp" onChange={pickFile} style={{display:'none'}}/>
+          <span style={{fontSize:'11px',color:'#9ca3af',flexBasis:'100%'}}>รองรับ JPG/PNG/WebP/AVIF/GIF/BMP/HEIC/TIFF (iPhone ได้) · CXR คมชัด ≤4096px/92% · อื่น ≤1920px/85% · ≤50MB · GIF เคลื่อนไหวเก็บต้นฉบับ</span>
         </div>
       )}
 
@@ -2353,6 +2407,13 @@ function PatientImagesTab({ patient, currentUser, locked }) {
           const active=filter===k; const v=PATIENT_IMG_TYPES[k];
           return <button key={k} onClick={()=>setFilter(k)} style={{padding:'4px 12px',borderRadius:'999px',fontSize:'12px',fontWeight:700,border:'1px solid '+(active?'#0d9488':'#e5e7eb'),background:active?'#0d9488':'#fff',color:active?'#fff':'#6b7280',cursor:'pointer'}}>{k==='all'?'ทั้งหมด':v.label}</button>;
         })}
+        <select value={sortBy} onChange={e=>setSortBy(e.target.value)} title="เรียงลำดับ" style={{padding:'4px 8px',borderRadius:'8px',border:'1px solid #e5e7eb',fontSize:'12px',color:'#6b7280',cursor:'pointer'}}>
+          {IMG_SORTS.map(([v,l])=><option key={v} value={v}>{l}</option>)}
+        </select>
+        <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} title="ตั้งแต่วันที่" style={{padding:'3px 6px',borderRadius:'8px',border:'1px solid #e5e7eb',fontSize:'11px',color:'#6b7280'}}/>
+        <span style={{fontSize:'11px',color:'#9ca3af'}}>ถึง</span>
+        <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} title="ถึงวันที่" style={{padding:'3px 6px',borderRadius:'8px',border:'1px solid #e5e7eb',fontSize:'11px',color:'#6b7280'}}/>
+        {(dateFrom||dateTo) && <button onClick={()=>{setDateFrom('');setDateTo('');}} title="ล้างวันที่" style={{fontSize:'12px',color:'#0d9488',background:'none',border:'none',cursor:'pointer'}}><i className="fa-solid fa-xmark"></i></button>}
         {cxrCount>=2 && (
           <button onClick={()=>{setCompareMode(m=>!m);setCompareSel([]);}} style={{marginLeft:'auto',padding:'4px 12px',borderRadius:'999px',fontSize:'12px',fontWeight:700,border:'1px solid '+(compareMode?'#d97706':'#e5e7eb'),background:compareMode?'#fef3c7':'#fff',color:compareMode?'#b45309':'#6b7280',cursor:'pointer'}}>
             <i className="fa-solid fa-clone" style={{marginRight:'5px'}}></i>เทียบ CXR
@@ -2362,41 +2423,99 @@ function PatientImagesTab({ patient, currentUser, locked }) {
       </div>
 
       {err && <p style={{fontSize:'12px',color:'#dc2626',margin:'0 0 10px'}}><i className="fa-solid fa-circle-exclamation" style={{marginRight:'5px'}}></i>{err}</p>}
-      {loading && <p style={{color:'#9ca3af',fontSize:'13px',textAlign:'center',padding:'20px'}}><i className="fa-solid fa-spinner fa-spin" style={{marginRight:'6px'}}></i>กำลังโหลด...</p>}
+      {loading && (
+        <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
+          {[0,1,2,3,4,5].map(i=><div key={i} className="tb-skel" style={{width:(150+(i%3)*40)+'px',height:'170px',borderRadius:'10px'}}/>)}
+        </div>
+      )}
       {!loading && shown.length===0 && <p style={{color:'#9ca3af',fontSize:'13px',textAlign:'center',padding:'30px'}}>ยังไม่มีรูปในหมวดนี้</p>}
 
-      {/* แกลเลอรี */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))',gap:'12px'}}>
-        {shown.map(im=>{
+      {/* แกลเลอรี — Google Photos (justified rows คงสัดส่วนจริง) */}
+      {!loading && shown.length>0 && (
+        <JustifiedGallery items={shown} targetHeight={170} gap={8} renderItem={(im)=>{
           const meta=PATIENT_IMG_TYPES[im.type]||PATIENT_IMG_TYPES.other;
           const canDel = !locked && (im.uploaded_by===currentUser?.id || isAdmin);
           const selIdx = compareSel.indexOf(im.id);
           const selectableForCompare = compareMode && im.type==='cxr';
           return (
-            <div key={im.id} style={{position:'relative',border:'1px solid #e5e7eb',borderRadius:'12px',overflow:'hidden',background:'#fff'}}>
-              <div className="tb-img-thumb" onClick={(e)=>selectableForCompare?toggleSel(im):openImage(im, e.currentTarget.getBoundingClientRect())}
-                style={{position:'relative',aspectRatio:'1',background:'#0b0f19',overflow:'hidden',cursor:selectableForCompare?'pointer':'zoom-in',outline:selIdx>=0?'3px solid #0d9488':'none',outlineOffset:'-3px'}}>
-                <img src={im.thumbUrl || im.url} alt="" loading="lazy" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
-                {!selectableForCompare && <div className="tb-img-zoomicon" style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.22)',pointerEvents:'none'}}><i className="fa-solid fa-magnifying-glass-plus" style={{color:'#fff',fontSize:'20px',textShadow:'0 1px 5px rgba(0,0,0,0.6)'}}></i></div>}
-                {selectableForCompare && <div style={{position:'absolute',top:'6px',left:'6px',width:'22px',height:'22px',borderRadius:'50%',background:selIdx>=0?'#0d9488':'rgba(255,255,255,0.85)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'11px',fontWeight:800,border:'2px solid #fff'}}>{selIdx>=0?selIdx+1:''}</div>}
-                <span style={{position:'absolute',top:'6px',right:'6px',fontSize:'10px',fontWeight:800,padding:'2px 7px',borderRadius:'999px',background:meta.bg,color:meta.fg}}>{meta.label}</span>
-              </div>
-              <div style={{padding:'7px 9px',display:'flex',justifyContent:'space-between',alignItems:'center',gap:'4px'}}>
-                <div style={{minWidth:0}}>
-                  <p style={{fontSize:'11px',color:'#374151',margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{im.title || im.note || '—'}</p>
-                  <p style={{fontSize:'10px',color:'#9ca3af',margin:0}}>{new Date(im.uploaded_at).toLocaleDateString('th-TH',{day:'numeric',month:'short'})} · {fmtSize(im.size_bytes)}</p>
-                </div>
-                {canDel && <button onClick={()=>setDelTarget(im)} title="ลบ" style={{flexShrink:0,width:'26px',height:'26px',borderRadius:'7px',background:'#fef2f2',color:'#dc2626',border:'none',cursor:'pointer',fontSize:'11px'}}><i className="fa-solid fa-trash-can"></i></button>}
+            <div className="tb-img-thumb" title={im.title || im.note || ''}
+              onClick={(e)=>selectableForCompare?toggleSel(im):openImage(im, e.currentTarget.getBoundingClientRect())}
+              style={{position:'relative',width:'100%',height:'100%',background:'#0b0f19',borderRadius:'10px',overflow:'hidden',cursor:selectableForCompare?'pointer':'zoom-in',border:'1px solid #e5e7eb',outline:selIdx>=0?'3px solid #0d9488':'none',outlineOffset:'-3px'}}>
+              <img src={im.thumbUrl || im.url} alt="" loading="lazy" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+              {!selectableForCompare && <div className="tb-img-zoomicon" style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.22)',pointerEvents:'none'}}><i className="fa-solid fa-magnifying-glass-plus" style={{color:'#fff',fontSize:'18px',textShadow:'0 1px 5px rgba(0,0,0,0.6)'}}></i></div>}
+              {selectableForCompare && <div style={{position:'absolute',top:'6px',left:'6px',width:'22px',height:'22px',borderRadius:'50%',background:selIdx>=0?'#0d9488':'rgba(255,255,255,0.85)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'11px',fontWeight:800,border:'2px solid #fff'}}>{selIdx>=0?selIdx+1:''}</div>}
+              <span style={{position:'absolute',top:'6px',right:'6px',fontSize:'10px',fontWeight:800,padding:'2px 7px',borderRadius:'999px',background:meta.bg,color:meta.fg}}>{meta.label}</span>
+              <div style={{position:'absolute',left:0,right:0,bottom:0,padding:'12px 8px 5px',background:'linear-gradient(transparent,rgba(0,0,0,0.65))'}}>
+                <span style={{fontSize:'10px',color:'#fff',textShadow:'0 1px 3px rgba(0,0,0,0.7)'}}>{new Date(im.uploaded_at).toLocaleDateString('th-TH',{day:'numeric',month:'short'})} · {fmtSize(im.size_bytes)}</span>
               </div>
             </div>
           );
-        })}
-      </div>
+        }}/>
+      )}
 
-      {lightbox && <AvatarLightbox src={lightbox.src} thumb={lightbox.thumb} originRect={lightbox.rect} info={lightbox.info}
-        onExpire={async()=>{ try { const r=await fetch(`/api/patient/images/${lightbox.id}/url`); if(r.ok){ const d=await r.json(); return d.url; } } catch {} return null; }}
-        onClose={()=>setLightbox(null)}/>}
+      {lightbox && (()=>{
+        const cur = shown[lightbox.idx]; if (!cur) return null;
+        const meta = PATIENT_IMG_TYPES[cur.type] || PATIENT_IMG_TYPES.other;
+        const name = meta.label + ' · ' + (cur.title || (cur.storage_key||'').split('/').pop());
+        const canDel = !locked && (cur.uploaded_by===currentUser?.id || isAdmin);
+        const acts = canDel ? [
+          { icon:'fa-pen', label:'แก้หมวด / คำอธิบาย', onClick:()=>{ setLightbox(null); openEdit(cur); } },
+          { icon:'fa-trash-can', label:'ลบรูป', danger:true, onClick:()=>{ setLightbox(null); setDelTarget(cur); } },
+        ] : [];
+        return <AvatarLightbox src={cur.url} thumb={cur.thumbUrl} originRect={lightbox.rect} info={patientImgInfo(cur, meta, name)} menuActions={acts}
+          hasPrev={lightbox.idx>0} hasNext={lightbox.idx<shown.length-1}
+          onPrev={()=>setLightbox(l=>({ idx: Math.max(0, l.idx-1) }))}
+          onNext={()=>setLightbox(l=>({ idx: Math.min(shown.length-1, l.idx+1) }))}
+          onExpire={async()=>{ try { const r=await fetch(`/api/patient/images/${cur.id}/url`); if(r.ok){ const d=await r.json(); return d.url; } } catch {} return null; }}
+          onClose={()=>setLightbox(null)}/>;
+      })()}
       {compare && <CXRCompareModal left={compare.left} right={compare.right} onClose={()=>setCompare(null)}/>}
+      {pendingUpload && createPortal(
+        <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.65)',zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={uploading?undefined:cancelUpload}>
+          <div className="modal-A" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'440px',overflow:'hidden',boxShadow:'0 25px 60px rgba(0,0,0,0.3)',maxHeight:'90vh',display:'flex',flexDirection:'column'}}>
+            <div style={{padding:'14px 20px',borderBottom:'1px solid #f3f4f6',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
+              <p style={{fontSize:'15px',fontWeight:700,color:'#0f766e',margin:0}}><i className="fa-solid fa-cloud-arrow-up" style={{marginRight:'8px'}}></i>ยืนยันอัปรูป</p>
+              {!uploading && <button onClick={cancelUpload} title="ปิด" style={{width:'28px',height:'28px',borderRadius:'7px',background:'#f3f4f6',color:'#6b7280',border:'none',cursor:'pointer'}}><i className="fa-solid fa-xmark"></i></button>}
+            </div>
+            <div style={{padding:'16px 20px',overflowY:'auto'}}>
+              <div style={{position:'relative',width:'100%',height:'220px',background:'#0b0f19',borderRadius:'12px',overflow:'hidden',marginBottom:'14px'}}>
+                <img src={pendingUpload.previewUrl} alt="" style={{width:'100%',height:'100%',objectFit:'contain'}}/>
+                {pendingUpload.isAnimated && <span style={{position:'absolute',top:'8px',left:'8px',fontSize:'10px',fontWeight:800,padding:'3px 8px',borderRadius:'999px',background:'#fef3c7',color:'#b45309'}}><i className="fa-solid fa-film" style={{marginRight:'4px'}}></i>GIF เคลื่อนไหว (เก็บต้นฉบับ)</span>}
+              </div>
+              <div style={{background:'#f0fdfa',border:'1px solid #99f6e4',borderRadius:'10px',padding:'9px 12px',marginBottom:'12px',fontSize:'12px',color:'#0f766e'}}>
+                <i className="fa-solid fa-circle-check" style={{marginRight:'6px'}}></i>เช็คให้แน่ใจว่าเลือก <strong>หมวดถูกต้อง</strong> ก่อนอัป
+              </div>
+              <label style={{fontSize:'12px',fontWeight:700,color:'#4b5563',display:'block',marginBottom:'5px'}}>หมวดรูป</label>
+              <select value={upType} onChange={e=>setUpType(e.target.value)} disabled={uploading} style={{width:'100%',padding:'9px 10px',borderRadius:'8px',border:'1px solid #d1d5db',fontSize:'13px',marginBottom:'12px',boxSizing:'border-box'}}>
+                {Object.entries(PATIENT_IMG_TYPES).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+              </select>
+              <label style={{fontSize:'12px',fontWeight:700,color:'#4b5563',display:'block',marginBottom:'5px'}}>หมายเหตุ (ไม่บังคับ)</label>
+              <input value={upNote} onChange={e=>setUpNote(e.target.value)} disabled={uploading} placeholder="เช่น CXR ก่อนเริ่มยา" style={{width:'100%',padding:'9px 10px',borderRadius:'8px',border:'1px solid #d1d5db',fontSize:'13px',marginBottom:'12px',boxSizing:'border-box'}}/>
+              <div style={{fontSize:'11px',color:'#9ca3af',lineHeight:1.6,wordBreak:'break-all'}}>
+                <div>ไฟล์: {pendingUpload.file.name}</div>
+                <div>ต้นฉบับ: {mimeLabel(pendingUpload.origMime)} · {fmtFileSize(pendingUpload.file.size)}{pendingUpload.dims.width?` · ${pendingUpload.dims.width}×${pendingUpload.dims.height}px`:''}</div>
+              </div>
+              {uploading && (
+                <div style={{marginTop:'14px'}}>
+                  {upPhase==='upload' ? (
+                    <div>
+                      <div style={{height:'8px',background:'#e5e7eb',borderRadius:'999px',overflow:'hidden'}}><div style={{height:'100%',width:upProgress+'%',background:'linear-gradient(90deg,#0d9488,#14b8a6)',borderRadius:'999px',transition:'width 0.2s ease'}}/></div>
+                      <p style={{fontSize:'11px',color:'#0f766e',fontWeight:700,margin:'5px 0 0'}}><i className="fa-solid fa-cloud-arrow-up" style={{marginRight:'6px'}}></i>กำลังอัปโหลด {upProgress}%</p>
+                    </div>
+                  ) : (
+                    <p style={{fontSize:'11px',color:'#0f766e',fontWeight:700,margin:0}}><i className="fa-solid fa-spinner fa-spin" style={{marginRight:'6px'}}></i>{upPhase==='compress'?'กำลังบีบอัดรูป...':'กำลังบันทึก...'}</p>
+                  )}
+                </div>
+              )}
+              {err && <p style={{fontSize:'12px',color:'#dc2626',margin:'10px 0 0'}}><i className="fa-solid fa-circle-exclamation" style={{marginRight:'5px'}}></i>{err}</p>}
+            </div>
+            <div style={{display:'flex',gap:'10px',padding:'0 20px 18px',flexShrink:0}}>
+              <button onClick={cancelUpload} disabled={uploading} style={{flex:1,padding:'11px',borderRadius:'10px',background:'#f3f4f6',color:'#4b5563',fontWeight:700,fontSize:'13px',border:'none',cursor:uploading?'not-allowed':'pointer'}}>ยกเลิก</button>
+              <button onClick={doUpload} disabled={uploading} style={{flex:1,padding:'11px',borderRadius:'10px',background:uploading?'#5eead4':'#0d9488',color:'#fff',fontWeight:700,fontSize:'13px',border:'none',cursor:uploading?'wait':'pointer'}}>{uploading?'กำลังอัป...':'ยืนยันอัป'}</button>
+            </div>
+          </div>
+        </div>, document.body
+      )}
       {delTarget && createPortal(
         <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={deleting?undefined:()=>setDelTarget(null)}>
           <div className="modal-A" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'340px',padding:'22px',textAlign:'center'}}>
@@ -2410,76 +2529,210 @@ function PatientImagesTab({ patient, currentUser, locked }) {
           </div>
         </div>, document.body
       )}
+      {editTarget && createPortal(
+        <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={savingEdit?undefined:()=>setEditTarget(null)}>
+          <div className="modal-A" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'380px',padding:'22px'}}>
+            <p style={{fontSize:'15px',fontWeight:700,color:'#0f766e',margin:'0 0 14px'}}><i className="fa-solid fa-pen" style={{marginRight:'8px'}}></i>แก้หมวด / หมายเหตุ</p>
+            <label style={{fontSize:'12px',fontWeight:700,color:'#4b5563',display:'block',marginBottom:'5px'}}>หมวดรูป</label>
+            <select value={editType} onChange={e=>setEditType(e.target.value)} disabled={savingEdit} style={{width:'100%',padding:'9px 10px',borderRadius:'8px',border:'1px solid #d1d5db',fontSize:'13px',marginBottom:'12px',boxSizing:'border-box'}}>
+              {Object.entries(PATIENT_IMG_TYPES).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+            </select>
+            <label style={{fontSize:'12px',fontWeight:700,color:'#4b5563',display:'block',marginBottom:'5px'}}>หมายเหตุ (ไม่บังคับ)</label>
+            <input value={editNote} onChange={e=>setEditNote(e.target.value)} disabled={savingEdit} placeholder="หมายเหตุ" style={{width:'100%',padding:'9px 10px',borderRadius:'8px',border:'1px solid #d1d5db',fontSize:'13px',marginBottom:'12px',boxSizing:'border-box'}}/>
+            {editType==='cxr' && editTarget.type!=='cxr' && (
+              <div style={{background:'#fffbeb',border:'1px solid #fcd34d',borderRadius:'10px',padding:'9px 12px',marginBottom:'12px',fontSize:'12px',color:'#b45309',lineHeight:1.5}}>
+                <i className="fa-solid fa-triangle-exclamation" style={{marginRight:'6px'}}></i>เปลี่ยนหมวดได้ แต่ไฟล์นี้บีบไว้ตามหมวดเดิมแล้ว <strong>คุณภาพคงเดิม</strong> — ถ้าอยากได้ความคมระดับ CXR เต็ม ต้องอัปไฟล์ใหม่
+              </div>
+            )}
+            {err && <p style={{fontSize:'12px',color:'#dc2626',margin:'0 0 10px'}}><i className="fa-solid fa-circle-exclamation" style={{marginRight:'5px'}}></i>{err}</p>}
+            <div style={{display:'flex',gap:'10px'}}>
+              <button onClick={()=>setEditTarget(null)} disabled={savingEdit} style={{flex:1,padding:'10px',borderRadius:'10px',background:'#f3f4f6',color:'#4b5563',fontWeight:700,fontSize:'13px',border:'none',cursor:'pointer'}}>ยกเลิก</button>
+              <button onClick={doEdit} disabled={savingEdit} style={{flex:1,padding:'10px',borderRadius:'10px',background:savingEdit?'#5eead4':'#0d9488',color:'#fff',fontWeight:700,fontSize:'13px',border:'none',cursor:savingEdit?'wait':'pointer'}}>{savingEdit?'กำลังบันทึก...':'บันทึก'}</button>
+            </div>
+          </div>
+        </div>, document.body
+      )}
     </div>
   );
 }
 
 // ── หน้าคลังรูปภาพรวมทุกผู้ป่วย (Google Photos style) ──────────────────────
-function ImageLibraryPage() {
-  const [images, setImages] = React.useState(null);
-  const [loading, setLoading] = React.useState(true);
+function ImageLibraryPage({ currentUser }) {
+  const [images, setImages] = React.useState(_libImgCache.data);
+  const [loading, setLoading] = React.useState(!_libImgCache.data);
   const [err, setErr]       = React.useState('');
   const [filter, setFilter] = React.useState('all');
+  const [sortBy, setSortBy] = React.useState('new');
+  const [dateFrom, setDateFrom] = React.useState('');
+  const [dateTo, setDateTo]     = React.useState('');
   const [q, setQ]           = React.useState('');
   const [lightbox, setLightbox] = React.useState(null);
+  const [editTarget, setEditTarget] = React.useState(null);
+  const [editType, setEditType]   = React.useState('cxr');
+  const [editNote, setEditNote]   = React.useState('');
+  const [savingEdit, setSavingEdit] = React.useState(false);
+  const [delTarget, setDelTarget] = React.useState(null);
+  const [deleting, setDeleting] = React.useState(false);
+  const isAdmin = currentUser?.role === 'admin';
 
-  const load = React.useCallback(async () => {
-    setLoading(true); setErr('');
+  // โหลดทุกรูปครั้งเดียว → กรอง/ค้นหาในเครื่อง + cache (เปิดซ้ำไม่โหลดใหม่)
+  const load = React.useCallback(async (force) => {
+    if (_libImgCache.data && !force && (Date.now() - _libImgCache.ts < CACHE_TTL)) { setImages(_libImgCache.data); setLoading(false); return; }
+    if (!_libImgCache.data) setLoading(true);
+    setErr('');
     try {
-      const params = new URLSearchParams();
-      if (filter !== 'all') params.set('type', filter);
-      if (q.trim()) params.set('q', q.trim());
-      const r = await fetch('/api/patient/images/all?' + params.toString());
+      const r = await fetch('/api/patient/images/all');
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'โหลดไม่สำเร็จ');
+      _libImgCache.data = d.images || []; _libImgCache.ts = Date.now();
       setImages(d.images || []);
-    } catch (e) { setErr(e.message); setImages([]); }
+    } catch (e) { setErr(e.message); if (!_libImgCache.data) setImages([]); }
     setLoading(false);
-  }, [filter, q]);
-  React.useEffect(() => { const t = setTimeout(load, q ? 350 : 0); return () => clearTimeout(t); }, [load]);
+  }, []);
+  React.useEffect(() => { load(); }, [load]);
 
-  const openImage = (im, rect) => {   // เปิดทันที (ลิงก์ใน list + รูปย่อเบลอ)
-    const meta = PATIENT_IMG_TYPES[im.type] || PATIENT_IMG_TYPES.other;
-    const name = meta.label + ' · ' + im.patient_name + (im.patient_hn ? ' (' + im.patient_hn + ')' : '');
-    setLightbox({ src: im.url, thumb: im.thumbUrl, id: im.id, rect, info: patientImgInfo(im, meta, name) });
+  const qq = q.trim().toLowerCase();
+  const flat = (images || []).filter(im =>
+    (filter === 'all' || im.type === filter) &&
+    imgInRange(im, dateFrom, dateTo) &&
+    (!qq || (im.patient_name || '').toLowerCase().includes(qq) || (im.patient_hn || '').toLowerCase().includes(qq))
+  ).sort(imgSortCmp(sortBy));
+  const openImage = (im, rect) => {   // เปิดด้วย index → ลูกศรเลื่อนข้ามทุกผู้ป่วยได้
+    const idx = flat.findIndex(x => x.id === im.id);
+    if (idx >= 0) setLightbox({ idx, rect });
+  };
+  const openEdit = (im) => { setEditTarget(im); setEditType(im.type); setEditNote(im.note || ''); setErr(''); };
+  const doEdit = async () => {
+    if (!editTarget) return;
+    setSavingEdit(true);
+    try {
+      const r = await fetch('/api/patient/images/' + editTarget.id, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: editType, note: editNote || null }) });
+      if (!r.ok) { const d = await r.json(); throw new Error(d.error || 'แก้ไขไม่สำเร็จ'); }
+      setEditTarget(null); invalidateImgCaches(); await load(true);
+    } catch (e) { setErr(e.message); }
+    setSavingEdit(false);
+  };
+  const doDelete = async () => {
+    if (!delTarget) return;
+    setDeleting(true);
+    try {
+      const r = await fetch('/api/patient/images/' + delTarget.id, { method: 'DELETE' });
+      if (!r.ok) { const d = await r.json(); throw new Error(d.error || 'ลบไม่สำเร็จ'); }
+      setDelTarget(null); invalidateImgCaches(); await load(true);
+    } catch (e) { setErr(e.message); }
+    setDeleting(false);
   };
 
   const groups = {};
-  for (const im of (images || [])) {
+  for (const im of flat) {
     if (!groups[im.patient_id]) groups[im.patient_id] = { name: im.patient_name, hn: im.patient_hn, items: [] };
     groups[im.patient_id].items.push(im);
   }
 
+  const renderThumb = (im) => {
+    const meta = PATIENT_IMG_TYPES[im.type] || PATIENT_IMG_TYPES.other;
+    return (
+      <div className="tb-img-thumb" title={(im.patient_name||'') + (im.title?(' · '+im.title):'')}
+        onClick={(e)=>openImage(im, e.currentTarget.getBoundingClientRect())}
+        style={{position:'relative',width:'100%',height:'100%',background:'#0b0f19',borderRadius:'10px',overflow:'hidden',cursor:'zoom-in',border:'1px solid #e5e7eb'}}>
+        <img src={im.thumbUrl || im.url} alt="" loading="lazy" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+        <div className="tb-img-zoomicon" style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.22)',pointerEvents:'none'}}><i className="fa-solid fa-magnifying-glass-plus" style={{color:'#fff',fontSize:'18px',textShadow:'0 1px 5px rgba(0,0,0,0.6)'}}></i></div>
+        <span style={{position:'absolute',top:'5px',right:'5px',fontSize:'9px',fontWeight:800,padding:'2px 6px',borderRadius:'999px',background:meta.bg,color:meta.fg}}>{meta.label}</span>
+        <span style={{position:'absolute',bottom:0,left:0,right:0,padding:'10px 6px 4px',background:'linear-gradient(transparent,rgba(0,0,0,0.6))',color:'#fff',fontSize:'9px'}}>{new Date(im.uploaded_at).toLocaleDateString('th-TH',{day:'numeric',month:'short'})}</span>
+      </div>
+    );
+  };
+
   return (
     <div>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'10px',marginBottom:'14px',flexWrap:'wrap'}}>
-        <h2 style={{fontWeight:800,fontSize:'20px',color:'#0f766e',margin:0}}><i className="fa-solid fa-images" style={{marginRight:'8px'}}></i>คลังรูปภาพผู้ป่วย</h2>
-        <input value={q} onChange={e=>setQ(e.target.value)} placeholder="ค้นหาชื่อ / HN ผู้ป่วย" style={{padding:'8px 12px',borderRadius:'10px',border:'1px solid #d1d5db',fontSize:'13px',minWidth:'200px'}}/>
-      </div>
-      <div style={{display:'flex',gap:'6px',flexWrap:'wrap',marginBottom:'16px'}}>
-        {['all',...Object.keys(PATIENT_IMG_TYPES)].map(k=>{const active=filter===k;const v=PATIENT_IMG_TYPES[k];return <button key={k} onClick={()=>setFilter(k)} style={{padding:'5px 14px',borderRadius:'999px',fontSize:'12px',fontWeight:700,border:'1px solid '+(active?'#0d9488':'#e5e7eb'),background:active?'#0d9488':'#fff',color:active?'#fff':'#6b7280',cursor:'pointer'}}>{k==='all'?'ทั้งหมด':v.label}</button>;})}
+      {/* ตัวกรอง + ค้นหา (ชื่อหน้าอยู่บนแถบหัวเรื่องด้านบนแล้ว) */}
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'10px',marginBottom:'16px',flexWrap:'wrap'}}>
+        <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
+          {['all',...Object.keys(PATIENT_IMG_TYPES)].map(k=>{const active=filter===k;const v=PATIENT_IMG_TYPES[k];return <button key={k} onClick={()=>setFilter(k)} style={{padding:'5px 14px',borderRadius:'999px',fontSize:'12px',fontWeight:700,border:'1px solid '+(active?'#0d9488':'#e5e7eb'),background:active?'#0d9488':'#fff',color:active?'#fff':'#6b7280',cursor:'pointer'}}>{k==='all'?'ทั้งหมด':v.label}</button>;})}
+        </div>
+        <div style={{display:'flex',gap:'8px',alignItems:'center',flexWrap:'wrap'}}>
+          <select value={sortBy} onChange={e=>setSortBy(e.target.value)} title="เรียงลำดับ" style={{padding:'7px 10px',borderRadius:'10px',border:'1px solid #d1d5db',fontSize:'13px',color:'#6b7280',cursor:'pointer'}}>
+            {IMG_SORTS.map(([v,l])=><option key={v} value={v}>{l}</option>)}
+          </select>
+          <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} title="ตั้งแต่วันที่" style={{padding:'6px 8px',borderRadius:'10px',border:'1px solid #d1d5db',fontSize:'12px',color:'#6b7280'}}/>
+          <span style={{fontSize:'12px',color:'#9ca3af'}}>ถึง</span>
+          <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} title="ถึงวันที่" style={{padding:'6px 8px',borderRadius:'10px',border:'1px solid #d1d5db',fontSize:'12px',color:'#6b7280'}}/>
+          {(dateFrom||dateTo) && <button onClick={()=>{setDateFrom('');setDateTo('');}} title="ล้างวันที่" style={{fontSize:'13px',color:'#0d9488',background:'none',border:'none',cursor:'pointer'}}><i className="fa-solid fa-xmark"></i></button>}
+          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="ค้นหาชื่อ / HN ผู้ป่วย" style={{padding:'8px 12px',borderRadius:'10px',border:'1px solid #d1d5db',fontSize:'13px',minWidth:'160px'}}/>
+        </div>
       </div>
       {err && <p style={{color:'#dc2626',fontSize:'13px'}}><i className="fa-solid fa-circle-exclamation" style={{marginRight:'5px'}}></i>{err}</p>}
-      {loading && <p style={{color:'#9ca3af',textAlign:'center',padding:'30px'}}><i className="fa-solid fa-spinner fa-spin" style={{marginRight:'6px'}}></i>กำลังโหลด...</p>}
-      {!loading && (images||[]).length===0 && <p style={{color:'#9ca3af',textAlign:'center',padding:'40px'}}>ยังไม่มีรูปในระบบ</p>}
-      {Object.entries(groups).map(([pid,g])=>(
-        <div key={pid} style={{marginBottom:'22px'}}>
-          <p style={{fontWeight:700,fontSize:'14px',color:'#1f2937',margin:'0 0 8px',borderLeft:'3px solid #0d9488',paddingLeft:'8px'}}>{g.name}{g.hn?<span style={{color:'#9ca3af',fontWeight:400,fontSize:'12px'}}> · HN {g.hn}</span>:null} <span style={{color:'#9ca3af',fontWeight:400,fontSize:'12px'}}>({g.items.length})</span></p>
-          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(130px,1fr))',gap:'10px'}}>
-            {g.items.map(im=>{const meta=PATIENT_IMG_TYPES[im.type]||PATIENT_IMG_TYPES.other;return (
-              <div key={im.id} className="tb-img-thumb" onClick={(e)=>openImage(im, e.currentTarget.getBoundingClientRect())} style={{position:'relative',aspectRatio:'1',background:'#0b0f19',borderRadius:'10px',overflow:'hidden',cursor:'zoom-in',border:'1px solid #e5e7eb'}}>
-                <img src={im.thumbUrl || im.url} alt="" loading="lazy" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
-                <div className="tb-img-zoomicon" style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.22)',pointerEvents:'none'}}><i className="fa-solid fa-magnifying-glass-plus" style={{color:'#fff',fontSize:'18px',textShadow:'0 1px 5px rgba(0,0,0,0.6)'}}></i></div>
-                <span style={{position:'absolute',top:'5px',right:'5px',fontSize:'9px',fontWeight:800,padding:'2px 6px',borderRadius:'999px',background:meta.bg,color:meta.fg}}>{meta.label}</span>
-                <span style={{position:'absolute',bottom:0,left:0,right:0,padding:'3px 6px',background:'rgba(0,0,0,0.5)',color:'#fff',fontSize:'9px'}}>{new Date(im.uploaded_at).toLocaleDateString('th-TH',{day:'numeric',month:'short'})}</span>
-              </div>
-            );})}
+
+      {/* กำลังโหลด → โครงร่างเบลอ (สื่อว่ามีรูปกำลังมา ไม่ใช่รูปหาย) */}
+      {loading && [0,1].map(g=>(
+        <div key={g} style={{marginBottom:'22px'}}>
+          <div className="tb-skel" style={{height:'14px',width:'170px',borderRadius:'6px',marginBottom:'10px'}}/>
+          <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
+            {[0,1,2,3,4,5].map(i=><div key={i} className="tb-skel" style={{width:(120+(i%3)*44)+'px',height:'170px',borderRadius:'10px'}}/>)}
           </div>
         </div>
       ))}
-      {lightbox && <AvatarLightbox src={lightbox.src} thumb={lightbox.thumb} originRect={lightbox.rect} info={lightbox.info}
-        onExpire={async()=>{ try { const r=await fetch(`/api/patient/images/${lightbox.id}/url`); if(r.ok){ const d=await r.json(); return d.url; } } catch {} return null; }}
-        onClose={()=>setLightbox(null)}/>}
+
+      {!loading && flat.length===0 && <p style={{color:'#9ca3af',textAlign:'center',padding:'40px'}}>ยังไม่มีรูปในระบบ</p>}
+      {!loading && Object.entries(groups).map(([pid,g])=>(
+        <div key={pid} style={{marginBottom:'22px'}}>
+          <p style={{fontWeight:700,fontSize:'14px',color:'#1f2937',margin:'0 0 8px',borderLeft:'3px solid #0d9488',paddingLeft:'8px'}}>{g.name}{g.hn?<span style={{color:'#9ca3af',fontWeight:400,fontSize:'12px'}}> · HN {g.hn}</span>:null} <span style={{color:'#9ca3af',fontWeight:400,fontSize:'12px'}}>({g.items.length})</span></p>
+          <JustifiedGallery items={g.items} targetHeight={160} gap={8} renderItem={renderThumb}/>
+        </div>
+      ))}
+
+      {editTarget && createPortal(
+        <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={savingEdit?undefined:()=>setEditTarget(null)}>
+          <div className="modal-A" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'380px',padding:'22px'}}>
+            <p style={{fontSize:'15px',fontWeight:700,color:'#0f766e',margin:'0 0 14px'}}><i className="fa-solid fa-pen" style={{marginRight:'8px'}}></i>แก้หมวด / หมายเหตุ</p>
+            <label style={{fontSize:'12px',fontWeight:700,color:'#4b5563',display:'block',marginBottom:'5px'}}>หมวดรูป</label>
+            <select value={editType} onChange={e=>setEditType(e.target.value)} disabled={savingEdit} style={{width:'100%',padding:'9px 10px',borderRadius:'8px',border:'1px solid #d1d5db',fontSize:'13px',marginBottom:'12px',boxSizing:'border-box'}}>
+              {Object.entries(PATIENT_IMG_TYPES).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+            </select>
+            <label style={{fontSize:'12px',fontWeight:700,color:'#4b5563',display:'block',marginBottom:'5px'}}>หมายเหตุ (ไม่บังคับ)</label>
+            <input value={editNote} onChange={e=>setEditNote(e.target.value)} disabled={savingEdit} placeholder="หมายเหตุ" style={{width:'100%',padding:'9px 10px',borderRadius:'8px',border:'1px solid #d1d5db',fontSize:'13px',marginBottom:'12px',boxSizing:'border-box'}}/>
+            {editType==='cxr' && editTarget.type!=='cxr' && (
+              <div style={{background:'#fffbeb',border:'1px solid #fcd34d',borderRadius:'10px',padding:'9px 12px',marginBottom:'12px',fontSize:'12px',color:'#b45309',lineHeight:1.5}}>
+                <i className="fa-solid fa-triangle-exclamation" style={{marginRight:'6px'}}></i>เปลี่ยนหมวดได้ แต่ไฟล์นี้บีบไว้ตามหมวดเดิมแล้ว <strong>คุณภาพคงเดิม</strong> — อยากได้ CXR เต็มต้องอัปใหม่
+              </div>
+            )}
+            {err && <p style={{fontSize:'12px',color:'#dc2626',margin:'0 0 10px'}}><i className="fa-solid fa-circle-exclamation" style={{marginRight:'5px'}}></i>{err}</p>}
+            <div style={{display:'flex',gap:'10px'}}>
+              <button onClick={()=>setEditTarget(null)} disabled={savingEdit} style={{flex:1,padding:'10px',borderRadius:'10px',background:'#f3f4f6',color:'#4b5563',fontWeight:700,fontSize:'13px',border:'none',cursor:'pointer'}}>ยกเลิก</button>
+              <button onClick={doEdit} disabled={savingEdit} style={{flex:1,padding:'10px',borderRadius:'10px',background:savingEdit?'#5eead4':'#0d9488',color:'#fff',fontWeight:700,fontSize:'13px',border:'none',cursor:savingEdit?'wait':'pointer'}}>{savingEdit?'กำลังบันทึก...':'บันทึก'}</button>
+            </div>
+          </div>
+        </div>, document.body
+      )}
+      {delTarget && createPortal(
+        <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={deleting?undefined:()=>setDelTarget(null)}>
+          <div className="modal-A" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'340px',padding:'22px',textAlign:'center'}}>
+            <div style={{width:'50px',height:'50px',borderRadius:'50%',background:'#fee2e2',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 12px'}}><i className="fa-solid fa-trash-can" style={{color:'#dc2626',fontSize:'19px'}}></i></div>
+            <p style={{fontSize:'15px',fontWeight:700,color:'#111827',margin:'0 0 6px'}}>ลบรูปนี้</p>
+            <p style={{fontSize:'13px',color:'#6b7280',margin:'0 0 16px'}}>รูปจะถูกลบถาวร กู้คืนไม่ได้</p>
+            <div style={{display:'flex',gap:'10px'}}>
+              <button onClick={()=>setDelTarget(null)} disabled={deleting} style={{flex:1,padding:'10px',borderRadius:'10px',background:'#f3f4f6',color:'#4b5563',fontWeight:700,fontSize:'13px',border:'none',cursor:'pointer'}}>ยกเลิก</button>
+              <button onClick={doDelete} disabled={deleting} style={{flex:1,padding:'10px',borderRadius:'10px',background:deleting?'#fca5a5':'#dc2626',color:'#fff',fontWeight:700,fontSize:'13px',border:'none',cursor:deleting?'wait':'pointer'}}>{deleting?'กำลังลบ...':'ลบรูป'}</button>
+            </div>
+          </div>
+        </div>, document.body
+      )}
+      {lightbox && (()=>{
+        const cur = flat[lightbox.idx]; if (!cur) return null;
+        const meta = PATIENT_IMG_TYPES[cur.type] || PATIENT_IMG_TYPES.other;
+        const name = meta.label + ' · ' + cur.patient_name + (cur.patient_hn ? ' (' + cur.patient_hn + ')' : '');
+        const canDel = cur.uploaded_by===currentUser?.id || isAdmin;
+        const acts = canDel ? [
+          { icon:'fa-pen', label:'แก้หมวด / คำอธิบาย', onClick:()=>{ setLightbox(null); openEdit(cur); } },
+          { icon:'fa-trash-can', label:'ลบรูป', danger:true, onClick:()=>{ setLightbox(null); setDelTarget(cur); } },
+        ] : [];
+        return <AvatarLightbox src={cur.url} thumb={cur.thumbUrl} originRect={lightbox.rect} info={patientImgInfo(cur, meta, name)} menuActions={acts}
+          hasPrev={lightbox.idx>0} hasNext={lightbox.idx<flat.length-1}
+          onPrev={()=>setLightbox(l=>({ idx: Math.max(0, l.idx-1) }))}
+          onNext={()=>setLightbox(l=>({ idx: Math.min(flat.length-1, l.idx+1) }))}
+          onExpire={async()=>{ try { const r=await fetch(`/api/patient/images/${cur.id}/url`); if(r.ok){ const d=await r.json(); return d.url; } } catch {} return null; }}
+          onClose={()=>setLightbox(null)}/>;
+      })()}
     </div>
   );
 }
@@ -7484,8 +7737,8 @@ function App() {
     ...(currentUser?.role === 'admin' ? [{ id:'audit-log', icon:'fa-clock-rotate-left', label:'ประวัติลบถาวร' }] : []),
     { id:'changelog', icon:'fa-scroll', label:'ประวัติเวอร์ชั่น', divider:true, redDot: changelogUnseen },
   ];
-  const titles = { dashboard:'Dashboard', 'patient-list':'ทะเบียนผู้ป่วย Active', 'archive-list':'ทะเบียนจบการรักษา', 'all-patients':'ทะเบียนผู้ป่วยทั้งหมด', 'add-patient':'ลงทะเบียนผู้ป่วยใหม่', 'weekly-prep':'เตรียมเคสรายสัปดาห์', reports:'รายงาน และ สถิติ', knowledge:'คลังความรู้วัณโรค', settings:'ตั้งค่าระบบ', 'admin-users':'จัดการผู้ใช้', trash:'ถังขยะ', 'activity-log':'บันทึกกิจกรรม', 'audit-log':'ประวัติการลบถาวร', changelog:'ประวัติเวอร์ชั่น' };
-  const pageIcons = { dashboard:'fa-chart-pie', 'patient-list':'fa-users', 'archive-list':'fa-box-archive', 'all-patients':'fa-users', 'add-patient':'fa-user-plus', 'weekly-prep':'fa-calendar-check', reports:'fa-file-contract', knowledge:'fa-book-open-reader', settings:'fa-gear', 'admin-users':'fa-user-shield', trash:'fa-trash', 'activity-log':'fa-wave-square', 'audit-log':'fa-clock-rotate-left', changelog:'fa-scroll' };
+  const titles = { dashboard:'Dashboard', 'patient-list':'ทะเบียนผู้ป่วย Active', 'archive-list':'ทะเบียนจบการรักษา', 'all-patients':'ทะเบียนผู้ป่วยทั้งหมด', 'add-patient':'ลงทะเบียนผู้ป่วยใหม่', 'weekly-prep':'เตรียมเคสรายสัปดาห์', reports:'รายงาน และ สถิติ', knowledge:'คลังความรู้วัณโรค', settings:'ตั้งค่าระบบ', 'admin-users':'จัดการผู้ใช้', trash:'ถังขยะ', 'activity-log':'บันทึกกิจกรรม', 'audit-log':'ประวัติการลบถาวร', changelog:'ประวัติเวอร์ชั่น', 'image-library':'คลังรูปภาพผู้ป่วย' };
+  const pageIcons = { dashboard:'fa-chart-pie', 'patient-list':'fa-users', 'archive-list':'fa-box-archive', 'all-patients':'fa-users', 'add-patient':'fa-user-plus', 'weekly-prep':'fa-calendar-check', reports:'fa-file-contract', knowledge:'fa-book-open-reader', settings:'fa-gear', 'admin-users':'fa-user-shield', trash:'fa-trash', 'activity-log':'fa-wave-square', 'audit-log':'fa-clock-rotate-left', changelog:'fa-scroll', 'image-library':'fa-images' };
 
   // v0.7.17.3 — ขณะ fetch ข้อมูลครั้งแรก คงโครง V2Skeleton ไว้แทน spinner ใจกลาง
   //              (login → V2Skeleton → ของจริง · ไม่ตัดเป็น 2 ขั้น)
@@ -7771,7 +8024,7 @@ function App() {
           {!dbLoading && nav==='weekly-prep'   && <WeeklyPrep patients={patients.filter(p=>!p.archived)} onOpen={setClinical}/>}
           {!dbLoading && nav==='reports'       && <Reports patients={patients}/>}
           {!dbLoading && nav==='knowledge'     && <KnowledgeBase/>}
-          {!dbLoading && nav==='image-library' && <ImageLibraryPage/>}
+          {!dbLoading && nav==='image-library' && <ImageLibraryPage currentUser={currentUser}/>}
           {!dbLoading && nav==='settings'      && <AdminSettings settings={settings} setSettings={setSettings} setNav={setNav}/>}
           {!dbLoading && nav==='admin-users'   && <AdminUsersTab currentUser={currentUser} onPendingChange={setPendingUserCount} highlightUserId={highlightUserId} onClearHighlight={()=>setHighlightUserId(null)}/>}
           {!dbLoading && nav==='trash'         && <TrashList currentUser={currentUser} onRestore={restorePatient} onHardDelete={hardDeletePatient} pendingDeleteRequests={pendingDeleteRequests} onApproveDelete={approveDeleteRequest} onRejectDelete={rejectDeleteRequest} onAcknowledgeCancelled={async () => { await window.acknowledgeCancelledRequests(); setCancelledDeleteCount(0); }}/>}
@@ -8003,7 +8256,7 @@ function RequestEditModal({ field, currentValue, onClose }) {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.19.0';
+const APP_VERSION = '0.7.19.1';
 const BUILD_DATE = '4 มิ.ย. 2569';
 function AboutModal({ onClose, onShowChangelog }) {
   const [closing, setClosing] = React.useState(false);
@@ -11349,30 +11602,150 @@ async function compressToWebp(src, quality = 0.92, maxEdge = 4096) {
   return { blob, width: w, height: h };
 }
 // อัปไฟล์ขึ้น R2 ด้วย XHR เพื่อรายงาน % ความคืบหน้า (fetch รายงาน upload progress ไม่ได้)
-function putWithProgress(url, blob, onProgress) {
+function putWithProgress(url, blob, onProgress, mime = 'image/webp') {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('PUT', url);
-    xhr.setRequestHeader('content-type', 'image/webp');
+    xhr.setRequestHeader('content-type', mime);
     if (xhr.upload) xhr.upload.onprogress = (e) => { if (e.lengthComputable && onProgress) onProgress(Math.round(e.loaded / e.total * 100)); };
     xhr.onload = () => (xhr.status >= 200 && xhr.status < 300) ? resolve() : reject(new Error('อัปโหลดไม่สำเร็จ (' + xhr.status + ')'));
     xhr.onerror = () => reject(new Error('อัปโหลดไม่สำเร็จ — เครือข่ายมีปัญหา'));
     xhr.send(blob);
   });
 }
+function blobToDataURL(blob) {
+  return new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(blob); });
+}
+// แปลงไฟล์รูปทุกชนิดที่รองรับ → dataURL ที่ canvas วาดได้ (HEIC/HEIF→heic2any · TIFF→UTIF · อื่นๆ เบราว์เซอร์อ่านเอง)
+// โหลด lib เฉพาะตอนเจอไฟล์นั้น (dynamic import → ไม่ถ่วง bundle)
+async function decodeImageToDataURL(file) {
+  const name = (file.name || '').toLowerCase();
+  const isHeic = file.type === 'image/heic' || file.type === 'image/heif' || /\.(heic|heif)$/.test(name);
+  const isTiff = file.type === 'image/tiff' || /\.(tif|tiff)$/.test(name);
+  if (isHeic) {
+    try {
+      const mod = await import('heic2any');
+      const heic2any = mod.default || mod;
+      const out = await Promise.race([
+        heic2any({ blob: file, toType: 'image/png' }),   // PNG = lossless → เหลือ lossy แค่ตอนเป็น WebP รอบเดียว
+        new Promise((_, rej) => setTimeout(() => rej(new Error('ถอดรหัส HEIC นานเกิน 60 วิ (timeout)')), 60000)),
+      ]);
+      return await blobToDataURL(Array.isArray(out) ? out[0] : out);
+    } catch (e) {
+      console.error('[HEIC decode] failed:', e);
+      throw new Error('เปิดไฟล์ HEIC ไม่ได้: ' + (e && e.message ? e.message : e) + ' — ลองแปลงเป็น JPG ก่อนอัป');
+    }
+  }
+  if (isTiff) {
+    const mod = await import('utif'); const UTIF = mod.default || mod;
+    const buf = await file.arrayBuffer();
+    const ifds = UTIF.decode(buf);
+    UTIF.decodeImage(buf, ifds[0]);
+    const rgba = UTIF.toRGBA8(ifds[0]);
+    const cv = document.createElement('canvas');
+    cv.width = ifds[0].width; cv.height = ifds[0].height;
+    const ctx = cv.getContext('2d');
+    const imgData = ctx.createImageData(ifds[0].width, ifds[0].height);
+    imgData.data.set(rgba);
+    ctx.putImageData(imgData, 0, 0);
+    return cv.toDataURL('image/png');
+  }
+  return await blobToDataURL(file);   // png/jpeg/webp/avif/gif/bmp — เบราว์เซอร์ decode เอง
+}
+// ตรวจว่า GIF เคลื่อนไหว (มี Graphic Control Extension ≥ 2 เฟรม)
+async function isAnimatedGif(file) {
+  if (!(file.type === 'image/gif' || /\.gif$/i.test(file.name || ''))) return false;
+  const b = new Uint8Array(await file.arrayBuffer());
+  let count = 0;
+  for (let i = 0; i < b.length - 3; i++) {
+    if (b[i] === 0x21 && b[i+1] === 0xF9 && b[i+2] === 0x04) { count++; if (count > 1) return true; }
+  }
+  return false;
+}
+// แกลเลอรีแบบ Google Photos (justified rows) — รูปคงสัดส่วนจริง เรียงเต็มแถวพอดี ไม่ครอป
+function JustifiedGallery({ items, targetHeight = 190, gap = 8, renderItem }) {
+  const ref = React.useRef(null);
+  const [cw, setCw] = React.useState(0);
+  React.useEffect(() => {
+    const el = ref.current; if (!el) return;
+    const update = () => setCw(el.clientWidth);
+    update();
+    let ro; if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(update); ro.observe(el); }
+    window.addEventListener('resize', update);
+    return () => { if (ro) ro.disconnect(); window.removeEventListener('resize', update); };
+  }, []);
+  const rows = [];
+  if (cw > 0) {
+    let row = [], rowRatio = 0;
+    const maxRatio = (cw - gap) / targetHeight;
+    for (const it of items) {
+      const r = (it.width && it.height) ? (it.width / it.height) : 1;
+      row.push({ it, r }); rowRatio += r;
+      if (rowRatio >= maxRatio) { rows.push(row); row = []; rowRatio = 0; }
+    }
+    if (row.length) rows.push(row);
+  }
+  return (
+    <div ref={ref}>
+      {rows.map((row, ri) => {
+        const last = ri === rows.length - 1;
+        const totalR = row.reduce((s, x) => s + x.r, 0);
+        const avail = cw - gap * (row.length - 1);
+        let h = avail / totalR;
+        if (last && h > targetHeight * 1.25) h = targetHeight;   // แถวสุดท้ายไม่ยืดเกิน
+        return (
+          <div key={ri} style={{ display: 'flex', gap: gap + 'px', marginBottom: gap + 'px' }}>
+            {row.map(({ it, r }) => (
+              <div key={it.id} style={{ width: Math.floor(h * r) + 'px', height: Math.floor(h) + 'px', flexShrink: 0 }}>
+                {renderItem(it)}
+              </div>
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 // helper จัดข้อมูลรูปผู้ป่วยสำหรับแผง info ใน lightbox
 function fmtFileSize(b){ return b==null?'—':(b<1024?b+' B':b<1048576?(b/1024).toFixed(1)+' KB':(b/1048576).toFixed(2)+' MB'); }
 function mimeLabel(m){ if(!m) return 'ไฟล์รูป'; const s=String(m).split('/').pop().toUpperCase(); return ({JPEG:'JPEG',PNG:'PNG',WEBP:'WebP',BMP:'BMP',GIF:'GIF'})[s]||s; }
+// ตรวจอุปกรณ์ที่อัปรูป (จาก userAgent) → แสดงในข้อมูลรูป
+function detectDevice(){
+  const ua = (typeof navigator !== 'undefined' ? navigator.userAgent : '') || '';
+  if (/iPhone|iPad|iPod/i.test(ua)) return 'iOS (iPhone/iPad)';
+  if (/Android/i.test(ua)) return 'Android';
+  if (/Macintosh|Mac OS X/i.test(ua)) return 'Mac';
+  if (/Windows/i.test(ua)) return 'Windows';
+  return 'อื่นๆ';
+}
+// ตัวเรียงรูป (วันที่/ขนาด) — ใช้ทั้งแท็บผู้ป่วย + คลังรูป
+const IMG_SORTS = [['new','ใหม่→เก่า'],['old','เก่า→ใหม่'],['big','ใหญ่→เล็ก'],['small','เล็ก→ใหญ่']];
+function imgInRange(im, from, to){
+  if (from && new Date(im.uploaded_at) < new Date(from + 'T00:00:00')) return false;
+  if (to && new Date(im.uploaded_at) > new Date(to + 'T23:59:59')) return false;
+  return true;
+}
+function imgSortCmp(sort){
+  return (a,b)=>{
+    if (sort==='old')   return new Date(a.uploaded_at)-new Date(b.uploaded_at);
+    if (sort==='big')   return (b.size_bytes||0)-(a.size_bytes||0);
+    if (sort==='small') return (a.size_bytes||0)-(b.size_bytes||0);
+    return new Date(b.uploaded_at)-new Date(a.uploaded_at);  // new (ค่าเริ่มต้น)
+  };
+}
 function patientImgInfo(im, meta, name){
+  const isGif = im.mime === 'image/gif';
   const q = im.type==='cxr' ? '92%' : '85%';
-  const reducePct = (im.orig_size_bytes && im.size_bytes) ? Math.max(0, Math.round((1 - im.size_bytes/im.orig_size_bytes)*100)) : null;
+  const reducePct = (!isGif && im.orig_size_bytes && im.size_bytes) ? Math.max(0, Math.round((1 - im.size_bytes/im.orig_size_bytes)*100)) : null;
   return {
     name,
     updatedAt: im.uploaded_at,
     sizeBytes: im.size_bytes,
-    format: 'WebP · คุณภาพ ' + q,
+    format: isGif ? 'GIF เคลื่อนไหว (เก็บต้นฉบับ)' : ('WebP · คุณภาพ ' + q),
     origText: im.orig_size_bytes ? (mimeLabel(im.orig_mime) + ' · ' + fmtFileSize(im.orig_size_bytes)) : null,
     reducePct,
+    device: im.device || null,
+    note: im.note || null,
     storage: 'Cloudflare R2 · ส่วนตัว (signed URL)',
   };
 }
@@ -11432,7 +11805,7 @@ function AvatarCropModal({ src, uploading, error, onCancel, onConfirm }) {
 
 // ── ดูรูปโปรไฟล์เต็ม (lightbox) — เครื่องมือดูรูปสไตล์ Windows Photos ──────────
 // แสดง "รูปต้นฉบับ" · เปิดแบบขยายจากตำแหน่งรูป · ลาก + สโครลซูม + หมุน + เลือก % + info (nerd)
-function AvatarLightbox({ src, thumb, originRect, info, onExpire, onClose }) {
+function AvatarLightbox({ src, thumb, originRect, info, onExpire, onClose, hasPrev, hasNext, onPrev, onNext, menuActions }) {
   const [open, setOpen]       = React.useState(false);
   const [settled, setSettled] = React.useState(false); // เปิดเสร็จแล้ว → สลับ transition ซูมให้ไว
   const [scale, setScale]     = React.useState(1);
@@ -11442,35 +11815,60 @@ function AvatarLightbox({ src, thumb, originRect, info, onExpire, onClose }) {
   const [dragging, setDragging] = React.useState(false);
   const [showInfo, setShowInfo] = React.useState(false);
   const [zoomMenu, setZoomMenu] = React.useState(false);
+  const [renderMenu, setRenderMenu] = React.useState(false);
+  const [actionMenu, setActionMenu] = React.useState(false);
+  const [imgRendering, setImgRendering] = React.useState('auto'); // auto | pixelated | crisp-edges (โหมดลบรอยหยัก)
+  const [showHelp, setShowHelp] = React.useState(false);
+  const [hintVisible, setHintVisible] = React.useState(true);     // ป้ายบอกวิธีใช้ตอนเปิด (จางเองใน 4 วิ)
   const [dim, setDim]     = React.useState(null);   // {w,h} ขนาดภาพจริง
   const [bytes, setBytes] = React.useState(info?.sizeBytes ?? null);
   const [curSrc, setCurSrc] = React.useState(src);          // URL รูปเต็ม (เปลี่ยนได้ถ้าลิงก์หมดอายุ)
   const [fullLoaded, setFullLoaded] = React.useState(false);// รูปเต็มโหลดเสร็จยัง
   const drag = React.useRef(null);
+  const touch = React.useRef(null);
   const triedRefresh = React.useRef(false);
-  const clamp = (s) => Math.max(0.1, Math.min(8, s));
+  // เลื่อนรูป (ลูกศร) → รีเซ็ตซูม/หมุน + โหลดรูปใหม่ (ไม่ remount → สลับลื่น)
+  React.useEffect(() => {
+    setScale(1); setTx(0); setTy(0); setRot(0); setFullLoaded(false); setCurSrc(src); setBytes(info?.sizeBytes ?? null); triedRefresh.current = false;
+  }, [src]);
   const doClose = () => { setOpen(false); setTimeout(onClose, 320); };
   const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
   const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
   const stop = (e) => e && e.stopPropagation();
+  const closeMenus = () => { setShowHelp(false); setRenderMenu(false); setZoomMenu(false); setActionMenu(false); setShowInfo(false); }; // คลิกที่รูป = ปิด popup ทั้งหมด
+  const dismissPopups = () => { setShowHelp(false); setRenderMenu(false); setZoomMenu(false); setActionMenu(false); }; // กดฟังก์ชันอื่น = ปิดเมนูที่ค้าง (ไม่แตะ info)
+  // เปิดเมนูลอยตัวใดตัวหนึ่ง → ปิดที่เหลือ (ไม่ทับกัน) · แผง info แยกต่างหาก
+  const toggleMenu = (which) => {
+    setShowHelp(which==='help' ? (v=>!v) : false);
+    setZoomMenu(which==='zoom' ? (v=>!v) : false);
+    setRenderMenu(which==='render' ? (v=>!v) : false);
+    setActionMenu(which==='action' ? (v=>!v) : false);
+  };
+  // เปิดแผง info → ดันพื้นที่รูปไปทางซ้าย (ไม่ทับรูป) · พอดีจอ + อัตราพิกเซลจริง
+  const panelW = 320;
+  const availW = showInfo ? Math.max(360, vw - panelW) : vw;
+  const cx = availW / 2;
+  const maxW = availW * 0.92, maxH = vh * 0.84;
+  const fitRatio = dim ? Math.min(maxW / dim.w, maxH / dim.h, 1) : 1;
+  // ซูม: ล้อ/นิ้ว ลึกได้ถึง ~8000% (เห็นพิกเซล) · ปุ่ม/แถบเลือก สูงสุด 4000%
+  const clamp = (s) => Math.max(0.1 / fitRatio, Math.min(80 / fitRatio, s));
 
   // ── ขอบเขตการลาก (กันรูปหลุดออกนอกจอ) ──
   const baseSize = () => {
-    const maxW = vw * 0.9, maxH = vh * 0.84;
     if (!dim) return { w: maxW, h: maxH };
     const r = Math.min(maxW / dim.w, maxH / dim.h, 1);
     return { w: dim.w * r, h: dim.h * r };
   };
   const clampPan = (x, y, s) => {
     const b = baseSize();
-    const limX = Math.max(0, (b.w * s) / 2 - vw / 2);
+    const limX = Math.max(0, (b.w * s) / 2 - availW / 2);
     const limY = Math.max(0, (b.h * s) / 2 - vh / 2);
     return [Math.max(-limX, Math.min(limX, x)), Math.max(-limY, Math.min(limY, y))];
   };
   // ── ซูม โดยยึด "จุด" (เมาส์/ดับเบิลคลิก) ให้อยู่กับที่ + ไม่ลอยตอนสุดสเกล ──
   const zoomAt = (clientX, clientY, ns) => {
     const k = ns / scale;
-    const mx = clientX - vw / 2, my = clientY - vh / 2;
+    const mx = clientX - cx, my = clientY - vh / 2;
     let nx, ny;
     if (ns <= 1.0001) { nx = 0; ny = 0; }                       // ย่อจนพอดี → กึ่งกลางเป๊ะ
     else { nx = tx * k + mx * (1 - k); ny = ty * k + my * (1 - k); } // k=1 (สุดสเกล) → ไม่ขยับ = ไม่ลอย
@@ -11478,17 +11876,19 @@ function AvatarLightbox({ src, thumb, originRect, info, onExpire, onClose }) {
     setScale(ns); setTx(nx); setTy(ny);
   };
   const onWheel = (e) => { e.preventDefault(); zoomAt(e.clientX, e.clientY, clamp(scale * (e.deltaY < 0 ? 1.12 : 0.89))); };
-  const onDblClick = (e) => { stop(e); if (scale > 1.2) fit(); else zoomAt(e.clientX, e.clientY, 2.5); };
-  const onMouseDown = (e) => { e.preventDefault(); drag.current = { x: e.clientX, y: e.clientY, tx, ty }; setDragging(true); };
+  const onDblClick = (e) => { stop(e); if (scale > 1.05) fit(); else zoomAt(e.clientX, e.clientY, clamp(Math.max(2, 1 / fitRatio))); }; // ดับเบิลคลิก → ซูมเข้า (อย่างน้อย 200% หรือ 100% พิกเซลจริง) ↔ พอดีจอ
+  const onMouseDown = (e) => { e.preventDefault(); closeMenus(); drag.current = { x: e.clientX, y: e.clientY, tx, ty }; setDragging(true); };
   const onMouseMove = (e) => {
     if (!drag.current) return;
     const [nx, ny] = clampPan(drag.current.tx + (e.clientX - drag.current.x), drag.current.ty + (e.clientY - drag.current.y), scale);
     setTx(nx); setTy(ny);
   };
   const endDrag = () => { drag.current = null; setDragging(false); };
-  const fit = (e) => { stop(e); setScale(1); setTx(0); setTy(0); setRot(0); };
+  const fit = (e) => { stop(e); dismissPopups(); setScale(1); setTx(0); setTy(0); setRot(0); };
   const zoomTo = (s) => { const ns = clamp(s); const [nx, ny] = clampPan(0, 0, ns); setScale(ns); setTx(nx); setTy(ny); };
-  const pct = Math.round(scale * 100);
+  // % จริง: scale=1 = "พอดีจอ" (รูปใหญ่อาจ ~30%) · 100% = 1:1 พิกเซลจริง
+  const zoomToPct = (p) => { const ns = clamp((p / 100) / fitRatio); const [nx, ny] = clampPan(0, 0, ns); setScale(ns); setTx(nx); setTy(ny); };
+  const pct = Math.round(scale * fitRatio * 100);
   // รูปเต็มโหลด error → ลิงก์อาจหมดอายุ → ขอใหม่ 1 ครั้ง
   const onFullError = () => {
     if (onExpire && !triedRefresh.current) {
@@ -11496,6 +11896,35 @@ function AvatarLightbox({ src, thumb, originRect, info, onExpire, onClose }) {
       Promise.resolve(onExpire()).then(u => { if (u) { setCurSrc(u); } }).catch(()=>{});
     }
   };
+  // ── สัมผัส (มือถือ/แท็บเล็ต): สองนิ้ว = pinch zoom · นิ้วเดียว = เลื่อน ──
+  const dist2 = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  const mid2 = (t) => ({ x: (t[0].clientX + t[1].clientX) / 2, y: (t[0].clientY + t[1].clientY) / 2 });
+  const onTouchStart = (e) => {
+    closeMenus();
+    if (e.touches.length === 2) touch.current = { mode:'pinch', d: dist2(e.touches), s: scale };
+    else if (e.touches.length === 1) touch.current = { mode:'pan', x: e.touches[0].clientX, y: e.touches[0].clientY, tx, ty };
+  };
+  const onTouchMove = (e) => {
+    if (!touch.current) return;
+    if (touch.current.mode === 'pinch' && e.touches.length === 2) {
+      e.preventDefault();
+      const m = mid2(e.touches);
+      zoomAt(m.x, m.y, clamp(touch.current.s * (dist2(e.touches) / touch.current.d)));
+    } else if (touch.current.mode === 'pan' && e.touches.length === 1) {
+      e.preventDefault();
+      const [nx, ny] = clampPan(touch.current.tx + (e.touches[0].clientX - touch.current.x), touch.current.ty + (e.touches[0].clientY - touch.current.y), scale);
+      setTx(nx); setTy(ny);
+    }
+  };
+  const onTouchEnd = (e) => {
+    if (e.touches.length === 0) touch.current = null;
+    else if (e.touches.length === 1) touch.current = { mode:'pan', x: e.touches[0].clientX, y: e.touches[0].clientY, tx, ty };
+  };
+  const RENDER_MODES = [
+    { v:'auto',      icon:'fa-wand-magic-sparkles', label:'ภาพเนียน (Smooth)',     desc:'เกลี่ยสีให้นุ่ม (ค่าเริ่มต้น) — เหมาะดูรูปทั่วไป/CXR' },
+    { v:'pixelated', icon:'fa-table-cells',         label:'พิกเซลดิบ (Pixelated)', desc:'ไม่เกลี่ยสี เห็นบล็อกพิกเซลจริง — เหมาะส่องรายละเอียดแบบเนิร์ด' },
+  ];
+  const curRender = RENDER_MODES.find(m => m.v === imgRendering) || RENDER_MODES[0];
 
   // ── เปิด (animation) + โหลดขนาดไฟล์ (เฉพาะ avatar ที่ไม่ได้ส่ง sizeBytes มา) ──
   React.useEffect(() => {
@@ -11508,29 +11937,45 @@ function AvatarLightbox({ src, thumb, originRect, info, onExpire, onClose }) {
     }
     return () => { cancelAnimationFrame(id); clearTimeout(t); };
   }, []);
-  // ── คีย์บอร์ด (ผูกใหม่เมื่อ scale เปลี่ยน เพื่อใช้ค่าล่าสุด) ──
+  // ── คีย์บอร์ด (ผูกใหม่เมื่อ scale/ขอบเขตเลื่อนเปลี่ยน เพื่อใช้ค่าล่าสุด) ──
   React.useEffect(() => {
     const onKey = (e) => {
       if (e.key === 'Escape') doClose();
       else if (e.key === '+' || e.key === '=') zoomTo(scale * 1.25);
       else if (e.key === '-' || e.key === '_') zoomTo(scale * 0.8);
       else if (e.key === '0') fit();
+      else if (e.key === 'ArrowLeft' && hasPrev && onPrev) onPrev();
+      else if (e.key === 'ArrowRight' && hasNext && onNext) onNext();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [scale]);
+  }, [scale, hasPrev, hasNext]);
+  // ป้ายบอกวิธีใช้ → จางหายเองใน 4 วิ
+  React.useEffect(() => { const t = setTimeout(() => setHintVisible(false), 4000); return () => clearTimeout(t); }, []);
 
   // เปิด: ขยายจากตำแหน่งรูปเดิม (thumb/avatar) → เลื่อนลื่น
   let sx = 0, sy = 0, ss = 0.2;
-  if (originRect) { sx = (originRect.left + originRect.width/2) - vw/2; sy = (originRect.top + originRect.height/2) - vh/2; ss = Math.max(0.12, Math.min(0.5, originRect.width / 520)); }
+  if (originRect) { sx = (originRect.left + originRect.width/2) - cx; sy = (originRect.top + originRect.height/2) - vh/2; ss = Math.max(0.12, Math.min(0.5, originRect.width / 520)); }
   const startT = `translate(-50%,-50%) translate(${sx}px,${sy}px) scale(${ss}) rotate(0deg)`;
   const liveT  = `translate(-50%,-50%) translate(${tx}px,${ty}px) scale(${scale}) rotate(${rot}deg)`;
-  const imgTrans = dragging
+  const imgTrans = (dragging
     ? 'opacity 0.3s ease'
-    : (settled ? 'transform 0.18s ease-out, opacity 0.3s ease' : 'transform 0.42s cubic-bezier(0.16,1,0.3,1), opacity 0.35s ease');
-  const imgBase = { position:'absolute', top:'50%', left:'50%', maxWidth:'90vw', maxHeight:'84vh', objectFit:'contain', userSelect:'none', boxShadow:'0 25px 80px rgba(0,0,0,0.6)' };
+    : (settled ? 'transform 0.18s ease-out, opacity 0.3s ease' : 'transform 0.42s cubic-bezier(0.16,1,0.3,1), opacity 0.35s ease')) + ', left 0.34s cubic-bezier(0.16,1,0.3,1)';
+  const imgBase = { position:'absolute', top:'50%', left: cx + 'px', maxWidth: maxW + 'px', maxHeight: maxH + 'px', objectFit:'contain', userSelect:'none', boxShadow:'0 25px 80px rgba(0,0,0,0.6)' };
   const bar = { width:'40px',height:'40px',borderRadius:'10px',background:'rgba(255,255,255,0.12)',color:'#fff',border:'none',cursor:'pointer',fontSize:'15px',display:'flex',alignItems:'center',justifyContent:'center' };
   const fmtBytes = (b) => b==null ? '—' : (b<1024 ? b+' B' : b<1048576 ? (b/1024).toFixed(1)+' KB' : (b/1048576).toFixed(2)+' MB');
+  // เคอร์เซอร์มือ (ขอบดำ + ไส้ขาว → เห็นชัดทั้งพื้นขาว/ดำ ไม่กลืน)
+  const handCur = `url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='32'%20height='32'%20viewBox='0%200%2024%2024'%20fill='white'%20stroke='black'%20stroke-width='1'%20stroke-linejoin='round'%3E%3Cpath%20d='M23%205.5V20c0%202.2-1.8%204-4%204h-7.3c-1.08%200-2.1-.43-2.85-1.19L1%2014.83s1.26-1.23%201.3-1.25c.22-.19.49-.29.79-.29.22%200%20.42.06.6.16.04.01%204.31%202.46%204.31%202.46V4c0-.83.67-1.5%201.5-1.5S11%203.17%2011%204v7h1V1.5c0-.83.67-1.5%201.5-1.5S15%20.67%2015%201.5V11h1V2.5c0-.83.67-1.5%201.5-1.5s1.5.67%201.5%201.5V11h1V5.5c0-.83.67-1.5%201.5-1.5s1.5.67%201.5%201.5z'/%3E%3C/svg%3E") 13 13, grab`;
+  // ── minimap: รูปย่อมุมจอ + กรอบบอกว่ากำลังดูส่วนไหน (แสดงเมื่อซูมจนรูปใหญ่กว่าพื้นที่) ──
+  const _b = baseSize();
+  const dispW = _b.w * scale, dispH = _b.h * scale;
+  const showMap = !!dim && (dispW > availW + 4 || dispH > maxH + 4);
+  let mmW = 130, mmH = 130;
+  if (dim) { const ar = dim.w / dim.h; if (ar >= 1) mmH = Math.round(130 / ar); else mmW = Math.round(130 * ar); }
+  const fracW = Math.min(1, availW / dispW), fracH = Math.min(1, maxH / dispH);
+  const rectW = mmW * fracW, rectH = mmH * fracH;
+  const rectL = Math.max(0, Math.min(mmW - rectW, mmW/2 + (-tx/dispW)*mmW - rectW/2));
+  const rectT = Math.max(0, Math.min(mmH - rectH, mmH/2 + (-ty/dispH)*mmH - rectH/2));
   return createPortal(
     <div onMouseMove={onMouseMove} onMouseUp={endDrag} onMouseLeave={endDrag}
       style={{position:'fixed',inset:0,zIndex:10001,background:`rgba(10,15,25,${open?0.95:0})`,transition:'background 0.32s ease',overflow:'hidden'}}>
@@ -11557,15 +12002,63 @@ function AvatarLightbox({ src, thumb, originRect, info, onExpire, onClose }) {
         onLoad={e=>{ setDim({ w:e.target.naturalWidth, h:e.target.naturalHeight }); setFullLoaded(true); }}
         onError={onFullError}
         onWheel={onWheel} onMouseDown={onMouseDown} onClick={stop} onDoubleClick={onDblClick} onContextMenu={e=>e.preventDefault()}
+        onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
         style={{...imgBase, transform: open ? liveT : startT,
           opacity: (open && (fullLoaded || !thumb)) ? 1 : 0, transition: imgTrans,
-          cursor: dragging ? 'grabbing' : 'grab'}}/>
+          imageRendering: imgRendering, touchAction: 'none',
+          cursor: dragging ? 'grabbing' : handCur}}/>
 
-      {/* มุมขวาบน: info + ปิด */}
+      {/* minimap — รูปย่อ + กรอบบอกตำแหน่งที่ซูมดูอยู่ */}
+      {showMap && (
+        <div style={{position:'fixed',top:'18px',left:'18px',width:mmW+'px',height:mmH+'px',borderRadius:'6px',overflow:'hidden',boxShadow:'0 6px 20px rgba(0,0,0,0.5)',border:'2px solid rgba(255,255,255,0.5)',opacity:open?1:0,transition:'opacity 0.3s',zIndex:8,background:'#0b0f19',pointerEvents:'none'}}>
+          <img src={thumb || curSrc} alt="" style={{width:'100%',height:'100%',objectFit:'cover',opacity:0.85}}/>
+          <div style={{position:'absolute',left:rectL+'px',top:rectT+'px',width:rectW+'px',height:rectH+'px',border:'2px solid #14b8a6',background:'rgba(20,184,166,0.18)',boxSizing:'border-box'}}/>
+        </div>
+      )}
+
+      {/* ลูกศรเลื่อนรูป ◀▶ */}
+      {hasPrev && <button onClick={e=>{stop(e);onPrev();}} title="ก่อนหน้า (←)" style={{position:'fixed',top:'50%',left:'16px',transform:'translateY(-50%)',width:'48px',height:'48px',borderRadius:'50%',background:'rgba(17,24,39,0.7)',color:'#fff',border:'none',cursor:'pointer',fontSize:'18px',opacity:open?1:0,transition:'opacity 0.3s',zIndex:8}}><i className="fa-solid fa-chevron-left"></i></button>}
+      {hasNext && <button onClick={e=>{stop(e);onNext();}} title="ถัดไป (→)" style={{position:'fixed',top:'50%',right:'16px',transform:'translateY(-50%)',width:'48px',height:'48px',borderRadius:'50%',background:'rgba(17,24,39,0.7)',color:'#fff',border:'none',cursor:'pointer',fontSize:'18px',opacity:open?1:0,transition:'opacity 0.3s',zIndex:8}}><i className="fa-solid fa-chevron-right"></i></button>}
+
+      {/* ป้ายบอกวิธีใช้ (จางหายเองใน 4 วิ) */}
+      <div style={{position:'fixed',top:'18px',left:'50%',transform:'translateX(-50%)',background:'rgba(17,24,39,0.82)',color:'#e5e7eb',fontSize:'12px',padding:'7px 14px',borderRadius:'999px',opacity:(open&&hintVisible)?1:0,transition:'opacity 0.4s',pointerEvents:'none',zIndex:8,whiteSpace:'nowrap',maxWidth:'92vw',overflow:'hidden',textOverflow:'ellipsis'}}>
+        <i className="fa-solid fa-circle-info" style={{marginRight:'6px',color:'#5eead4'}}></i>สโครล = ซูม · ดับเบิลคลิก = ซูมเข้า/ออก · ลาก = เลื่อน · กดปุ่ม ? ดูทั้งหมด
+      </div>
+
+      {/* มุมขวาบน: ⋮ + ? + info + ปิด */}
       <div style={{position:'fixed',top:'18px',right:'18px',display:'flex',gap:'10px',opacity:open?1:0,transition:'opacity 0.3s',zIndex:8}}>
-        <button onClick={e=>{stop(e);setShowInfo(v=>!v);}} title="ข้อมูลรูป" style={{...bar, background: showInfo?'rgba(13,148,136,0.85)':'rgba(255,255,255,0.12)'}}><i className="fa-solid fa-circle-info"></i></button>
+        {menuActions && menuActions.length>0 && (
+          <div style={{position:'relative'}}>
+            <button onClick={e=>{stop(e);toggleMenu('action');}} title="เพิ่มเติม" style={{...bar, background: actionMenu?'rgba(13,148,136,0.85)':'rgba(255,255,255,0.12)'}}><i className="fa-solid fa-ellipsis-vertical"></i></button>
+            {actionMenu && (
+              <div onClick={stop} style={{position:'absolute',top:'48px',right:0,background:'rgba(17,24,39,0.98)',borderRadius:'12px',padding:'6px',boxShadow:'0 12px 30px rgba(0,0,0,0.5)',minWidth:'190px',display:'flex',flexDirection:'column'}}>
+                {menuActions.map((a,i)=>(
+                  <button key={i} onClick={e=>{stop(e);setActionMenu(false);a.onClick&&a.onClick();}}
+                    style={{background:'transparent',color:a.danger?'#fca5a5':'#e5e7eb',border:'none',padding:'9px 12px',borderRadius:'7px',cursor:'pointer',fontSize:'13px',textAlign:'left',display:'flex',alignItems:'center',gap:'10px'}}
+                    onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,0.08)'} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                    <i className={'fa-solid '+a.icon} style={{width:'16px'}}></i>{a.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        <button onClick={e=>{stop(e);toggleMenu('help');}} title="วิธีใช้ / คีย์ลัด" style={{...bar, background: showHelp?'rgba(13,148,136,0.85)':'rgba(255,255,255,0.12)'}}><i className="fa-solid fa-question"></i></button>
+        <button onClick={e=>{stop(e);dismissPopups();setShowInfo(v=>!v);}} title="ข้อมูลรูป" style={{...bar, background: showInfo?'rgba(13,148,136,0.85)':'rgba(255,255,255,0.12)'}}><i className="fa-solid fa-circle-info"></i></button>
         <button onClick={doClose} title="ปิด (Esc)" style={bar}><i className="fa-solid fa-xmark"></i></button>
       </div>
+
+      {/* แผงวิธีใช้ / คีย์ลัด */}
+      {showHelp && (
+        <div onClick={stop} style={{position:'fixed',top:'70px',right:'18px',width:'264px',background:'rgba(17,24,39,0.97)',borderRadius:'14px',padding:'14px 16px',boxShadow:'0 16px 40px rgba(0,0,0,0.5)',zIndex:9,color:'#e5e7eb'}}>
+          <p style={{margin:'0 0 8px',fontWeight:700,fontSize:'13px',color:'#fff'}}><i className="fa-solid fa-keyboard" style={{marginRight:'6px',color:'#5eead4'}}></i>วิธีใช้ / คีย์ลัด</p>
+          {[['สโครลเมาส์','ซูมเข้า/ออก ตามจุดเมาส์'],['ดับเบิลคลิก','ซูมเข้า/ออก ที่จุดนั้น'],['ลากเมาส์','เลื่อนรูป'],['สองนิ้ว','ซูม (จอสัมผัส)'],['+ / −','ซูมเข้า / ออก'],['0','พอดีหน้าจอ'],['← / →','รูปก่อนหน้า / ถัดไป'],['Esc','ปิด']].map(([k,v])=>(
+            <div key={k} style={{display:'flex',justifyContent:'space-between',gap:'10px',padding:'4px 0',fontSize:'12px'}}>
+              <span style={{color:'#5eead4',fontWeight:700,flexShrink:0}}>{k}</span><span style={{color:'#cbd5e1',textAlign:'right'}}>{v}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* แผง info (nerd) — สไลด์เข้าจากขวา (mount ตลอด → animate ทั้งเข้า/ออก) */}
       <div onClick={stop} style={{position:'fixed',top:0,right:0,bottom:0,width:'312px',background:'#fff',boxShadow:'-12px 0 40px rgba(0,0,0,0.35)',overflowY:'auto',display:'flex',flexDirection:'column',zIndex:9,
@@ -11577,6 +12070,7 @@ function AvatarLightbox({ src, thumb, originRect, info, onExpire, onClose }) {
         <div style={{padding:'6px 20px 20px'}}>
           {[
             ['ชื่อไฟล์', info && info.name ? info.name : '—'],
+            ...(info && info.note ? [['คำอธิบาย', info.note]] : []),
             ['ขนาดภาพ', dim ? `${dim.w} × ${dim.h} px` : '—'],
             ...(info && info.origText ? [['ไฟล์ต้นฉบับ', info.origText]] : []),
             ['ขนาดไฟล์ (หลังบีบ)', fmtBytes(bytes)],
@@ -11584,6 +12078,7 @@ function AvatarLightbox({ src, thumb, originRect, info, onExpire, onClose }) {
             ['ฟอร์แมต', (info && info.format) ? info.format : 'WebP · คุณภาพ 100%'],
             ['ซูมปัจจุบัน', pct + '%'],
             ['หมุน', (rot % 360) + '°'],
+            ...(info && info.device ? [['อัปจากอุปกรณ์', info.device]] : []),
             ['อัปเดตล่าสุด', info && info.updatedAt ? new Date(info.updatedAt).toLocaleString('th-TH') : '—'],
             ['แหล่งเก็บ', (info && info.storage) ? info.storage : 'Cloudflare R2 · img.tbjourney.care'],
           ].map(([k,v]) => (
@@ -11597,24 +12092,41 @@ function AvatarLightbox({ src, thumb, originRect, info, onExpire, onClose }) {
 
       {/* แถบควบคุมล่าง (สไตล์ Windows Photos) */}
       <div onClick={stop} style={{position:'fixed',bottom:'22px',left:'50%',transform:'translateX(-50%)',display:'flex',alignItems:'center',gap:'7px',background:'rgba(17,24,39,0.88)',backdropFilter:'blur(6px)',borderRadius:'14px',padding:'8px 12px',opacity:open?1:0,transition:'opacity 0.3s',boxShadow:'0 10px 30px rgba(0,0,0,0.4)',zIndex:8}}>
-        <button onClick={e=>{stop(e);setRot(r=>r-90);}} title="หมุนซ้าย" style={bar}><i className="fa-solid fa-rotate-left"></i></button>
-        <button onClick={e=>{stop(e);setRot(r=>r+90);}} title="หมุนขวา" style={bar}><i className="fa-solid fa-rotate-right"></i></button>
-        <button onClick={fit} title="พอดีหน้าจอ (0)" style={bar}><i className="fa-solid fa-expand"></i></button>
+        <button onClick={e=>{stop(e);dismissPopups();setRot(r=>r-90);}} title="หมุนซ้าย" style={bar}><i className="fa-solid fa-rotate-left"></i></button>
+        <button onClick={e=>{stop(e);dismissPopups();setRot(r=>r+90);}} title="หมุนขวา" style={bar}><i className="fa-solid fa-rotate-right"></i></button>
+        <button onClick={fit} title="พอดีจอ (Fit to screen) · กด 0" style={bar}><i className="fa-solid fa-expand"></i></button>
+        <button onClick={e=>{stop(e);dismissPopups();zoomToPct(100);}} title="ขนาดจริง 1:1 (Actual size)" style={{...bar,width:'auto',padding:'0 10px',fontSize:'12px',fontWeight:800}}>1:1</button>
         <div style={{width:'1px',height:'24px',background:'rgba(255,255,255,0.15)'}}/>
-        <button onClick={e=>{stop(e);zoomTo(scale*0.8);}} title="ย่อ (−)" style={bar}><i className="fa-solid fa-magnifying-glass-minus"></i></button>
-        <input type="range" min={0.1} max={8} step={0.01} value={scale}
-          onChange={e=>{stop(e);zoomTo(Number(e.target.value));}} onMouseDown={stop}
+        <button onClick={e=>{stop(e);dismissPopups();zoomTo(scale*0.8);}} title="ย่อ (−)" style={bar}><i className="fa-solid fa-magnifying-glass-minus"></i></button>
+        <input type="range" min={10} max={4000} step={1} value={Math.min(4000,Math.max(10,pct))}
+          onChange={e=>{stop(e);dismissPopups();zoomToPct(Number(e.target.value));}} onMouseDown={stop}
           title="เลื่อนปรับขนาด"
           style={{width:'130px',accentColor:'#14b8a6',cursor:'pointer'}}/>
-        <button onClick={e=>{stop(e);zoomTo(scale*1.25);}} title="ขยาย (+)" style={bar}><i className="fa-solid fa-magnifying-glass-plus"></i></button>
+        <button onClick={e=>{stop(e);dismissPopups();zoomTo(scale*1.25);}} title="ขยาย (+)" style={bar}><i className="fa-solid fa-magnifying-glass-plus"></i></button>
         <div style={{width:'1px',height:'24px',background:'rgba(255,255,255,0.15)'}}/>
         <div style={{position:'relative'}}>
-          <button onClick={e=>{stop(e);setZoomMenu(v=>!v);}} title="เลือกขนาด" style={{...bar,width:'auto',padding:'0 12px',fontSize:'13px',fontWeight:700,gap:'6px'}}>{pct}% <i className="fa-solid fa-chevron-down" style={{fontSize:'9px'}}></i></button>
+          <button onClick={e=>{stop(e);toggleMenu('zoom');}} title="เลือกขนาด" style={{...bar,width:'auto',padding:'0 12px',fontSize:'13px',fontWeight:700,gap:'6px'}}>{pct}% <i className="fa-solid fa-chevron-down" style={{fontSize:'9px'}}></i></button>
           {zoomMenu && (
             <div style={{position:'absolute',bottom:'48px',right:'0',background:'rgba(17,24,39,0.98)',borderRadius:'10px',padding:'6px',boxShadow:'0 10px 30px rgba(0,0,0,0.5)',display:'flex',flexDirection:'column',minWidth:'92px'}}>
-              {[800,400,200,100,75,50,25,10].map(p => (
-                <button key={p} onClick={e=>{stop(e);zoomTo(p/100);setZoomMenu(false);}}
+              {[4000,2000,1000,400,200,100,50,25,10].map(p => (
+                <button key={p} onClick={e=>{stop(e);zoomToPct(p);setZoomMenu(false);}}
                   style={{background:pct===p?'rgba(13,148,136,0.6)':'transparent',color:'#fff',border:'none',padding:'7px 12px',borderRadius:'6px',cursor:'pointer',fontSize:'13px',textAlign:'center'}}>{p}%</button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div style={{width:'1px',height:'24px',background:'rgba(255,255,255,0.15)'}}/>
+        {/* โหมดลบรอยหยัก (เนิร์ด) */}
+        <div style={{position:'relative'}}>
+          <button onClick={e=>{stop(e);toggleMenu('render');}} title={'การแสดงผลตอนซูม: '+curRender.label+' — '+curRender.desc} style={{...bar, background: imgRendering!=='auto'?'rgba(13,148,136,0.55)':'rgba(255,255,255,0.12)'}}><i className={'fa-solid '+curRender.icon}></i></button>
+          {renderMenu && (
+            <div style={{position:'absolute',bottom:'48px',right:'0',background:'rgba(17,24,39,0.98)',borderRadius:'10px',padding:'6px',boxShadow:'0 10px 30px rgba(0,0,0,0.5)',display:'flex',flexDirection:'column',minWidth:'160px'}}>
+              <p style={{fontSize:'10px',color:'#94a3b8',margin:'4px 8px 6px',textTransform:'uppercase',letterSpacing:'0.5px'}}>โหมดลบรอยหยัก</p>
+              {RENDER_MODES.map(m=>(
+                <button key={m.v} onClick={e=>{stop(e);setImgRendering(m.v);setRenderMenu(false);}} title={m.desc}
+                  style={{background:imgRendering===m.v?'rgba(13,148,136,0.6)':'transparent',color:'#fff',border:'none',padding:'8px 12px',borderRadius:'6px',cursor:'pointer',fontSize:'13px',textAlign:'left',display:'flex',alignItems:'center',gap:'9px'}}>
+                  <i className={'fa-solid '+m.icon} style={{width:'15px',color:'#5eead4'}}></i>{m.label}
+                </button>
               ))}
             </div>
           )}
