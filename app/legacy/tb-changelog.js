@@ -23,6 +23,87 @@ window.TB_CHANGELOG = [
     description: "ระบบ login จริง + Audit Log ครบวงจร + Admin Approval + ดีไซน์ใหม่ทั้งหมด",
     versions: [
       {
+        version: "0.7.19.2",
+        date: "4 มิ.ย. 2569",
+        commit: "pending",
+        commitFull: "pending",
+        title: "Polish ระบบรูปภาพรอบใหญ่ — HEIC ปลอดภัย + ตัวดูรูป + เปลี่ยนหมวดย่อจริง + Realtime + ลบทันที",
+        changes: [
+          { tag: "feature", text: "HEIC/HEIF อัปโหลดได้แล้ว (เปลี่ยน heic2any → heic-to/csp ที่ไม่ใช้ eval) — ใช้แค่ wasm-unsafe-eval · CSP ยังเข้ม ไม่ต้องเปิด unsafe-eval" },
+          { tag: "feature", text: "เปลี่ยนหมวดรูปแล้วย่อไฟล์จริง — CXR→Lab โหลดรูปเดิม → ย่อเป็น 2K → อัปทับ → ลบไฟล์ใหญ่ทิ้ง (Lab→CXR ขยายคืนไม่ได้ตามธรรมชาติ)" },
+          { tag: "feature", text: "เมนู 3 จุด (⋮) ในตัวดูรูป — ลบ / แก้หมวด-คำอธิบาย (ย้ายออกจากทัมเนล กันลบพลาด ต้องเปิดรูปก่อน)" },
+          { tag: "feature", text: "Minimap มุมขวาบน บอกตำแหน่งที่ซูม + ซูมลึกถึงพิกเซล (เมนูสุด 4000%) + ปุ่มพอดีจอ / ขนาดจริง 1:1" },
+          { tag: "feature", text: "บอก \"อัปโหลดโดย <ชื่อ>\" + อุปกรณ์ที่อัป (iOS/Android/Windows + เบราว์เซอร์) + ขนาดภาพต้นฉบับ ในข้อมูลรูป" },
+          { tag: "feature", text: "ตัวกรองตามคนอัปโหลด + ช่วงวันที่ (ตั้งแต่–ถึง) + เรียง (วันที่/ขนาด) ทั้งแท็บผู้ป่วยและคลังรูป" },
+          { tag: "feature", text: "Realtime ข้ามผู้ใช้ — อัป/ลบ/แก้รูป เห็นสดทุกเครื่องทันที (อัปเดตจาก payload ตรงๆ ไม่โหลดทั้งหน้า)" },
+          { tag: "feature", text: "คำอธิบายรูป — คลิกพิมพ์ได้เลยในข้อมูลรูป (inline แบบ Google Photos ไม่มีปุ่มปากกา)" },
+          { tag: "ui", text: "ลบรูปแบบ optimistic — กดยืนยันปุ๊บ หายปั๊บ + รูปอื่นเลื่อนนุ่มๆ มาแทน (FLIP animation) ไม่ขึ้น skeleton (ลบจริงทำเบื้องหลัง) · soft-delete = UPDATE event จัดการเป็นลบ" },
+          { tag: "ui", text: "พรีวิวก่อนอัปเด้งทันที + แถบถอดรหัสในป๊อปอัป (HEIC/TIFF ไม่ค้างให้งง) · ปุ่ม ⋮/info/ปิด + แถบล่าง พื้นหลังเข้ม+hover เทล (เห็นชัดบนรูปขาว)" },
+          { tag: "ui", text: "ตัวดูรูป: ซูมยึดจุดเมาส์ + เคอร์เซอร์มือ (เปิด→กำตอนลาก ขนาดเท่ากัน) · เปิดข้อมูลรูปแล้วรูปเลื่อนซ้ายไม่ถูกบัง · เมนูควบคุมไม่ทับกัน" },
+          { tag: "ui", text: "แกลเลอรี Google Photos (justified) คงสัดส่วนจริง · cache localStorage เปิดซ้ำ/รีเฟรชไม่โหลดทัมเนลใหม่" },
+          { tag: "backend", text: "รูปทั่วไปบีบ 87% + สูงสุด 2560px (2K) · CXR 4096/92% · อัปได้สูงสุด 200MB · เก็บ orig_width/height + quality + device + uploader" },
+          { tag: "backend", text: "API: PATCH รองรับย่อขนาด (เปลี่ยนคีย์+มิติ+ลบไฟล์เก่า) · list/all join ชื่อคนอัป · CSP เพิ่ม worker-src blob + connect blob (heic-to)" },
+          { tag: "text", text: "เปลี่ยนคำ \"อัป\" → \"อัปโหลด\" ทั้งระบบ (ทางการขึ้น)" },
+        ],
+        body: `🎯 เป้าหมาย
+Polish ระบบรูปภาพผู้ป่วยตาม feedback หลายรอบ — แก้ HEIC ให้อัปได้แบบปลอดภัย + ทำตัวดูรูปให้สมบูรณ์ + เปลี่ยนหมวดย่อไฟล์จริง + Realtime ข้ามผู้ใช้ + ลบทันทีไม่หน่วง
+
+═══════════════════════════════════════════════════════════════════════════
+🆕 HEIC/HEIF อัปได้แบบปลอดภัย (เปลี่ยน decoder)
+═══════════════════════════════════════════════════════════════════════════
+- ปัญหาเดิม: heic2any ใช้ new Function/eval → CSP บล็อก (ต้องเปิด unsafe-eval = เสี่ยง)
+- แก้: เปลี่ยนเป็น heic-to/csp (ค้น web เจอ — build ที่เลี่ยง eval) → ใช้แค่ wasm-unsafe-eval
+- ผล: HEIC อัปได้ + CSP ยังเข้ม (ไม่เปิด unsafe-eval)
+- package.json: ถอด heic2any + ใส่ heic-to · next.config: + worker-src blob, connect blob:
+- (lib/heic-to import dynamic ใน decodeImageToDataURL — tb-monolith.jsx)
+
+═══════════════════════════════════════════════════════════════════════════
+🗜 เปลี่ยนหมวด = ย่อไฟล์จริง
+═══════════════════════════════════════════════════════════════════════════
+- doEdit (tb-monolith.jsx): ถ้าหมวดใหม่ maxEdge < ขนาดปัจจุบัน → โหลดรูปเดิม (signed url) → compressToWebp ตาม maxEdge ใหม่ → อัป key ใหม่ → PATCH (storageKey/thumbKey/width/height/size/quality + oldKey) → ลบไฟล์เก่า
+- API PATCH /api/patient/images/[id]/route.ts: รับ storageKey/thumbKey/มิติ/quality + ลบ R2 คีย์เก่า
+- ไม่เก็บต้นฉบับ (ประหยัดที่) · Lab→CXR ไม่ขยาย (ขีดเดิม) · CXR 4096/92% · อื่น 2560/87%
+
+═══════════════════════════════════════════════════════════════════════════
+🔴 Realtime + ลบทันที (optimistic) + FLIP
+═══════════════════════════════════════════════════════════════════════════
+- subscribe tb_patient_images (per patient + all) · UPDATE+deleted_at = soft-delete → เอาออก · UPDATE อื่น → merge field จาก payload (ไม่ refetch ไม่ revert) · INSERT → load เงียบ
+- ลบ optimistic: setImages กรองออกทันที + ปิดป๊อปอัป + ลบจริง fire-and-forget (fail → กู้กลับ)
+- JustifiedGallery: FLIP animation (data-flip-id + useLayoutEffect) → รูปเลื่อนนุ่มไปตำแหน่งใหม่
+- load รับ silent → refresh ไม่ขึ้น skeleton
+
+═══════════════════════════════════════════════════════════════════════════
+🔭 ตัวดูรูป (AvatarLightbox)
+═══════════════════════════════════════════════════════════════════════════
+- เมนู 3 จุด (⋮ menuActions) = ลบ/แก้หมวด · ปุ่มบนพื้นหลังเข้ม + .tb-lb-btn:hover เทล
+- minimap มุมขวา (data-flip + rect) · ซูม clamp 10%–สูง (เมนู 4000%) · ปุ่ม Fit + 1:1
+- เคอร์เซอร์มือ SVG (เปิด handCur / กำ fistCur ขนาดเท่ากัน ขอบดำเห็นบนพื้นขาว)
+- เปิด info → ดันรูปไปซ้าย (availW/cx) · เมนูควบคุมไม่ทับ (toggleMenu/dismissPopups)
+- คำอธิบาย inline (noteEditable + onSaveNote คลิกพิมพ์ได้เลย)
+
+═══════════════════════════════════════════════════════════════════════════
+🖼 อัป/แกลเลอรี/คลังรูป
+═══════════════════════════════════════════════════════════════════════════
+- พรีวิวเด้งทันที (decoding state + แถบถอดรหัส) · บีบ 87%/2560 (อื่น) · ≤200MB · "อัปโหลด" ทุกคำ
+- ตัวกรอง: คนอัปโหลด + ช่วงวันที่ + เรียง (วันที่/ขนาด) · cache localStorage (loadCache/saveCache/invalidateImgCaches)
+- ข้อมูลรูป: ขนาดต้นฉบับ + อัปโหลดโดย + อุปกรณ์ (detectDevice OS+browser+รุ่น)
+
+═══════════════════════════════════════════════════════════════════════════
+📁 ไฟล์ที่แตะ
+═══════════════════════════════════════════════════════════════════════════
+- app/legacy/tb-monolith.jsx (decodeImageToDataURL→heic-to · doEdit ย่อจริง · doDelete optimistic · realtime payload-merge · JustifiedGallery FLIP · AvatarLightbox: minimap/cursor/hover/3จุด/info-shift/inline note · cache localStorage · ตัวกรอง · detectDevice · patientImgInfo)
+- app/api/patient/images/[id]/route.ts (PATCH ย่อขนาด+ลบเก่า) · confirm (origW/H+quality+device) · route.ts + all (uploader join)
+- app/globals.css (.tb-lb-btn hover) · next.config.js (worker-src/connect blob) · package.json (heic-to)
+- scripts: add-patient-images-origdim.sql + -quality.sql + -realtime.sql (รันผ่าน MCP แล้ว)
+- app/login/page.tsx (version)
+
+═══════════════════════════════════════════════════════════════════════════
+📝 Version / Roadmap
+═══════════════════════════════════════════════════════════════════════════
+- APP_VERSION 0.7.19.1 → 0.7.19.2 · BUILD_DATE 4 มิ.ย. 2569
+- 🔭 ถัดไป (Gemini suggest): ลบไฟล์รูปใน R2 ตอนลบผู้ป่วย (กันไฟล์กำพร้า) · ถังขยะรูป · empty state สวยขึ้น · กันลาก/คลิกขวาที่ทัมเนล · "ขอลบ" สำหรับ user ทั่วไป · favorite · อนิเมชันระเบิด`,
+      },
+      {
         version: "0.7.19.1",
         date: "4 มิ.ย. 2569",
         commit: "bf162f6",

@@ -30,10 +30,19 @@ export async function GET(req: NextRequest) {
       : { data: [] as any[] }
     const pmap: Record<string, any> = Object.fromEntries((pts || []).map((p: any) => [p.id, p]))
 
+    // join ชื่อคนอัป
+    const uids = [...new Set((data || []).map((d: any) => d.uploaded_by).filter(Boolean))]
+    const { data: ups } = uids.length
+      ? await admin.from('profiles').select('id, first_name, last_name, username').in('id', uids)
+      : { data: [] as any[] }
+    const umap: Record<string, any> = Object.fromEntries((ups || []).map((p: any) => [p.id, p]))
+    const upName = (id: string) => { const p = umap[id]; if (!p) return ''; const n = [p.first_name, p.last_name].filter(Boolean).join(' '); return n || p.username || '' }
+
     let images = await Promise.all((data || []).map(async (im: any) => ({
       ...im,
       patient_name: pmap[im.patient_id]?.name || '—',
       patient_hn: pmap[im.patient_id]?.hn || '',
+      uploader_name: upName(im.uploaded_by),
       url: await presignGet(im.storage_key, 7200, PATIENT_BUCKET),
       thumbUrl: await presignGet(im.thumb_key || im.storage_key, 7200, PATIENT_BUCKET),
     })))

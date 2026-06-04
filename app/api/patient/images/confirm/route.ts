@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     if (!isApproved) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
     const b = await req.json().catch(() => ({} as any))
-    const { patientId, key, thumbKey, type, title, note, size, width, height, mime, origSize, origMime, device } = b
+    const { patientId, key, thumbKey, type, title, note, size, width, height, mime, origSize, origMime, origWidth, origHeight, quality, device } = b
     if (!patientId || !key) return NextResponse.json({ error: 'patientId + key required' }, { status: 400 })
     const { data, error } = await admin
       .from('tb_patient_images')
@@ -25,6 +25,9 @@ export async function POST(req: NextRequest) {
         height: height || null,
         orig_size_bytes: origSize || null,
         orig_mime: origMime || null,
+        orig_width: origWidth || null,
+        orig_height: origHeight || null,
+        quality: quality || null,
         device: device || null,
         title: title || null,
         note: note || null,

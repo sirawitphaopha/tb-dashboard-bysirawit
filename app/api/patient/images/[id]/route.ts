@@ -57,10 +57,25 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (typeof b.type === 'string' && ALLOWED_TYPES.includes(b.type)) upd.type = b.type
     if ('note' in b) upd.note = b.note || null
     if ('title' in b) upd.title = b.title || null
+    // ย่อขนาดใหม่ตอนเปลี่ยนหมวด (client ส่งไฟล์ย่อแล้ว + คีย์ใหม่) → อัปเดตคีย์/มิติ + ลบไฟล์เก่า
+    if (b.storageKey) {
+      upd.storage_key = b.storageKey
+      upd.thumb_key = b.thumbKey || null
+      if (b.width) upd.width = b.width
+      if (b.height) upd.height = b.height
+      if (b.size) upd.size_bytes = b.size
+      if (b.quality) upd.quality = b.quality
+    }
     if (!Object.keys(upd).length) return NextResponse.json({ error: 'no changes' }, { status: 400 })
 
     const { error } = await admin.from('tb_patient_images').update(upd).eq('id', id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    // ลบไฟล์เก่าใน R2 (กรณีย่อขนาดใหม่ = เปลี่ยนคีย์)
+    if (b.storageKey && b.oldKey && b.oldKey !== b.storageKey) {
+      try { await r2Delete(b.oldKey, PATIENT_BUCKET) } catch {}
+      if (b.oldThumbKey && b.oldThumbKey !== b.thumbKey) { try { await r2Delete(b.oldThumbKey, PATIENT_BUCKET) } catch {} }
+    }
     return NextResponse.json({ success: true })
   } catch (e: any) {
     return NextResponse.json({ error: e.message || 'error' }, { status: 500 })

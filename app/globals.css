@@ -251,6 +251,10 @@ body {
 .tb-img-zoomicon { opacity: 0; transition: opacity 0.2s ease; }
 .tb-img-thumb:hover .tb-img-zoomicon { opacity: 1; }
 
+/* ปุ่มควบคุมในตัวดูรูป — hover เปลี่ยนเป็นเทล */
+.tb-lb-btn { transition: background 0.15s ease, color 0.15s ease; }
+.tb-lb-btn:hover { background: rgba(13,148,136,0.8) !important; color: #fff !important; }
+
 /* โครงร่าง (skeleton) ตอนโหลดรูป — โทนเทลเหมือนตอนเปิดเว็บ (สื่อว่ามีรูปกำลังมา) */
 .tb-skel {
   background: linear-gradient(100deg, #e6fffb 30%, #99f6e4 50%, #e6fffb 70%);
