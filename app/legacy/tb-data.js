@@ -829,6 +829,15 @@ window.restorePatient = async id => {
 window.hardDeletePatient = async id => {
   // ดึง requestedBy ก่อนลบ (เพื่อส่งเมลแจ้ง user)
   const { data: req } = await window._sb.from('tb_delete_requests').select('requested_by').eq('patient_id', id).maybeSingle();
+  // ลบรูปผู้ป่วยออกจาก R2 + DB ก่อน (กันไฟล์กำพร้าค้างใน R2) — ลบฝั่ง client ตรงไม่ได้ ต้องผ่าน API server
+  // ถ้า purge ล้มเหลว ก็ปล่อยให้ลบผู้ป่วยต่อ (ไม่บล็อกการลบ · ไฟล์ที่ค้างกู้ทีหลังได้)
+  try {
+    await fetch('/api/patient/images/purge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ patientId: id }),
+    });
+  } catch (e) { console.warn('Purge patient images failed:', e); }
   // ลบ delete_requests ก่อน (FK constraint)
   await window._sb.from('tb_delete_requests').delete().eq('patient_id', id);
   // ลบผู้ป่วย

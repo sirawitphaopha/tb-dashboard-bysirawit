@@ -51,7 +51,7 @@ const securityHeaders = [
 ];
 
 const nextConfig = {
-  allowedDevOrigins: ['*.vusercontent.net'],
+  allowedDevOrigins: ['*.vusercontent.net', '192.168.34.126'],
   async headers() {
     return [
       {

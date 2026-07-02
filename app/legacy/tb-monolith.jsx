@@ -2474,7 +2474,15 @@ function PatientImagesTab({ patient, currentUser, locked }) {
           {[0,1,2,3,4,5].map(i=><div key={i} className="tb-skel" style={{width:(150+(i%3)*40)+'px',height:'170px',borderRadius:'10px'}}/>)}
         </div>
       )}
-      {!loading && shown.length===0 && <p style={{color:'#9ca3af',fontSize:'13px',textAlign:'center',padding:'30px'}}>ยังไม่มีรูปในหมวดนี้</p>}
+      {!loading && shown.length===0 && (
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'48px 20px'}}>
+          <div style={{width:'72px',height:'72px',borderRadius:'50%',background:'#f3f4f6',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'14px'}}>
+            <i className="fa-solid fa-images" style={{fontSize:'28px',color:'#cbd5e1'}}></i>
+          </div>
+          <p style={{fontSize:'14px',fontWeight:700,color:'#6b7280',margin:'0 0 4px'}}>ยังไม่มีรูปในหมวดนี้</p>
+          {!locked && <p style={{fontSize:'12px',color:'#9ca3af',margin:0,textAlign:'center'}}>กดปุ่มอัปโหลดด้านบน เพื่อเพิ่มรูป CXR ผล Lab หรือเอกสาร</p>}
+        </div>
+      )}
 
       {/* แกลเลอรี — Google Photos (justified rows คงสัดส่วนจริง) */}
       {!loading && shown.length>0 && (
@@ -2487,7 +2495,7 @@ function PatientImagesTab({ patient, currentUser, locked }) {
             <div className="tb-img-thumb" title={im.title || im.note || ''}
               onClick={(e)=>selectableForCompare?toggleSel(im):openImage(im, e.currentTarget.getBoundingClientRect())}
               style={{position:'relative',width:'100%',height:'100%',background:'#0b0f19',borderRadius:'10px',overflow:'hidden',cursor:selectableForCompare?'pointer':'zoom-in',border:'1px solid #e5e7eb',outline:selIdx>=0?'3px solid #0d9488':'none',outlineOffset:'-3px'}}>
-              <img src={im.thumbUrl || im.url} alt="" loading="lazy" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+              <img src={im.thumbUrl || im.url} alt="" loading="lazy" draggable={false} onContextMenu={e=>e.preventDefault()} style={{width:'100%',height:'100%',objectFit:'cover'}}/>
               {!selectableForCompare && <div className="tb-img-zoomicon" style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.22)',pointerEvents:'none'}}><i className="fa-solid fa-magnifying-glass-plus" style={{color:'#fff',fontSize:'18px',textShadow:'0 1px 5px rgba(0,0,0,0.6)'}}></i></div>}
               {selectableForCompare && <div style={{position:'absolute',top:'6px',left:'6px',width:'22px',height:'22px',borderRadius:'50%',background:selIdx>=0?'#0d9488':'rgba(255,255,255,0.85)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'11px',fontWeight:800,border:'2px solid #fff'}}>{selIdx>=0?selIdx+1:''}</div>}
               <span style={{position:'absolute',top:'6px',right:'6px',fontSize:'10px',fontWeight:800,padding:'2px 7px',borderRadius:'999px',background:meta.bg,color:meta.fg}}>{meta.label}</span>
@@ -2735,7 +2743,7 @@ function ImageLibraryPage({ currentUser }) {
       <div className="tb-img-thumb" title={(im.patient_name||'') + (im.title?(' · '+im.title):'')}
         onClick={(e)=>openImage(im, e.currentTarget.getBoundingClientRect())}
         style={{position:'relative',width:'100%',height:'100%',background:'#0b0f19',borderRadius:'10px',overflow:'hidden',cursor:'zoom-in',border:'1px solid #e5e7eb'}}>
-        <img src={im.thumbUrl || im.url} alt="" loading="lazy" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+        <img src={im.thumbUrl || im.url} alt="" loading="lazy" draggable={false} onContextMenu={e=>e.preventDefault()} style={{width:'100%',height:'100%',objectFit:'cover'}}/>
         <div className="tb-img-zoomicon" style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.22)',pointerEvents:'none'}}><i className="fa-solid fa-magnifying-glass-plus" style={{color:'#fff',fontSize:'18px',textShadow:'0 1px 5px rgba(0,0,0,0.6)'}}></i></div>
         <span style={{position:'absolute',top:'5px',right:'5px',fontSize:'9px',fontWeight:800,padding:'2px 6px',borderRadius:'999px',background:meta.bg,color:meta.fg}}>{meta.label}</span>
         <span style={{position:'absolute',bottom:0,left:0,right:0,padding:'10px 6px 4px',background:'linear-gradient(transparent,rgba(0,0,0,0.6))',color:'#fff',fontSize:'9px'}}>{new Date(im.uploaded_at).toLocaleDateString('th-TH',{day:'numeric',month:'short'})}</span>
@@ -2774,7 +2782,15 @@ function ImageLibraryPage({ currentUser }) {
         </div>
       ))}
 
-      {!loading && flat.length===0 && <p style={{color:'#9ca3af',textAlign:'center',padding:'40px'}}>ยังไม่มีรูปในระบบ</p>}
+      {!loading && flat.length===0 && (
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'60px 20px'}}>
+          <div style={{width:'80px',height:'80px',borderRadius:'50%',background:'#f3f4f6',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'16px'}}>
+            <i className="fa-solid fa-images" style={{fontSize:'32px',color:'#cbd5e1'}}></i>
+          </div>
+          <p style={{fontSize:'15px',fontWeight:700,color:'#6b7280',margin:'0 0 4px'}}>{(q||filter!=='all'||dateFrom||dateTo||uploaderFilter!=='all')?'ไม่พบรูปที่ตรงกับตัวกรอง':'ยังไม่มีรูปในระบบ'}</p>
+          <p style={{fontSize:'12px',color:'#9ca3af',margin:0,textAlign:'center'}}>{(q||filter!=='all'||dateFrom||dateTo||uploaderFilter!=='all')?'ลองล้างตัวกรองหรือเปลี่ยนคำค้นหา':'อัปโหลดรูปได้จากแท็บ "รูปภาพ" ในหน้าผู้ป่วย'}</p>
+        </div>
+      )}
       {!loading && Object.entries(groups).map(([pid,g])=>(
         <div key={pid} style={{marginBottom:'22px'}}>
           <p style={{fontWeight:700,fontSize:'14px',color:'#1f2937',margin:'0 0 8px',borderLeft:'3px solid #0d9488',paddingLeft:'8px'}}>{g.name}{g.hn?<span style={{color:'#9ca3af',fontWeight:400,fontSize:'12px'}}> · HN {g.hn}</span>:null} <span style={{color:'#9ca3af',fontWeight:400,fontSize:'12px'}}>({g.items.length})</span></p>
@@ -8360,8 +8376,8 @@ function RequestEditModal({ field, currentValue, onClose }) {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.19.2';
-const BUILD_DATE = '4 มิ.ย. 2569';
+const APP_VERSION = '0.7.19.3';
+const BUILD_DATE = '2 ก.ค. 2569';
 function AboutModal({ onClose, onShowChangelog }) {
   const [closing, setClosing] = React.useState(false);
   const handleClose = () => { if (closing) return; setClosing(true); setTimeout(onClose, 580); };
