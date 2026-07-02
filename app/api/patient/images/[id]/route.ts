@@ -18,16 +18,22 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     if (!im || im.deleted_at) return NextResponse.json({ error: 'not found' }, { status: 404 })
     if (im.uploaded_by !== user.id && !isAdmin) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
 
-    // soft delete + audit
+    const body = await req.json().catch(() => ({} as any))
+    const reason = (body?.reason ? String(body.reason).trim().slice(0, 300) : '') || null
+
+    // ชื่อคนลบ ณ ตอนลบ (โชว์ในถังขยะ)
+    let deleterName: string | null = null
+    try {
+      const { data: me } = await admin.from('profiles').select('first_name, last_name, username').eq('id', user.id).maybeSingle()
+      if (me) deleterName = [me.first_name, me.last_name].filter(Boolean).join(' ') || me.username || null
+    } catch {}
+
+    // soft delete → ย้ายไปถังขยะ (เก็บไฟล์ R2 ไว้ก่อน เพื่อกู้คืนได้ · ลบ R2 จริงตอน "ลบถาวร"/auto-purge 60 วัน)
     const { error } = await admin
       .from('tb_patient_images')
-      .update({ deleted_at: new Date().toISOString(), deleted_by: user.id })
+      .update({ deleted_at: new Date().toISOString(), deleted_by: user.id, deleter_name: deleterName, delete_reason: reason })
       .eq('id', id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-    // ลบไฟล์จริงใน R2 ทั้งรูปเต็ม + รูปย่อ (ถ้า fail ก็ปล่อย — DB ล้างแล้ว)
-    try { await r2Delete(im.storage_key, PATIENT_BUCKET) } catch {}
-    if (im.thumb_key) { try { await r2Delete(im.thumb_key, PATIENT_BUCKET) } catch {} }
 
     return NextResponse.json({ success: true })
   } catch (e: any) {

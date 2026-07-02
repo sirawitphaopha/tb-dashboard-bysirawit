@@ -12,13 +12,15 @@ export async function GET(req: NextRequest) {
 
     const type = req.nextUrl.searchParams.get('type')
     const q = (req.nextUrl.searchParams.get('q') || '').trim().toLowerCase()
+    const trash = req.nextUrl.searchParams.get('trash') === '1'   // ถังขยะรวม = รูปที่ลบแล้ว
 
     let query = admin
       .from('tb_patient_images')
       .select('*')
-      .is('deleted_at', null)
-      .order('uploaded_at', { ascending: false })
       .limit(500)
+    query = trash
+      ? query.not('deleted_at', 'is', null).order('deleted_at', { ascending: false })
+      : query.is('deleted_at', null).order('uploaded_at', { ascending: false })
     if (type && type !== 'all') query = query.eq('type', type)
     const { data, error } = await query
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })

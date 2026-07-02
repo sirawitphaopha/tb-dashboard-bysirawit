@@ -10,13 +10,12 @@ export async function GET(req: NextRequest) {
     if (!isApproved) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
     const patientId = req.nextUrl.searchParams.get('patientId')
     if (!patientId) return NextResponse.json({ error: 'patientId required' }, { status: 400 })
+    const trash = req.nextUrl.searchParams.get('trash') === '1'   // โหมดถังขยะ = เอารูปที่ลบแล้ว (deleted_at != null)
 
-    const { data, error } = await admin
-      .from('tb_patient_images')
-      .select('*')
-      .eq('patient_id', patientId)
-      .is('deleted_at', null)
-      .order('uploaded_at', { ascending: false })
+    const base = admin.from('tb_patient_images').select('*').eq('patient_id', patientId)
+    const { data, error } = trash
+      ? await base.not('deleted_at', 'is', null).order('deleted_at', { ascending: false })
+      : await base.is('deleted_at', null).order('uploaded_at', { ascending: false })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
     // join ชื่อคนอัป
