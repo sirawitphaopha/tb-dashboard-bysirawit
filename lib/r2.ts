@@ -43,3 +43,24 @@ export async function presignGet(key: string, expiresSec = 3600, bucket: string 
 export async function r2Delete(key: string, bucket: string = AVATAR_BUCKET): Promise<Response> {
   return client().fetch(endpoint(key, bucket), { method: 'DELETE' })
 }
+
+// นับขนาดรวมของ bucket จริง (ListObjectsV2 + รวม <Size> · แม่นยำ) — ไล่ทีละ 1000 ไฟล์จนครบ
+export async function r2BucketUsage(bucket: string): Promise<{ bytes: number, count: number }> {
+  const c = client()
+  let total = 0, count = 0
+  let token: string | undefined
+  do {
+    const url = new URL(`https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${bucket}`)
+    url.searchParams.set('list-type', '2')
+    url.searchParams.set('max-keys', '1000')
+    if (token) url.searchParams.set('continuation-token', token)
+    const res = await c.fetch(url.toString(), { method: 'GET' })
+    if (!res.ok) throw new Error('R2 list failed: ' + res.status)
+    const xml = await res.text()
+    for (const m of xml.matchAll(/<Size>(\d+)<\/Size>/g)) { total += parseInt(m[1], 10); count++ }
+    const trunc = /<IsTruncated>\s*true\s*<\/IsTruncated>/i.test(xml)
+    const nt = xml.match(/<NextContinuationToken>([^<]+)<\/NextContinuationToken>/)
+    token = (trunc && nt) ? nt[1] : undefined
+  } while (token)
+  return { bytes: total, count }
+}

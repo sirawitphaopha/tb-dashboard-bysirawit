@@ -2247,9 +2247,9 @@ function invalidateImgCaches(){ try { localStorage.removeItem('tb_libimg'); for 
 // ── แท็บรูปภาพในโปรไฟล์ผู้ป่วย (CXR/Lab/Document) ───────────────────────────
 // ── ระบบมุมมองรูป (การ์ด/แถว + ขนาด เล็ก/กลาง/ใหญ่) ใช้ร่วมกันทุกคลังรูป ──────
 const IMG_VIEW_SIZES = [
-  { label:'เล็ก', card:120, thumb:44 },
-  { label:'กลาง', card:168, thumb:56 },
-  { label:'ใหญ่', card:230, thumb:76 },
+  { label:'เล็ก', card:120, thumb:44, jh:120 },   // jh = ความสูงแกลเลอรี justified (โหมดการ์ด)
+  { label:'กลาง', card:168, thumb:56, jh:170 },
+  { label:'ใหญ่', card:230, thumb:76, jh:240 },
 ];
 function ImgViewToolbar({ mode, setMode, size, setSize }) {
   const btn = (on) => ({width:'34px',height:'30px',border:'none',background:on?'#0d9488':'#fff',color:on?'#fff':'#6b7280',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'});
@@ -2271,6 +2271,7 @@ function ImageTrashPage({ currentUser, isAdmin }) {
   const [q, setQ]       = React.useState('');
   const [typeFilter, setTypeFilter] = React.useState('all');
   const [sortBy, setSortBy] = React.useState('expiry');   // expiry = ใกล้ลบถาวรก่อน
+  const [pSort, setPSort] = React.useState('name-asc');       // เรียงกลุ่มผู้ป่วย: name(ชื่อ) / hn
   const [mode, setMode] = React.useState('card');
   const [size, setSize] = React.useState(1);
   const [lightbox, setLightbox] = React.useState(null);
@@ -2319,6 +2320,13 @@ function ImageTrashPage({ currentUser, isAdmin }) {
     : new Date(b.deleted_at||0) - new Date(a.deleted_at||0));  // ลบล่าสุดก่อน
   const groups = {};
   sorted.forEach(im => { const k = im.patient_id; if (!groups[k]) groups[k] = { name: im.patient_name, hn: im.patient_hn, items: [] }; groups[k].items.push(im); });
+  const groupEntries = Object.entries(groups).sort((a,b)=>{
+    const [pf,pd] = pSort.split('-');
+    const r = pf==='hn'
+      ? String(a[1].hn||'').localeCompare(String(b[1].hn||''), undefined, {numeric:true})
+      : (a[1].name||'').localeCompare(b[1].name||'', 'th');
+    return pd==='desc' ? -r : r;
+  });
   const thumb = IMG_VIEW_SIZES[size].thumb;
 
   const actionsFor = (im, compact) => isAdmin ? (
@@ -2333,18 +2341,21 @@ function ImageTrashPage({ currentUser, isAdmin }) {
     const dl = daysLeft(im.deleted_at);
     const delWhen = im.deleted_at ? new Date(im.deleted_at).toLocaleString('th-TH',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '-';
     if (mode === 'row') {
-      const dim = (im.width && im.height) ? im.width+'×'+im.height : '';
-      const sz = im.size_bytes!=null ? (im.size_bytes<1048576 ? Math.round(im.size_bytes/1024)+' KB' : (im.size_bytes/1048576).toFixed(1)+' MB') : '';
+      const up = new Date(im.uploaded_at).toLocaleString('th-TH',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+      const dimF = (im.width && im.height) ? im.width+' × '+im.height+' px' : '—';
+      const qual = im.mime==='image/gif' ? 'GIF' : 'WebP '+(im.type==='cxr'?92:87)+'%';
       const col = (label, val, w) => <div style={{flexShrink:0,width:w}}><p style={{fontSize:'10px',color:'#9ca3af',margin:0}}>{label}</p><p style={{fontSize:'12px',color:'#374151',margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{val||'—'}</p></div>;
       return (
-        <div key={im.id} onClick={()=>setLightbox(im)} style={{display:'flex',alignItems:'center',gap:'12px',border:'1px solid #e5e7eb',borderRadius:'10px',padding:'7px 10px',background:'#fff',cursor:'zoom-in'}}>
+        <div key={im.id} onClick={()=>setLightbox(im)} style={{display:'flex',alignItems:'center',gap:'10px',border:'1px solid #e5e7eb',borderRadius:'10px',padding:'7px 10px',background:'#fff',cursor:'zoom-in'}}>
           <div style={{width:thumb+'px',height:thumb+'px',flexShrink:0,borderRadius:'8px',overflow:'hidden',background:'#0b0f19'}}><img src={im.thumbUrl||im.url} alt="" loading="lazy" draggable={false} onContextMenu={e=>e.preventDefault()} style={{width:'100%',height:'100%',objectFit:'cover',filter:'grayscale(0.35)'}}/></div>
-          <span style={{flexShrink:0,width:'54px',fontSize:'10px',fontWeight:800,padding:'2px 0',textAlign:'center',borderRadius:'999px',background:meta.bg,color:meta.fg}}>{meta.label}</span>
-          {col('ลบเมื่อ', delWhen, '132px')}
-          {col('โดย', im.deleter_name, '120px')}
-          <div style={{flex:1,minWidth:'90px'}}><p style={{fontSize:'10px',color:'#9ca3af',margin:0}}>เหตุผล</p><p style={{fontSize:'12px',color:'#374151',margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{im.delete_reason||'—'}</p></div>
-          {col('ขนาด', dim || sz, '96px')}
-          <div style={{flexShrink:0,width:'70px',textAlign:'center'}}><p style={{fontSize:'10px',color:'#9ca3af',margin:0}}>เหลือ</p><p style={{fontSize:'12px',fontWeight:700,color:dl<=7?'#dc2626':'#b45309',margin:0}}>{dl} วัน</p></div>
+          <span style={{flexShrink:0,width:'52px',fontSize:'10px',fontWeight:800,padding:'2px 0',textAlign:'center',borderRadius:'999px',background:meta.bg,color:meta.fg}}>{meta.label}</span>
+          {col('ลบเมื่อ', delWhen, '126px')}
+          {col('โดย', im.deleter_name, '92px')}
+          {col('อัปโหลด', up, '126px')}
+          {col('ขนาดภาพ', dimF, '106px')}
+          {col('คุณภาพ', qual, '80px')}
+          <div style={{flex:1,minWidth:'70px'}}><p style={{fontSize:'10px',color:'#9ca3af',margin:0}}>เหตุผล</p><p style={{fontSize:'12px',color:'#374151',margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{im.delete_reason||'—'}</p></div>
+          <div style={{flexShrink:0,width:'64px',textAlign:'center'}}><p style={{fontSize:'10px',color:'#9ca3af',margin:0}}>เหลือ</p><p style={{fontSize:'12px',fontWeight:700,color:dl<=7?'#dc2626':'#b45309',margin:0}}>{dl} วัน</p></div>
           <div onClick={e=>e.stopPropagation()} style={{flexShrink:0,width:'150px'}}>{actionsFor(im)}</div>
         </div>
       );
@@ -2389,6 +2400,12 @@ function ImageTrashPage({ currentUser, isAdmin }) {
           <option value="expiry">ใกล้ลบถาวรก่อน</option>
           <option value="recent">ลบล่าสุดก่อน</option>
         </select>
+        <select value={pSort} onChange={e=>setPSort(e.target.value)} title="เรียงผู้ป่วย" style={{padding:'5px 8px',borderRadius:'8px',border:'1px solid #e5e7eb',fontSize:'12px',color:'#6b7280',cursor:'pointer'}}>
+          <option value="name-asc">ชื่อ ก → ฮ</option>
+          <option value="name-desc">ชื่อ ฮ → ก</option>
+          <option value="hn-asc">HN น้อย → มาก</option>
+          <option value="hn-desc">HN มาก → น้อย</option>
+        </select>
         <div style={{marginLeft:'auto'}}><ImgViewToolbar mode={mode} setMode={setMode} size={size} setSize={setSize}/></div>
       </div>
 
@@ -2401,7 +2418,7 @@ function ImageTrashPage({ currentUser, isAdmin }) {
           <p style={{fontSize:'12px',color:'#9ca3af',margin:0}}>{(imgs.length>0)?'ลองล้างตัวกรองหรือเปลี่ยนคำค้นหา':'ยังไม่มีรูปที่ถูกลบ'}</p>
         </div>
       )}
-      {imgs!==null && sorted.length>0 && Object.entries(groups).map(([pid,g])=>(
+      {imgs!==null && sorted.length>0 && groupEntries.map(([pid,g])=>(
         <div key={pid} style={{marginBottom:'20px'}}>
           <p style={{fontWeight:700,fontSize:'13px',color:'#1f2937',margin:'0 0 8px',borderLeft:'3px solid #0d9488',paddingLeft:'8px'}}>{g.name}{g.hn?<span style={{color:'#9ca3af',fontWeight:400,fontSize:'12px'}}> · HN {g.hn}</span>:null} <span style={{color:'#9ca3af',fontWeight:400,fontSize:'12px'}}>({g.items.length})</span></p>
           {mode==='card'
@@ -2521,6 +2538,8 @@ function PatientImagesTab({ patient, currentUser, locked }) {
   const [compare, setCompare] = React.useState(null);
   const fileRef = React.useRef(null);
   const isAdmin = currentUser?.role === 'admin';
+  const [vMode, setVMode] = React.useState('card');   // มุมมองรูป: การ์ด/แถว
+  const [vSize, setVSize] = React.useState(1);         // ขนาด 0/1/2
 
   const load = React.useCallback(async (force, silent) => {
     const c = loadCache(LSKEY);
@@ -2714,11 +2733,12 @@ function PatientImagesTab({ patient, currentUser, locked }) {
         {(dateFrom||dateTo) && <button onClick={()=>{setDateFrom('');setDateTo('');}} title="ล้างวันที่" style={{fontSize:'12px',color:'#0d9488',background:'none',border:'none',cursor:'pointer'}}><i className="fa-solid fa-xmark"></i></button>}
         {uploaders.length>1 && <select value={uploaderFilter} onChange={e=>setUploaderFilter(e.target.value)} title="กรองตามคนอัปโหลด" style={{padding:'4px 8px',borderRadius:'8px',border:'1px solid #e5e7eb',fontSize:'12px',color:'#6b7280',cursor:'pointer',maxWidth:'140px'}}><option value="all">คนอัปโหลด: ทุกคน</option>{uploaders.map(u=><option key={u} value={u}>{u}</option>)}</select>}
         {cxrCount>=2 && (
-          <button onClick={()=>{setCompareMode(m=>!m);setCompareSel([]);}} style={{marginLeft:'auto',padding:'4px 12px',borderRadius:'999px',fontSize:'12px',fontWeight:700,border:'1px solid '+(compareMode?'#d97706':'#e5e7eb'),background:compareMode?'#fef3c7':'#fff',color:compareMode?'#b45309':'#6b7280',cursor:'pointer'}}>
+          <button onClick={()=>{setCompareMode(m=>!m);setCompareSel([]);}} style={{marginLeft:'auto',padding:'4px 12px',borderRadius:'999px',fontSize:'12px',fontWeight:700,border:'1px solid '+(compareMode?'#d97706':'#e5e7eb'),background:compareMode?'#fef3c7':'#fff',color:compareMode?'#b45309':'#6b7280',cursor:'pointer',order:2}}>
             <i className="fa-solid fa-clone" style={{marginRight:'5px'}}></i>เทียบ CXR
           </button>
         )}
-        {compareMode && <button onClick={openCompare} disabled={compareSel.length!==2} style={{padding:'4px 12px',borderRadius:'999px',fontSize:'12px',fontWeight:700,border:'none',background:compareSel.length===2?'#0d9488':'#e5e7eb',color:'#fff',cursor:compareSel.length===2?'pointer':'not-allowed'}}>เปิดเทียบ ({compareSel.length}/2)</button>}
+        {compareMode && <button onClick={openCompare} disabled={compareSel.length!==2} style={{padding:'4px 12px',borderRadius:'999px',fontSize:'12px',fontWeight:700,border:'none',background:compareSel.length===2?'#0d9488':'#e5e7eb',color:'#fff',cursor:compareSel.length===2?'pointer':'not-allowed',order:3}}>เปิดเทียบ ({compareSel.length}/2)</button>}
+        <div style={{marginLeft:cxrCount>=2?'8px':'auto',order:4}}><ImgViewToolbar mode={vMode} setMode={setVMode} size={vSize} setSize={setVSize}/></div>
       </div>
 
       {err && <p style={{fontSize:'12px',color:'#dc2626',margin:'0 0 10px'}}><i className="fa-solid fa-circle-exclamation" style={{marginRight:'5px'}}></i>{err}</p>}
@@ -2738,8 +2758,8 @@ function PatientImagesTab({ patient, currentUser, locked }) {
       )}
 
       {/* แกลเลอรี — Google Photos (justified rows คงสัดส่วนจริง) */}
-      {!loading && shown.length>0 && (
-        <JustifiedGallery items={shown} targetHeight={170} gap={8} renderItem={(im)=>{
+      {!loading && shown.length>0 && vMode==='card' && (
+        <JustifiedGallery items={shown} targetHeight={IMG_VIEW_SIZES[vSize].jh} gap={8} renderItem={(im)=>{
           const meta=PATIENT_IMG_TYPES[im.type]||PATIENT_IMG_TYPES.other;
           const canDel = !locked && (im.uploaded_by===currentUser?.id || isAdmin);
           const selIdx = compareSel.indexOf(im.id);
@@ -2758,6 +2778,30 @@ function PatientImagesTab({ patient, currentUser, locked }) {
             </div>
           );
         }}/>
+      )}
+      {/* มุมมองแถว */}
+      {!loading && shown.length>0 && vMode==='row' && (
+        <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+          {shown.map(im=>{
+            const meta=PATIENT_IMG_TYPES[im.type]||PATIENT_IMG_TYPES.other;
+            const th=IMG_VIEW_SIZES[vSize].thumb;
+            const up=new Date(im.uploaded_at).toLocaleString('th-TH',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+            const dimF=(im.width&&im.height)?im.width+' × '+im.height+' px':'—';
+            const qual=im.mime==='image/gif' ? 'GIF' : 'WebP '+(im.type==='cxr'?92:87)+'%';
+            return (
+              <div key={im.id} onClick={(e)=>openImage(im, e.currentTarget.getBoundingClientRect())} style={{display:'flex',alignItems:'center',gap:'10px',border:'1px solid #e5e7eb',borderRadius:'10px',padding:'7px 10px',background:'#fff',cursor:'zoom-in'}}>
+                <div style={{width:th+'px',height:th+'px',flexShrink:0,borderRadius:'8px',overflow:'hidden',background:'#0b0f19'}}><img src={im.thumbUrl||im.url} alt="" loading="lazy" draggable={false} onContextMenu={e=>e.preventDefault()} style={{width:'100%',height:'100%',objectFit:'cover'}}/></div>
+                <span style={{flexShrink:0,width:'52px',fontSize:'10px',fontWeight:800,padding:'2px 0',textAlign:'center',borderRadius:'999px',background:meta.bg,color:meta.fg}}>{meta.label}</span>
+                <div style={{flexShrink:0,width:'146px'}}><p style={{fontSize:'10px',color:'#9ca3af',margin:0}}>อัปโหลด</p><p style={{fontSize:'12px',color:'#374151',margin:0}}>{up}</p></div>
+                <div style={{flexShrink:0,width:'112px'}}><p style={{fontSize:'10px',color:'#9ca3af',margin:0}}>ขนาดภาพ</p><p style={{fontSize:'12px',color:'#374151',margin:0}}>{dimF}</p></div>
+                <div style={{flexShrink:0,width:'82px'}}><p style={{fontSize:'10px',color:'#9ca3af',margin:0}}>คุณภาพ</p><p style={{fontSize:'12px',color:'#374151',margin:0}}>{qual}</p></div>
+                <div style={{flex:1,minWidth:'70px'}}><p style={{fontSize:'10px',color:'#9ca3af',margin:0}}>หมายเหตุ</p><p style={{fontSize:'12px',color:'#374151',margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{im.title||im.note||'—'}</p></div>
+                <div style={{flexShrink:0,width:'102px'}}><p style={{fontSize:'10px',color:'#9ca3af',margin:0}}>อัปโหลดโดย</p><p style={{fontSize:'12px',color:'#374151',margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{im.uploader_name||'—'}</p></div>
+                <div style={{flexShrink:0,width:'60px',textAlign:'right'}}><p style={{fontSize:'10px',color:'#9ca3af',margin:0}}>ไฟล์</p><p style={{fontSize:'12px',color:'#374151',margin:0}}>{fmtSize(im.size_bytes)}</p></div>
+              </div>
+            );
+          })}
+        </div>
       )}
 
       {lightbox && (()=>{
@@ -3004,11 +3048,22 @@ function ImageLibraryPage({ currentUser }) {
       .catch(() => { setErr('ลบไม่สำเร็จ — กู้รายการกลับมา'); load(true, true); });
   };
 
+  const [vMode, setVMode] = React.useState('card');   // มุมมองรูป: การ์ด/แถว
+  const [vSize, setVSize] = React.useState(1);         // ขนาด 0/1/2
+  const [pSort, setPSort] = React.useState('name-asc');   // เรียงกลุ่มผู้ป่วย: name/hn
+
   const groups = {};
   for (const im of flat) {
     if (!groups[im.patient_id]) groups[im.patient_id] = { name: im.patient_name, hn: im.patient_hn, items: [] };
     groups[im.patient_id].items.push(im);
   }
+  const groupEntries = Object.entries(groups).sort((a,b)=>{
+    const [pf,pd] = pSort.split('-');
+    const r = pf==='hn'
+      ? String(a[1].hn||'').localeCompare(String(b[1].hn||''), undefined, {numeric:true})
+      : (a[1].name||'').localeCompare(b[1].name||'', 'th');
+    return pd==='desc' ? -r : r;
+  });
 
   const renderThumb = (im) => {
     const meta = PATIENT_IMG_TYPES[im.type] || PATIENT_IMG_TYPES.other;
@@ -3024,6 +3079,27 @@ function ImageLibraryPage({ currentUser }) {
     );
   };
 
+  const renderRow = (im) => {   // มุมมองแถว (คอลัม)
+    const meta = PATIENT_IMG_TYPES[im.type] || PATIENT_IMG_TYPES.other;
+    const th = IMG_VIEW_SIZES[vSize].thumb;
+    const sz = im.size_bytes!=null ? (im.size_bytes<1048576?Math.round(im.size_bytes/1024)+' KB':(im.size_bytes/1048576).toFixed(1)+' MB') : '';
+    const up = new Date(im.uploaded_at).toLocaleString('th-TH',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    const dimF = (im.width&&im.height)?im.width+' × '+im.height+' px':'—';
+    const qual = im.mime==='image/gif' ? 'GIF' : 'WebP '+(im.type==='cxr'?92:87)+'%';
+    return (
+      <div key={im.id} onClick={(e)=>openImage(im, e.currentTarget.getBoundingClientRect())} style={{display:'flex',alignItems:'center',gap:'10px',border:'1px solid #e5e7eb',borderRadius:'10px',padding:'7px 10px',background:'#fff',cursor:'zoom-in',marginBottom:'8px'}}>
+        <div style={{width:th+'px',height:th+'px',flexShrink:0,borderRadius:'8px',overflow:'hidden',background:'#0b0f19'}}><img src={im.thumbUrl||im.url} alt="" loading="lazy" draggable={false} onContextMenu={e=>e.preventDefault()} style={{width:'100%',height:'100%',objectFit:'cover'}}/></div>
+        <span style={{flexShrink:0,width:'52px',fontSize:'10px',fontWeight:800,padding:'2px 0',textAlign:'center',borderRadius:'999px',background:meta.bg,color:meta.fg}}>{meta.label}</span>
+        <div style={{flexShrink:0,width:'146px'}}><p style={{fontSize:'10px',color:'#9ca3af',margin:0}}>อัปโหลด</p><p style={{fontSize:'12px',color:'#374151',margin:0}}>{up}</p></div>
+        <div style={{flexShrink:0,width:'112px'}}><p style={{fontSize:'10px',color:'#9ca3af',margin:0}}>ขนาดภาพ</p><p style={{fontSize:'12px',color:'#374151',margin:0}}>{dimF}</p></div>
+        <div style={{flexShrink:0,width:'82px'}}><p style={{fontSize:'10px',color:'#9ca3af',margin:0}}>คุณภาพ</p><p style={{fontSize:'12px',color:'#374151',margin:0}}>{qual}</p></div>
+        <div style={{flex:1,minWidth:'70px'}}><p style={{fontSize:'10px',color:'#9ca3af',margin:0}}>หมายเหตุ</p><p style={{fontSize:'12px',color:'#374151',margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{im.title||im.note||'—'}</p></div>
+        <div style={{flexShrink:0,width:'102px'}}><p style={{fontSize:'10px',color:'#9ca3af',margin:0}}>อัปโหลดโดย</p><p style={{fontSize:'12px',color:'#374151',margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{im.uploader_name||'—'}</p></div>
+        <div style={{flexShrink:0,width:'60px',textAlign:'right'}}><p style={{fontSize:'10px',color:'#9ca3af',margin:0}}>ไฟล์</p><p style={{fontSize:'12px',color:'#374151',margin:0}}>{sz}</p></div>
+      </div>
+    );
+  };
+
   return (
     <div>
       {/* ตัวกรอง + ค้นหา (ชื่อหน้าอยู่บนแถบหัวเรื่องด้านบนแล้ว) */}
@@ -3035,12 +3111,19 @@ function ImageLibraryPage({ currentUser }) {
           <select value={sortBy} onChange={e=>setSortBy(e.target.value)} title="เรียงลำดับ" style={{padding:'7px 10px',borderRadius:'10px',border:'1px solid #d1d5db',fontSize:'13px',color:'#6b7280',cursor:'pointer'}}>
             {IMG_SORTS.map(([v,l])=><option key={v} value={v}>{l}</option>)}
           </select>
+          <select value={pSort} onChange={e=>setPSort(e.target.value)} title="เรียงผู้ป่วย" style={{padding:'7px 10px',borderRadius:'10px',border:'1px solid #d1d5db',fontSize:'13px',color:'#6b7280',cursor:'pointer'}}>
+            <option value="name-asc">ชื่อ ก → ฮ</option>
+          <option value="name-desc">ชื่อ ฮ → ก</option>
+            <option value="hn-asc">HN น้อย → มาก</option>
+          <option value="hn-desc">HN มาก → น้อย</option>
+          </select>
           <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} title="ตั้งแต่วันที่" style={{padding:'6px 8px',borderRadius:'10px',border:'1px solid #d1d5db',fontSize:'12px',color:'#6b7280'}}/>
           <span style={{fontSize:'12px',color:'#9ca3af'}}>ถึง</span>
           <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} title="ถึงวันที่" style={{padding:'6px 8px',borderRadius:'10px',border:'1px solid #d1d5db',fontSize:'12px',color:'#6b7280'}}/>
           {(dateFrom||dateTo) && <button onClick={()=>{setDateFrom('');setDateTo('');}} title="ล้างวันที่" style={{fontSize:'13px',color:'#0d9488',background:'none',border:'none',cursor:'pointer'}}><i className="fa-solid fa-xmark"></i></button>}
           {uploaders.length>1 && <select value={uploaderFilter} onChange={e=>setUploaderFilter(e.target.value)} title="กรองตามคนอัปโหลด" style={{padding:'7px 10px',borderRadius:'10px',border:'1px solid #d1d5db',fontSize:'13px',color:'#6b7280',cursor:'pointer',maxWidth:'160px'}}><option value="all">คนอัปโหลด: ทุกคน</option>{uploaders.map(u=><option key={u} value={u}>{u}</option>)}</select>}
           <input value={q} onChange={e=>setQ(e.target.value)} placeholder="ค้นหาชื่อ / HN ผู้ป่วย" style={{padding:'8px 12px',borderRadius:'10px',border:'1px solid #d1d5db',fontSize:'13px',minWidth:'160px'}}/>
+          <ImgViewToolbar mode={vMode} setMode={setVMode} size={vSize} setSize={setVSize}/>
         </div>
       </div>
       {err && <p style={{color:'#dc2626',fontSize:'13px'}}><i className="fa-solid fa-circle-exclamation" style={{marginRight:'5px'}}></i>{err}</p>}
@@ -3064,10 +3147,12 @@ function ImageLibraryPage({ currentUser }) {
           <p style={{fontSize:'12px',color:'#9ca3af',margin:0,textAlign:'center'}}>{(q||filter!=='all'||dateFrom||dateTo||uploaderFilter!=='all')?'ลองล้างตัวกรองหรือเปลี่ยนคำค้นหา':'อัปโหลดรูปได้จากแท็บ "รูปภาพ" ในหน้าผู้ป่วย'}</p>
         </div>
       )}
-      {!loading && Object.entries(groups).map(([pid,g])=>(
+      {!loading && groupEntries.map(([pid,g])=>(
         <div key={pid} style={{marginBottom:'22px'}}>
           <p style={{fontWeight:700,fontSize:'14px',color:'#1f2937',margin:'0 0 8px',borderLeft:'3px solid #0d9488',paddingLeft:'8px'}}>{g.name}{g.hn?<span style={{color:'#9ca3af',fontWeight:400,fontSize:'12px'}}> · HN {g.hn}</span>:null} <span style={{color:'#9ca3af',fontWeight:400,fontSize:'12px'}}>({g.items.length})</span></p>
-          <JustifiedGallery items={g.items} targetHeight={160} gap={8} renderItem={renderThumb}/>
+          {vMode==='card'
+            ? <JustifiedGallery items={g.items} targetHeight={IMG_VIEW_SIZES[vSize].jh} gap={8} renderItem={renderThumb}/>
+            : g.items.map(renderRow)}
         </div>
       ))}
 
@@ -5893,7 +5978,206 @@ const MONTH_LABELS = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค
 const FAKE_MONTHLY = { 2025:[8,11,9,14,15,20,18,25,22,19,13,10], 2026:[12,15,10,18,6,0,0,0,0,0,0,0] };
 const FAKE_YEARLY = { 2025:184, 2026:61 };
 
-function Dashboard({ patients, archivePatients, onDashFilter, onGoArchiveDelayed, onGoAllPatients, onGoArchiveSuccess, onOpen }) {
+// ── พื้นที่จัดเก็บ (แอดมินเท่านั้น) — การ์ด dashboard + รายละเอียด + popup 80% ──────
+let _storageCache = null, _storageAt = 0;
+let _settingsWantTab = null;   // dashboard กดการ์ด → เปิดแท็บ storage ในตั้งค่า
+const STORAGE_TTL = 5*60*1000;
+function _readStorageLS() {   // อ่านแคชจากเบราว์เซอร์ (ข้ามรีเฟรช) ถ้ายังสด
+  try { const s = JSON.parse(localStorage.getItem('tb_storage')||'null'); if (s && (Date.now()-s.ts < STORAGE_TTL)) { _storageCache = s.d; _storageAt = s.ts; return s.d; } } catch {}
+  return null;
+}
+async function fetchStorageUsage(force) {
+  if (!force) {
+    if (_storageCache && (Date.now()-_storageAt < STORAGE_TTL)) return _storageCache;
+    const ls = _readStorageLS(); if (ls) return ls;
+  }
+  const r = await fetch('/api/admin/storage');
+  if (!r.ok) throw new Error('storage ' + r.status);
+  const d = await r.json(); _storageCache = d; _storageAt = Date.now();
+  try { localStorage.setItem('tb_storage', JSON.stringify({ d, ts: _storageAt })); } catch {}
+  return d;
+}
+const fmtStorageBytes = (b) => b==null?'—':(b<1024?b+' B':b<1048576?(b/1024).toFixed(0)+' KB':b<1073741824?(b/1048576).toFixed(1)+' MB':(b/1073741824).toFixed(2)+' GB');
+const storagePct = (used, quota) => quota ? (used/quota*100) : 0;               // ตัวเลขดิบ
+const storagePctStr = (used, quota) => storagePct(used, quota).toFixed(3);       // x.xxx
+const R2_CAT_COLORS = { cxr:'#0d9488', lab:'#d97706', document:'#7c3aed', other:'#64748b' };
+const R2_CAT_LABELS = { cxr:'CXR', lab:'Lab', document:'เอกสาร', other:'อื่นๆ' };
+
+// การ์ดเล็กบน Dashboard (ขนาดเท่าการ์ด KPI · กดเข้าตั้งค่า) — ไม่ใช่แอดมิน → null
+function StorageMiniCard({ onOpen }) {
+  const [data, setData] = React.useState(() => _storageCache || (typeof window!=='undefined' ? _readStorageLS() : null));
+  const [hovered, setHovered] = React.useState(false);
+  React.useEffect(() => { let ok=true; fetchStorageUsage().then(d=>ok&&setData(d)).catch(()=>{}); return ()=>{ok=false;}; }, []);
+  const dbP = data ? storagePct(data.db.total, data.db.quota) : null;
+  const r2P = data ? storagePct(data.r2.total, data.r2.quota) : null;
+  const row = (label, pct, color) => (
+    <div style={{marginBottom:'8px'}}>
+      <div style={{display:'flex',justifyContent:'space-between',marginBottom:'3px'}}><span style={{fontSize:'11px',color:'#6b7280'}}>{label}</span><span style={{fontSize:'11px',fontWeight:700,color:pct==null?'#cbd5e1':(pct>=80?'#dc2626':color)}}>{pct==null?'···':pct.toFixed(3)+'%'}</span></div>
+      <div style={{height:'6px',background:'#f1f5f9',borderRadius:'999px',overflow:'hidden'}}>{pct!=null && <div style={{height:'100%',width:(pct>0?Math.max(pct,1.5):0)+'%',background:pct>=80?'#dc2626':color,borderRadius:'999px',transition:'width 0.6s ease'}}/>}</div>
+    </div>
+  );
+  return (
+    <div onClick={onOpen} onMouseEnter={()=>setHovered(true)} onMouseLeave={()=>setHovered(false)} style={{background:'#fff',border:'2px solid '+(hovered?'#0d9488':'#99f6e4'),borderRadius:'16px',overflow:'hidden',cursor:'pointer',boxShadow:hovered?'0 10px 28px rgba(0,0,0,0.13)':'0 1px 4px rgba(0,0,0,0.06)',transform:hovered?'translateY(-5px) scale(1.025)':'translateY(0) scale(1)',transition:'all 0.22s cubic-bezier(0.34,1.56,0.64,1)'}}>
+      <div style={{height:'3px',background:'#0d9488'}}></div>
+      <div style={{padding:'15px',display:'flex',flexDirection:'column'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'12px'}}>
+          <span style={{fontSize:'13px',fontWeight:700,color:'#0f766e'}}><i className="fa-solid fa-hard-drive" style={{marginRight:'6px'}}></i>พื้นที่จัดเก็บ</span>
+          <i className="fa-solid fa-chevron-right" style={{fontSize:'11px',color:'#cbd5e1'}}></i>
+        </div>
+        {row('ฐานข้อมูล', dbP, '#0d9488')}
+        {row('รูปภาพ', r2P, '#b45309')}
+      </div>
+    </div>
+  );
+}
+
+// donut ด้วย conic-gradient · segments=[{color,pct}]
+function StorageDonut({ segments, size=110 }) {
+  const [on, setOn] = React.useState(false);
+  const [hovered, setHovered] = React.useState(false);
+  React.useEffect(()=>{ const t=setTimeout(()=>setOn(true),80); return ()=>clearTimeout(t); },[]);
+  let acc=0; const stops = segments.filter(s=>s.pct>0).map(s=>{ const f=acc; acc+=s.pct; return `${s.color} ${f}% ${acc}%`; });
+  const bg = stops.length ? `conic-gradient(${stops.join(', ')})` : '#e5e7eb';
+  return <div onMouseEnter={()=>setHovered(true)} onMouseLeave={()=>setHovered(false)} style={{width:size+'px',height:size+'px',borderRadius:'50%',background:bg,position:'relative',flexShrink:0,opacity:on?1:0,transform:on?(hovered?'scale(1.05)':'scale(1)'):'scale(0.85)',transition:'opacity 0.5s ease, transform 0.5s cubic-bezier(0.34,1.56,0.64,1)'}}><div style={{position:'absolute',inset:(size*0.2)+'px',borderRadius:'50%',background:'#fff'}}/></div>;
+}
+
+// รายละเอียดเต็มในหน้าตั้งค่า (บาร์แบ่งสี iPhone-style + กราฟวงกลม + ลิงก์)
+function StorageDetail() {
+  const [data, setData] = React.useState(() => _storageCache || (typeof window!=='undefined' ? _readStorageLS() : null));
+  const [err, setErr] = React.useState(false);
+  const [anim, setAnim] = React.useState(false);
+  const [hov, setHov] = React.useState(null);
+  React.useEffect(() => { let ok=true; fetchStorageUsage().then(d=>ok&&setData(d)).catch(()=>ok&&setErr(true)); return ()=>{ok=false;}; }, []);
+  React.useEffect(() => { if(data){ const t=setTimeout(()=>setAnim(true),80); return ()=>clearTimeout(t); } }, [data]);
+  if (err) return <p style={{fontSize:'13px',color:'#dc2626'}}>โหลดข้อมูลพื้นที่ไม่สำเร็จ</p>;
+  if (!data) return <p style={{fontSize:'13px',color:'#6b7280'}}>กำลังโหลด...</p>;
+
+  const usageBar = (used, quota, color) => {
+    const p = storagePct(used, quota), warn = p>=80;
+    return (
+      <div>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:'6px'}}>
+          <span style={{fontSize:'13px',color:'#374151'}}>ใช้ไป <span style={{fontWeight:700,color:warn?'#dc2626':color}}>{fmtStorageBytes(used)}</span> จาก {fmtStorageBytes(quota)}</span>
+          <span style={{fontSize:'13px',fontWeight:700,color:warn?'#dc2626':color}}>{storagePctStr(used,quota)}%</span>
+        </div>
+        <div style={{height:'14px',background:'#f1f5f9',border:'1px solid #e5e7eb',borderRadius:'999px',overflow:'hidden'}}>
+          <div style={{height:'100%',width:(anim?(p>0?Math.max(p,0.8):0):0)+'%',background:warn?'#dc2626':color,borderRadius:'999px',transition:'width 0.9s cubic-bezier(0.34,1.2,0.64,1)'}}/>
+        </div>
+      </div>
+    );
+  };
+  const segBar = (segs) => (
+    <div>
+      <div style={{height:'22px',marginBottom:'8px',fontSize:'12px',fontWeight:700,color:'#374151',display:'flex',alignItems:'center'}}>
+        {hov ? <><span style={{width:'11px',height:'11px',borderRadius:'3px',background:hov.color,marginRight:'7px'}}/>{hov.label} · {fmtStorageBytes(hov.bytes)} · {hov.pct.toFixed(1)}%</> : <span style={{color:'#9ca3af',fontWeight:400}}>เลื่อนเมาส์ชี้แถบ / วงกลม เพื่อดูรายละเอียด</span>}
+      </div>
+      <div style={{display:'flex',height:'20px',borderRadius:'999px',overflow:'hidden',border:'1px solid #e5e7eb',background:'#f1f5f9'}}>
+        {segs.filter(s=>s.pct>0).map((s,i)=><div key={i} onMouseEnter={()=>setHov(s)} onMouseLeave={()=>setHov(null)} style={{width:(anim?s.pct:0)+'%',background:s.color,minWidth:anim?'3px':0,opacity:(hov&&hov.label!==s.label)?0.4:1,transition:'width 0.9s cubic-bezier(0.34,1.3,0.64,1), opacity 0.2s ease'}}/>)}
+      </div>
+    </div>
+  );
+  const legend = (segs, interactive) => (
+    <div style={{display:'flex',flexDirection:'column',gap:'4px'}}>
+      {segs.map((s,i)=>(
+        <div key={i} onMouseEnter={interactive?()=>setHov(s):undefined} onMouseLeave={interactive?()=>setHov(null):undefined} style={{display:'flex',alignItems:'center',gap:'8px',fontSize:'12px',cursor:'default',background:(interactive&&hov&&hov.label===s.label)?'#f1f5f9':'transparent',borderRadius:'6px',padding:'3px 5px',transition:'background 0.15s'}}>
+          <span style={{width:'11px',height:'11px',borderRadius:'3px',background:s.color,flexShrink:0}}/>
+          <span style={{color:'#374151',flex:1}}>{s.label}</span>
+          <span style={{color:'#6b7280'}}>{fmtStorageBytes(s.bytes)}</span>
+          <span style={{color:'#9ca3af',minWidth:'46px',textAlign:'right'}}>{s.pct.toFixed(1)}%</span>
+        </div>
+      ))}
+    </div>
+  );
+
+  // Supabase composition: ข้อมูลจริง vs พื้นที่ระบบ (รวม = total เป๊ะ)
+  const dbT = data.db.total || 1;
+  const dbSegs = [
+    { label:'ข้อมูลจริง (ตารางของเรา)', bytes:data.db.userTables, color:'#0d9488', pct:data.db.userTables/dbT*100 },
+    { label:'พื้นที่ระบบ (Postgres + extension)', bytes:data.db.systemSpace, color:'#94a3b8', pct:data.db.systemSpace/dbT*100 },
+  ];
+  // R2 composition: หมวดรูป + โปรไฟล์ (สัดส่วน)
+  const bt = data.r2.byType || {};
+  const r2Raw = [
+    { key:'cxr', bytes:bt.cxr||0 }, { key:'lab', bytes:bt.lab||0 },
+    { key:'document', bytes:bt.document||0 }, { key:'other', bytes:bt.other||0 },
+    { key:'avatar', bytes:data.r2.avatarTotal||0 },
+  ];
+  const compTotal = r2Raw.reduce((a,s)=>a+s.bytes,0) || 1;
+  const r2Segs = r2Raw.map(s=>({
+    label: s.key==='avatar' ? 'รูปโปรไฟล์' : R2_CAT_LABELS[s.key],
+    bytes: s.bytes,
+    color: s.key==='avatar' ? '#2563eb' : R2_CAT_COLORS[s.key],
+    pct: s.bytes/compTotal*100,
+  }));
+
+  const linkBtn = (href, icon, label) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" style={{display:'inline-flex',alignItems:'center',gap:'6px',fontSize:'12px',color:'#0d9488',fontWeight:700,textDecoration:'none',border:'1px solid #99f6e4',borderRadius:'8px',padding:'6px 12px'}}><i className={'fa-solid '+icon}></i>{label}<i className="fa-solid fa-arrow-up-right-from-square" style={{fontSize:'10px'}}></i></a>
+  );
+
+  const sectionStyle = {background:'#fff',border:'1px solid #e5e7eb',borderRadius:'14px',padding:'18px 20px',marginBottom:'16px'};
+
+  return (
+    <div>
+      {/* ── Supabase ── */}
+      <div style={sectionStyle}>
+        <p style={{fontSize:'14px',fontWeight:700,color:'#0f766e',margin:'0 0 14px'}}><i className="fa-solid fa-database" style={{marginRight:'8px'}}></i>ฐานข้อมูล (Supabase)</p>
+        {usageBar(data.db.total, data.db.quota, '#0d9488')}
+        <div style={{display:'flex',gap:'20px',alignItems:'center',marginTop:'18px',flexWrap:'wrap'}}>
+          <StorageDonut segments={dbSegs}/>
+          <div style={{flex:1,minWidth:'220px'}}>{legend(dbSegs)}</div>
+        </div>
+        <p style={{fontSize:'11px',color:'#9ca3af',margin:'14px 0 12px',lineHeight:1.6}}><i className="fa-solid fa-circle-info" style={{marginRight:'5px'}}></i>"พื้นที่ระบบ" คือตารางระบบของ Postgres + extension ที่มีมาตั้งแต่โปรเจกต์ว่างๆ ลบไม่ได้ · ข้อมูลจริงของเราใช้แค่ {fmtStorageBytes(data.db.userTables)}</p>
+        {linkBtn('https://supabase.com/dashboard/project/cioswzdbonnbhbyynrhh','fa-database','เปิด Supabase Dashboard')}
+      </div>
+
+      {/* ── R2 ── */}
+      <div style={sectionStyle}>
+        <p style={{fontSize:'14px',fontWeight:700,color:'#b45309',margin:'0 0 14px'}}><i className="fa-solid fa-images" style={{marginRight:'8px'}}></i>รูปภาพ (Cloudflare R2)</p>
+        {usageBar(data.r2.total, data.r2.quota, '#b45309')}
+        <p style={{fontSize:'12px',fontWeight:700,color:'#6b7280',margin:'18px 0 8px'}}>แบ่งตามหมวด (สัดส่วนการใช้พื้นที่รูป)</p>
+        {segBar(r2Segs)}
+        <div style={{display:'flex',gap:'20px',alignItems:'center',marginTop:'16px',flexWrap:'wrap'}}>
+          <StorageDonut segments={r2Segs}/>
+          <div style={{flex:1,minWidth:'220px'}}>{legend(r2Segs, true)}</div>
+        </div>
+        <p style={{fontSize:'11px',color:'#9ca3af',margin:'14px 0 12px',lineHeight:1.6}}><i className="fa-solid fa-circle-info" style={{marginRight:'5px'}}></i>รูปทั้งหมด {data.r2.count} ไฟล์ · สัดส่วนคิดจากขนาดที่บันทึกในระบบ (ทัมเนลนับรวมในถังคนไข้)</p>
+        {linkBtn('https://dash.cloudflare.com/?to=/:account/r2/overview','fa-cloud','เปิด Cloudflare R2')}
+      </div>
+
+      <p style={{fontSize:'11px',color:'#9ca3af',margin:'2px 0 0'}}>โควตาอิงแพ็กเกจฟรี · Supabase 500 MB · R2 10 GB · ถ้าอัปเกรดแพ็กเกจแจ้งแคลร์เพื่อแก้โควตา</p>
+    </div>
+  );
+}
+
+function StorageAlert({ currentUser }) {   // popup เตือน >=80% ทุกครั้งที่เข้าเว็บ · แอดมินเท่านั้น
+  const [alert, setAlert] = React.useState(null);
+  const [closed, setClosed] = React.useState(false);
+  React.useEffect(() => {
+    if (currentUser?.role !== 'admin') return;
+    let ok=true;
+    fetchStorageUsage().then(d=>{ if(ok && (storagePct(d.db.total,d.db.quota)>=80 || storagePct(d.r2.total,d.r2.quota)>=80)) setAlert(d); }).catch(()=>{});
+    return ()=>{ok=false;};
+  }, [currentUser?.role]);
+  if (!alert || closed) return null;
+  const items = [];
+  if (storagePct(alert.db.total,alert.db.quota)>=80) items.push({ label:'ฐานข้อมูล (Supabase)', pct:storagePctStr(alert.db.total,alert.db.quota) });
+  if (storagePct(alert.r2.total,alert.r2.quota)>=80) items.push({ label:'รูปภาพ (Cloudflare R2)', pct:storagePctStr(alert.r2.total,alert.r2.quota) });
+  return createPortal(
+    <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',zIndex:10005,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={()=>setClosed(true)}>
+      <div className="modal-A" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'380px',padding:'24px',textAlign:'center'}}>
+        <div style={{width:'54px',height:'54px',borderRadius:'50%',background:'#fee2e2',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 14px'}}><i className="fa-solid fa-triangle-exclamation" style={{color:'#dc2626',fontSize:'22px'}}></i></div>
+        <p style={{fontSize:'16px',fontWeight:700,color:'#111827',margin:'0 0 8px'}}>พื้นที่จัดเก็บใกล้เต็ม</p>
+        <div style={{background:'#fef2f2',border:'1px solid #fecaca',borderRadius:'10px',padding:'12px',margin:'0 0 16px'}}>
+          {items.map((it,i)=><p key={i} style={{fontSize:'13px',color:'#991b1b',margin:i?'6px 0 0':'0',fontWeight:700}}>{it.label} · ใช้ไป {it.pct}%</p>)}
+        </div>
+        <p style={{fontSize:'12px',color:'#6b7280',margin:'0 0 16px',lineHeight:1.6}}>แนะนำล้างถังขยะรูป / ลบข้อมูลเก่า หรือพิจารณาอัปเกรดแพ็กเกจ ก่อนพื้นที่เต็ม</p>
+        <button onClick={()=>setClosed(true)} style={{width:'100%',padding:'11px',borderRadius:'10px',background:'#0d9488',color:'#fff',fontWeight:700,fontSize:'14px',border:'none',cursor:'pointer'}}>รับทราบ</button>
+      </div>
+    </div>, document.body
+  );
+}
+
+function Dashboard({ patients, archivePatients, onDashFilter, onGoArchiveDelayed, onGoAllPatients, onGoArchiveSuccess, onOpen, onOpenStorage, currentUser }) {
   const barRef = useRef(null); const pieRef = useRef(null);
   const [chartMode, setChartMode] = useState('monthly');
   const [selectedYear, setSelectedYear] = useState(2026);
@@ -5999,7 +6283,8 @@ function Dashboard({ patients, archivePatients, onDashFilter, onGoArchiveDelayed
     <div className="space-y-5 tb-fade">
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className={currentUser?.role==='admin' ? "grid grid-cols-2 lg:grid-cols-5 gap-4" : "grid grid-cols-2 lg:grid-cols-4 gap-4"}>
+        {currentUser?.role==='admin' && <StorageMiniCard onOpen={onOpenStorage}/>}
         {kpis.map(k => (
           <div key={k.label} onClick={k.onClick}
             onMouseEnter={()=>setHoveredKpi(k.label)}
@@ -7155,12 +7440,13 @@ function Reports({ patients }) {
 }
 
 // ===================== ADMIN SETTINGS =====================
-function AdminSettings({ settings, setSettings, setNav }) {
+function AdminSettings({ settings, setSettings, setNav, currentUser }) {
+  const isAdmin = currentUser?.role === 'admin';
   const [newComorbidity, setNewComorbidity] = useState({ name: '', abbr: '' });
   const [newDrug, setNewDrug] = useState('');
   const [newReason, setNewReason] = useState('');
   const [newLabField, setNewLabField] = useState({ label:'', key:'', unit:'', lo:'', hi:'', group:'lft' });
-  const [activeTab, setActiveTab] = useState('comorbidity');
+  const [activeTab, setActiveTab] = useState(() => { const w = _settingsWantTab; _settingsWantTab = null; return (w && (w!=='storage' || isAdmin)) ? w : 'comorbidity'; });
 
 
   const addComorbidity = () => {
@@ -7220,6 +7506,7 @@ function AdminSettings({ settings, setSettings, setNav }) {
   );
 
   const adminTabs = [
+    ...(isAdmin ? [{ id:'storage', label:'พื้นที่จัดเก็บ', icon:'fa-hard-drive' }] : []),
     { id:'comorbidity', label:'โรคประจำตัว', icon:'fa-heart-pulse' },
     { id:'drugs', label:'ยาโรคร่วม', icon:'fa-capsules' },
     { id:'tb-drugs', label:'ยาวัณโรค', icon:'fa-prescription-bottle-medical' },
@@ -7245,6 +7532,7 @@ function AdminSettings({ settings, setSettings, setNav }) {
       </div>
 
       {/* Comorbidity */}
+      {activeTab==='storage'&&<StorageDetail/>}
       {activeTab==='comorbidity'&&(
         <div className="bg-white p-6 rounded-2xl border border-gray-200 tb-fade">
           <div className="flex items-center gap-3 mb-4">
@@ -7639,6 +7927,7 @@ function KnowledgeBase() {
 function App() {
   const [nav, setNavRaw] = useState('dashboard');
   const mainScrollRef = React.useRef(null);  // v0.7.17.3 — สำหรับ ScrollNav
+  React.useEffect(() => { if (mainScrollRef.current) mainScrollRef.current.scrollTop = 0; }, [nav]);   // เปลี่ยนหน้า → เลื่อนขึ้นบนสุด (กันค้างตำแหน่งหน้าเดิม)
   const [pendingLeave, setPendingLeave] = useState(null); // v0.7.14.7 — target nav รอ user ยืนยันออกจาก draft
   // v0.7.14.7 — wrapper setNav: ดัก draft ค้างก่อนเปลี่ยนหน้า
   const setNav = React.useCallback((target) => {
@@ -8175,13 +8464,13 @@ function App() {
 
       {/* ── SIDEBAR ── */}
       {/* v0.7.15.1 — zIndex:40 กันปุ่ม chevron toggle ถูก header (zIndex:30) ทับครึ่ง */}
-      <div style={{position:'relative',width:sidebarOpen?'260px':'72px',transition:'width 0.2s ease',flexShrink:0,zIndex:40}} onMouseEnter={()=>setSidebarHovered(true)} onMouseLeave={()=>setSidebarHovered(false)}>
+      <div style={{position:'relative',width:sidebarOpen?'260px':'56px',transition:'width 0.2s ease',flexShrink:0,zIndex:40}} onMouseEnter={()=>setSidebarHovered(true)} onMouseLeave={()=>setSidebarHovered(false)}>
       <aside style={{width:'100%',height:'100%',overflow:'hidden',display:'flex',flexDirection:'column',background:'#fff',borderRight:'1px solid #e5e7eb'}}>
 
         {/* Header: icon คงที่ + label fade */}
         <div style={{display:'flex',alignItems:'center',height:'64px',padding:'0 10px',borderBottom:'1px solid #e5e7eb',flexShrink:0}}>
           <div onClick={handleLogoClick} title="กลับหน้าหลัก" style={{display:'flex',alignItems:'center',flex:1,cursor:'pointer',minWidth:0,height:'100%',borderRadius:'8px',transition:'background 0.15s'}} onMouseEnter={e=>e.currentTarget.style.background='#f0fdfa'} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
-            <span style={{width:'56px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+            <span style={{width:'56px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginLeft:'-10px'}}>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512" width="44" height="36"><path fill="#0d9488" d="M320 0c17.7 0 32 14.3 32 32l0 124.2c-8.5-7.6-19.7-12.2-32-12.2s-23.5 4.6-32 12.2L288 32c0-17.7 14.3-32 32-32zM444.5 195.5c-16.4-16.4-41.8-18.5-60.5-6.1l0-24.1C384 127 415 96 453.3 96c21.7 0 42.8 10.2 55.8 28.8c15.4 22.1 44.3 65.4 71 116.9c26.5 50.9 52.4 112.5 59.6 170.3c.2 1.3 .2 2.6 .2 4l0 7c0 49.1-39.8 89-89 89c-7.3 0-14.5-.9-21.6-2.7l-72.7-18.2c-20.9-5.2-38.7-17.1-51.5-32.9c14 1.5 28.5-3 39.2-13.8l-22.6-22.6 22.6 22.6c18.7-18.7 18.7-49.1 0-67.9c-1.1-1.1-1.4-2-1.5-2.5c-.1-.8-.1-1.8 .4-2.9s1.2-1.9 1.8-2.3c.5-.3 1.3-.8 2.9-.8c26.5 0 48-21.5 48-48s-21.5-48-48-48c-1.6 0-2.4-.4-2.9-.8c-.6-.4-1.3-1.2-1.8-2.3s-.5-2.2-.4-2.9c.1-.6 .4-1.4 1.5-2.5c18.7-18.7 18.7-49.1 0-67.9zM183.3 491.2l-72.7 18.2c-7.1 1.8-14.3 2.7-21.6 2.7c-49.1 0-89-39.8-89-89l0-7c0-1.3 .1-2.7 .2-4c7.2-57.9 33.1-119.4 59.6-170.3c26.8-51.5 55.6-94.8 71-116.9c13-18.6 34-28.8 55.8-28.8C225 96 256 127 256 165.3l0 24.1c-18.6-12.4-44-10.3-60.5 6.1c-18.7 18.7-18.7 49.1 0 67.9c1.1 1.1 1.4 2 1.5 2.5c.1 .8 .1 1.8-.4 2.9s-1.2 1.9-1.8 2.3c-.5 .3-1.3 .8-2.9 .8c-26.5 0-48 21.5-48 48s21.5 48 48 48c1.6 0 2.4 .4 2.9 .8c.6 .4 1.3 1.2 1.8 2.3s.5 2.2 .4 2.9c-.1 .6-.4 1.4-1.5 2.5c-18.7 18.7-18.7 49.1 0 67.9c10.7 10.7 25.3 15.3 39.2 13.8c-12.8 15.9-30.6 27.7-51.5 32.9z"/><path fill="#fbbf24" d="M421.8 421.8c-6.2 6.2-16.4 6.2-22.6 0C375.9 398.5 336 415 336 448c0 8.8-7.2 16-16 16s-16-7.2-16-16c0-33-39.9-49.5-63.2-26.2c-6.2 6.2-16.4 6.2-22.6 0s-6.2-16.4 0-22.6C241.5 375.9 225 336 192 336c-8.8 0-16-7.2-16-16s7.2-16 16-16c33 0 49.5-39.9 26.2-63.2c-6.2-6.2-6.2-16.4 0-22.6s16.4-6.2 22.6 0C264.1 241.5 304 225 304 192c0-8.8 7.2-16 16-16s16 7.2 16 16c0 33 39.9 49.5 63.2 26.2c6.2-6.2 16.4-6.2 22.6 0s6.2 16.4 0 22.6C398.5 264.1 415 304 448 304c8.8 0 16 7.2 16 16s-7.2 16-16 16c-33 0-49.5 39.9-26.2 63.2c6.2 6.2 6.2 16.4 0 22.6z"/><path fill="#e11d48" d="M296 320a24 24 0 1 0 0-48 24 24 0 1 0 0 48zm72 32a16 16 0 1 0 -32 0 16 16 0 1 0 32 0z"/></svg>
             </span>
             <span style={{overflow:'hidden',whiteSpace:'nowrap',fontFamily:"'Manrope', sans-serif",fontWeight:800,fontSize:'17px',color:'#0f766e',letterSpacing:'-0.3px',flex:1,maxWidth:sidebarOpen?'190px':'0px',opacity:sidebarOpen?1:0,transition:'max-width 0.2s ease,opacity 0.15s ease'}}>TB JOURNEY <span style={{fontFamily:"'Plus Jakarta Sans', sans-serif"}}>&amp;</span> CARE</span>
@@ -8214,8 +8503,8 @@ function App() {
                 onMouseEnter={e=>{if(nav!==n.id&&!hasBadge){e.currentTarget.style.background='#f0fdfa';e.currentTarget.style.color='#0f766e';}}}
                 onMouseLeave={e=>{if(nav!==n.id&&!hasBadge){e.currentTarget.style.background='transparent';e.currentTarget.style.color='#374151';}}}
               >
-                {/* v0.7.15.1 — icon คงที่ 36px + ขยับขวา 10px ตอน collapsed ให้ center ตรงกับ logo ปอด */}
-                <span style={{width:'36px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,position:'relative',marginLeft:sidebarOpen?'0':'10px',transition:'margin-left 0.2s ease'}}>
+                {/* icon 36px · ล็อกตำแหน่งกลางไว้นิ่งสนิท (marginLeft คงที่ ไม่ขยับตอนเปิด/ปิด) */}
+                <span style={{width:'36px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,position:'relative',marginLeft:'0px'}}>
                   <i className={`fa-solid ${n.icon}`} style={{fontSize:'17px',color:hasBadge?'#dc2626':'#0f766e'}}></i>
                   {n.redDot && <span className="tb-pulse-badge" style={{position:'absolute',top:'2px',right:'4px',width:'8px',height:'8px',background:'#ef4444',borderRadius:'50%',display:'block'}}/>}
                 </span>
@@ -8235,7 +8524,7 @@ function App() {
           <button onClick={()=>setShowProfile(true)} style={{width:'100%',display:'flex',alignItems:'center',padding:'8px',borderRadius:'10px',cursor:'pointer',transition:'background 0.15s',border:'none',background:'transparent',textAlign:'left'}}
             onMouseEnter={e=>e.currentTarget.style.background='#f0fdfa'}
             onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
-            <span style={{width:'36px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginLeft:sidebarOpen?'0':'10px',transition:'margin-left 0.2s ease'}}>
+            <span style={{width:'36px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginLeft:'-6px'}}>
               <AvatarCircle urlKey={currentUser?.avatarUrl} updatedAt={currentUser?.avatarUpdatedAt} fallback={currentUser?.avatar || '?'} name={currentUser?.fullName} colorKey={currentUser?.id} size={32} fontSize={(currentUser?.avatar||'').length>3?8:11} />
             </span>
             <div style={{overflow:'hidden',maxWidth:sidebarOpen?'160px':'0px',opacity:sidebarOpen?1:0,transition:'max-width 0.2s ease,opacity 0.15s ease',whiteSpace:'nowrap'}}>
@@ -8251,7 +8540,7 @@ function App() {
             onMouseEnter={e=>{ e.currentTarget.style.background='#fef2f2'; e.currentTarget.querySelector('i').style.color='#dc2626'; e.currentTarget.querySelector('span').style.color='#dc2626'; }}
             onMouseLeave={e=>{ e.currentTarget.style.background='transparent'; e.currentTarget.querySelector('i').style.color='#f87171'; e.currentTarget.querySelector('span').style.color='#9ca3af'; }}
           >
-            <span style={{width:'36px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+            <span style={{width:'36px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginLeft:'-6px'}}>
               <i className="fa-solid fa-right-from-bracket" style={{fontSize:'15px',color:'#f87171',transition:'color 0.15s'}}></i>
             </span>
             <span style={{overflow:'hidden',whiteSpace:'nowrap',maxWidth:sidebarOpen?'160px':'0px',opacity:sidebarOpen?1:0,transition:'max-width 0.2s ease,opacity 0.15s ease,color 0.15s'}}>
@@ -8273,7 +8562,7 @@ function App() {
               <p style={{fontSize:'10px',color:'#d1d5db',margin:'2px 0 0 0',whiteSpace:'nowrap'}}>v{APP_VERSION} ·<span style={{color:'#fbbf24'}}>ยังไม่เผยแพร่</span> <i className="fa-solid fa-circle-info" style={{color:'#9ca3af'}}></i></p>
             </div>
           ) : (
-            <div onClick={()=>setShowAbout(true)} title="ดูข้อมูลระบบ" style={{display:'flex',justifyContent:'center',cursor:'pointer'}}>
+            <div onClick={()=>setShowAbout(true)} title="ดูข้อมูลระบบ" style={{display:'flex',justifyContent:'flex-start',paddingLeft:'10px',cursor:'pointer'}}>
               <i className="fa-solid fa-circle-info" style={{fontSize:'12px',color:'#cbd5e1'}}></i>
             </div>
           )}
@@ -8285,7 +8574,7 @@ function App() {
       <button
         onClick={()=>setSidebarOpen(o=>!o)}
         title={sidebarOpen?'ซ่อนเมนู':'แสดงเมนู'}
-        style={{position:'absolute',right:'-12px',top:'20px',width:'24px',height:'24px',borderRadius:'50%',border:'1.5px solid #0d9488',background:'#fff',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',zIndex:50,transition:'all 0.15s',boxShadow:'0 1px 3px rgba(0,0,0,0.08)'}}
+        style={{position:'absolute',right:'-10px',top:'20px',width:'24px',height:'24px',borderRadius:'50%',border:'1.5px solid #0d9488',background:'#fff',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',zIndex:50,transition:'all 0.15s',boxShadow:'0 1px 3px rgba(0,0,0,0.08)'}}
         onMouseEnter={e=>{ e.currentTarget.style.background='#0d9488'; const icon = e.currentTarget.querySelector('i'); if (icon) icon.style.color='#fff'; }}
         onMouseLeave={e=>{ e.currentTarget.style.background='#fff'; const icon = e.currentTarget.querySelector('i'); if (icon) icon.style.color='#0d9488'; }}
       >
@@ -8423,7 +8712,7 @@ function App() {
 
         <div ref={mainScrollRef} style={{ scrollbarGutter: 'stable' }} className={`flex-1 p-6 min-h-0 ${(nav==='patient-list'||nav==='archive-list'||nav==='all-patients')?'overflow-hidden':'overflow-y-auto'}`}>
           {/* v0.7.17.3 — dbLoading ใช้ V2Skeleton early-return ที่ระดับ App แล้ว → ที่นี่ไม่ต้องมี spinner */}
-          {!dbLoading && nav==='dashboard'     && <Dashboard patients={patients.filter(p=>!p.archived)} archivePatients={patients.filter(p=>p.archived)} onDashFilter={f=>{setDashFilter(f);setNav('patient-list');}} onGoArchiveDelayed={()=>{setArchiveDashFilter('delayed');setNav('archive-list');}} onGoAllPatients={()=>setNav('all-patients')} onGoArchiveSuccess={()=>{setArchiveDashFilter('success');setNav('archive-list');}} onOpen={setClinical}/>}
+          {!dbLoading && nav==='dashboard'     && <Dashboard patients={patients.filter(p=>!p.archived)} archivePatients={patients.filter(p=>p.archived)} onDashFilter={f=>{setDashFilter(f);setNav('patient-list');}} onGoArchiveDelayed={()=>{setArchiveDashFilter('delayed');setNav('archive-list');}} onGoAllPatients={()=>setNav('all-patients')} onGoArchiveSuccess={()=>{setArchiveDashFilter('success');setNav('archive-list');}} onOpen={setClinical} onOpenStorage={()=>{_settingsWantTab='storage';setNav('settings');}} currentUser={currentUser}/>}
           {!dbLoading && nav==='all-patients'  && <AllPatientsPage patients={patients.filter(p=>!p.archived)} archivePatients={patients.filter(p=>p.archived)} onOpen={setClinical} onBack={()=>setNav('dashboard')}/>}
           {!dbLoading && nav==='patient-list'  && <PatientList patients={patients.filter(p=>!p.archived)} onAdd={addPatient} onOpen={setClinical} settings={settings} dashFilter={dashFilter} onClearDashFilter={()=>setDashFilter(null)} search={ptSearch} filter={ptFilter} showColMgr={ptShowColMgr} onToggleColMgr={()=>setPtShowColMgr(v=>!v)} onArchive={archivePatient}/>}
           {!dbLoading && nav==='archive-list'  && <ArchiveList patients={patients.filter(p=>p.archived)} onOpen={setClinical} archiveDashFilter={archiveDashFilter} onClearArchiveDashFilter={()=>setArchiveDashFilter(null)}/>}
@@ -8432,13 +8721,14 @@ function App() {
           {!dbLoading && nav==='reports'       && <Reports patients={patients}/>}
           {!dbLoading && nav==='knowledge'     && <KnowledgeBase/>}
           {!dbLoading && nav==='image-library' && <ImageLibraryPage currentUser={currentUser}/>}
-          {!dbLoading && nav==='settings'      && <AdminSettings settings={settings} setSettings={setSettings} setNav={setNav}/>}
+          {!dbLoading && nav==='settings'      && <AdminSettings settings={settings} setSettings={setSettings} setNav={setNav} currentUser={currentUser}/>}
           {!dbLoading && nav==='admin-users'   && <AdminUsersTab currentUser={currentUser} onPendingChange={setPendingUserCount} highlightUserId={highlightUserId} onClearHighlight={()=>setHighlightUserId(null)}/>}
           {!dbLoading && nav==='trash'         && <TrashHub currentUser={currentUser} onRestore={restorePatient} onHardDelete={hardDeletePatient} pendingDeleteRequests={pendingDeleteRequests} onApproveDelete={approveDeleteRequest} onRejectDelete={rejectDeleteRequest} onAcknowledgeCancelled={async () => { await window.acknowledgeCancelledRequests(); setCancelledDeleteCount(0); }}/>}
           {!dbLoading && nav==='activity-log'  && <ActivityLogTab/>}
           {!dbLoading && nav==='audit-log'     && <AuditLogTab/>}
           {!dbLoading && nav==='changelog'     && <ChangelogPage highlightCommentTarget={highlightCommentTarget} onClearHighlight={()=>setHighlightCommentTarget(null)}/>}
         </div>
+        <StorageAlert currentUser={currentUser}/>
         {/* v0.7.17.3 — Floating Scroll up/down (มองเฉพาะหน้าที่ scroll ของ main content) */}
         <ScrollNav getContainer={() => mainScrollRef.current} />
       </main>
@@ -8663,8 +8953,8 @@ function RequestEditModal({ field, currentValue, onClose }) {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.19.4';
-const BUILD_DATE = '2 ก.ค. 2569';
+const APP_VERSION = '0.7.19.5';
+const BUILD_DATE = '3 ก.ค. 2569';
 function AboutModal({ onClose, onShowChangelog }) {
   const [closing, setClosing] = React.useState(false);
   const handleClose = () => { if (closing) return; setClosing(true); setTimeout(onClose, 580); };
@@ -12074,6 +12364,7 @@ function JustifiedGallery({ items, targetHeight = 190, gap = 8, renderItem }) {
   const ref = React.useRef(null);
   const [cw, setCw] = React.useState(0);
   const posRef = React.useRef(new Map());   // id → ตำแหน่งเดิม (สำหรับ FLIP animate ตอนเลื่อน)
+  const cwRef = React.useRef(0);            // ความกว้างล่าสุด — ใช้เช็คว่าเป็น resize (ยุบ sidebar) จะได้ไม่ FLIP
   React.useEffect(() => {
     const el = ref.current; if (!el) return;
     const update = () => setCw(el.clientWidth);
@@ -12085,13 +12376,14 @@ function JustifiedGallery({ items, targetHeight = 190, gap = 8, renderItem }) {
   // FLIP: รูปลบ/เพิ่ม → รูปที่เหลือเลื่อนนุ่มๆ ไปตำแหน่งใหม่ (ไม่กระโดด)
   React.useLayoutEffect(() => {
     const el = ref.current; if (!el) return;
+    const widthChanged = cwRef.current !== cw; cwRef.current = cw;   // resize/ยุบ sidebar → ไหลตามความกว้าง ไม่ FLIP (ไม่เด้ง)
     const nodes = el.querySelectorAll('[data-flip-id]');
     const present = new Set();
     nodes.forEach(node => {
       const id = node.getAttribute('data-flip-id'); present.add(id);
       const nr = node.getBoundingClientRect();
       const old = posRef.current.get(id);
-      if (old) {
+      if (old && !widthChanged) {
         const dx = old.left - nr.left, dy = old.top - nr.top;
         if (dx || dy) {
           node.style.transition = 'none';

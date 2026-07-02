@@ -85,6 +85,12 @@ Earlier versions rendered the dashboard in an `<iframe src="/app.html">` and tra
 - HEIC/HEIF decode uses **`heic-to/csp`** (avoids `eval`, needs only `wasm-unsafe-eval`). Do **not** switch back to `heic2any` (uses `eval` → blocked by CSP).
 - CSP lives in `next.config.js`. When adding an external origin (font, storage, API), add it to the right directive there.
 
+### Storage usage monitor (admin) — v0.7.19.5
+- **`app/api/admin/storage/route.ts`** (admin-only) returns real usage: `db` (Supabase Postgres — `total` from `pg_database_size`, split into `userTables` vs `systemSpace`, `quota` 500 MB) and `r2` (Cloudflare R2 — exact `total` by listing both buckets, `quota` 10 GB, `count`, per-category `byType` from `tb_patient_images.size_bytes`, `thumbsOther`, plus `patientTotal`/`avatarTotal`).
+- R2 exact size comes from `r2BucketUsage(bucket)` in `lib/r2.ts` (S3 ListObjectsV2, sums `<Size>`, paginates via continuation token). No extra API token — reuses R2 creds.
+- Two SECURITY DEFINER SQL functions (already applied in Supabase, saved as evidence): `get_db_stats()` (`scripts/add-db-stats-function.sql`) and `get_db_size()` (`scripts/add-get-db-size-function.sql`). Granted to `service_role`, called via the admin client only.
+- UI components in `tb-monolith.jsx`: `StorageMiniCard` (Dashboard KPI row — 5th card, admin only, clickable → opens settings storage tab via `_settingsWantTab`), `StorageDonut` + `StorageDetail` (settings "พื้นที่จัดเก็บ" tab — donut + segmented bars colored by category like iPhone storage), `StorageAlert` (popup on every site entry when usage ≥ 80%, **admin only** — regular users never see it). Client caches the fetch in `localStorage` (`STORAGE_TTL`) to avoid layout shift. Percentages shown as `x.xxx`.
+
 ### Database conventions
 - `profiles.status` ∈ `pending | approved | rejected` drives redirects in middleware and page checks. `profiles.is_super_admin` is planned for the multi-admin feature.
 - Heavy use of append-only log tables (`tb_session_log`, `tb_logout_log`, `tb_login_log`, `tb_password_change_log`, `tb_password_reset_log`, `tb_user_action_log`, `tb_profile_edit_log`, `tb_user_reject_log`). Most carry snapshot columns of user state at event time.
@@ -111,7 +117,7 @@ The version string lives in **three code locations** — all must match, in the 
 | 2 | `app/legacy/tb-monolith.jsx` | `const BUILD_DATE = '...'` — Thai date, พ.ศ. = ค.ศ.+543 (e.g. `'2 ก.ค. 2569'` for 2026-07-02). **Must equal the actual push date.** |
 | 3 | `app/login/page.tsx` | hardcoded `Version X.Y.Z` in the footer under the login form |
 
-Format differs: `tb-monolith.jsx` footer shows `v0.7.19.3`; `login/page.tsx` shows `Version 0.7.19.3`. After editing, grep the repo for both the **new** and **old** version strings — the new one must appear in exactly these three spots (plus the changelog after regeneration), and the old one must be gone from code.
+Format differs: `tb-monolith.jsx` footer shows `v0.7.19.5`; `login/page.tsx` shows `Version 0.7.19.5`. After editing, grep the repo for both the **new** and **old** version strings — the new one must appear in exactly these three spots (plus the changelog after regeneration), and the old one must be gone from code.
 
 The **changelog is auto-generated from git log** — do not hand-edit `app/legacy/tb-changelog.js`. After committing the version bump with a detailed message, run:
 
