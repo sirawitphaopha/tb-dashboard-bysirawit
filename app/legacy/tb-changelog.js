@@ -23,8 +23,29 @@ window.TB_CHANGELOG = [
     description: "ระบบ login จริง + Audit Log ครบวงจร + Admin Approval + ดีไซน์ใหม่ทั้งหมด",
     versions: [
       {
-        version: "0.7.19.5",
+        version: "0.7.19.6",
         date: "3 ก.ค. 2569",
+        commit: "04bbdb1",
+        commitFull: "04bbdb1150c168d391c09c53fef8ed18d032fe9a",
+        title: "refactor(phase-1a): แยก window.* globals ไป parts/globals.js — v0.7.19.6.1",
+        changes: [
+          { tag: "feature", text: "เพิ่มไฟล์ใหม่ app/legacy/parts/globals.js: อ่าน window.* ที่ tb-data.js/setup.ts ตั้งไว้ \"ครั้งเดียว\" แล้ว re-export เป็น named export (a) ชุด destructure เดิม 18 ค่า (ADR_LIST, migrateAdr, calcDoses, calcCrCl, crClStage," },
+          { tag: "feature", text: "แก้ tb-monolith.jsx: ลบ destructure `const {...} = window` (เดิมบรรทัด 55–58) เปลี่ยนเป็น import ชื่อเดียวกันจาก './parts/globals' ที่หัวไฟล์ ชื่อทั้งหมดที่ใช้ในไฟล์ยังเหมือนเดิม → component ไม่ต้องแก้" },
+          { tag: "feature", text: "อัปเดต CLAUDE.md: บันทึกสถาปัตยกรรมใหม่ (parts/ + globals.js) + สถานะ refactor" },
+          { tag: "ui", text: "bump version → 0.7.19.6.1 (APP_VERSION + login/page.tsx; BUILD_DATE = 3 ก.ค. 2569 ตรงวันแล้ว)" },
+          { tag: "feature", text: "ลำดับโหลด setup → tb-data → tb-changelog → tb-monolith ยังเดิม (globals.js ถูกเรียกผ่าน tb-monolith ซึ่งเป็น import ตัวสุดท้ายใน TbBundle → window.* ถูก set ครบก่อน)" },
+          { tag: "feature", text: "ยืนยันแล้วว่าไม่มีการประกาศชื่อซ้ำ (ไม่เกิด duplicate binding)" },
+          { tag: "ui", text: "npm run build ผ่านสะอาด: Compiled successfully + TypeScript ผ่าน + ทุกหน้า generate สำเร็จ" },
+          { tag: "feature", text: "app/legacy/parts/globals.js (ใหม่)" },
+          { tag: "feature", text: "app/legacy/tb-monolith.jsx (import จาก globals แทน destructure window)" },
+          { tag: "feature", text: "app/login/page.tsx (version)" },
+          { tag: "feature", text: "CLAUDE.md (บันทึก refactor)" },
+        ],
+        body: "== เป้าหมาย (Goal) ==\nเริ่มเฟสแรกของการผ่าไฟล์ยักษ์ tb-monolith.jsx (13,476 บรรทัด) ออกเป็นไฟล์ย่อย\nเฟส 1a สร้าง \"โมดูลกลางของ window globals\" เป็นฐานให้ทุกเฟสถัดไป import ใช้\nเป็นการย้ายโค้ดล้วน ไม่แก้ logic ใด ๆ แอปทำงานเหมือนเดิมทุกประการ\n\n== สิ่งที่แก้ (What changed) ==\n- เพิ่มไฟล์ใหม่ app/legacy/parts/globals.js:\n  อ่าน window.* ที่ tb-data.js/setup.ts ตั้งไว้ \"ครั้งเดียว\" แล้ว re-export เป็น named export\n  (a) ชุด destructure เดิม 18 ค่า (ADR_LIST, migrateAdr, calcDoses, calcCrCl, crClStage,\n      DRUG_RANGES, REGIMENS, PREFIXES, PATIENT_TYPES, DISEASE_LOCATIONS, EXTRA_PULMONARY_TYPES,\n      TAMBONS, DEFAULT_COMORBIDITIES, CONSULT_TYPES, DRP_TYPES, LAB_GROUPS, getLabStatus, LAB_STATUS_STYLE)\n  (b) ปิดกับดัก \"bare implicit globals\" ที่เคยพึ่ง window fall-through (สาย ESM strict มองไม่เห็น):\n      Chart, INITIAL_PATIENTS, generateAlerts, DEFAULT_DRUGS, DEFAULT_RESTART_REASONS\n  (c) profession maps (PROFESSION_LABELS_TH, PROFESSIONS) เตรียมไว้ให้ parts อนาคต\n- แก้ tb-monolith.jsx:\n  ลบ destructure `const {...} = window` (เดิมบรรทัด 55–58)\n  เปลี่ยนเป็น import ชื่อเดียวกันจาก './parts/globals' ที่หัวไฟล์\n  ชื่อทั้งหมดที่ใช้ในไฟล์ยังเหมือนเดิม → component ไม่ต้องแก้\n- อัปเดต CLAUDE.md: บันทึกสถาปัตยกรรมใหม่ (parts/ + globals.js) + สถานะ refactor\n- bump version → 0.7.19.6.1 (APP_VERSION + login/page.tsx; BUILD_DATE = 3 ก.ค. 2569 ตรงวันแล้ว)\n\n== ทำไมปลอดภัย (Why safe) ==\n- ลำดับโหลด setup → tb-data → tb-changelog → tb-monolith ยังเดิม (globals.js ถูกเรียกผ่าน\n  tb-monolith ซึ่งเป็น import ตัวสุดท้ายใน TbBundle → window.* ถูก set ครบก่อน)\n- ยืนยันแล้วว่าไม่มีการประกาศชื่อซ้ำ (ไม่เกิด duplicate binding)\n- npm run build ผ่านสะอาด: Compiled successfully + TypeScript ผ่าน + ทุกหน้า generate สำเร็จ\n\n== ไฟล์ (Files) ==\n- app/legacy/parts/globals.js (ใหม่)\n- app/legacy/tb-monolith.jsx (import จาก globals แทน destructure window)\n- app/login/page.tsx (version)\n- CLAUDE.md (บันทึก refactor)\n\nClaude-Session: https://claude.ai/code/session_01G4FiNUn1unkp7fFpYR5hyi",
+      },
+      {
+        version: "0.7.19.5",
+        date: "2 ก.ค. 2569",
         commit: "01ee271",
         commitFull: "01ee27196e81d06492740a799c032e3850274c45",
         title: "ระบบวัดพื้นที่จัดเก็บ (Storage usage) สำหรับแอดมิน + จัด sidebar ยุบให้ icon อยู่กลาง",
@@ -360,7 +381,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.16.1",
-        date: "1 มิ.ย. 2569",
+        date: "31 พ.ค. 2569",
         commit: "9ae1eab",
         commitFull: "9ae1eab266bf0326bcd9887f2c4a3f360846bb83",
         title: "Phase 3 Step 2 — Teal Skeleton Loading (ลด perceived blank time เหลือ 0)",
@@ -384,7 +405,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.16.0",
-        date: "1 มิ.ย. 2569",
+        date: "31 พ.ค. 2569",
         commit: "b958385",
         commitFull: "b958385e4d7ebf190f0a11ac7d3007de8c653cb9",
         title: "Phase 3 Step 1 — Pre-compile JSX (ลบ Babel 2.1 MB จาก prod) ลด first load ~30%",
@@ -408,7 +429,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.15.5",
-        date: "1 มิ.ย. 2569",
+        date: "31 พ.ค. 2569",
         commit: "4da584c",
         commitFull: "4da584c1bcec7a3c040f5f50e94e40bc5402f670",
         title: "Phase 2 Step 4 — Style refactor Comment card (inline → CSS class · ลด React allocation 50%)",
@@ -432,7 +453,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.15.4",
-        date: "1 มิ.ย. 2569",
+        date: "31 พ.ค. 2569",
         commit: "297dad2",
         commitFull: "297dad2138a8d3b53288a817e5a3c61609a79960",
         title: "Phase 2 Step 3 — Keep mounted CommentSection (เปิดปิดคอมเม้น instant ครั้งถัดไป)",
@@ -456,7 +477,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.15.3",
-        date: "1 มิ.ย. 2569",
+        date: "31 พ.ค. 2569",
         commit: "468134b",
         commitFull: "468134b933c7697c27159a745b54903a640d0424",
         title: "Phase 2 Step 2 — RLS strict tb_changelog_comments + pg_cron auto-refresh MV ทุก 5 นาที",
@@ -480,7 +501,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.15.2",
-        date: "1 มิ.ย. 2569",
+        date: "31 พ.ค. 2569",
         commit: "c19894d",
         commitFull: "c19894da6f5e468928a297147f33d318cdb610d2",
         title: "Phase 2 Step 1 — Materialized View บันทึกกิจกรรม + KPI border 4 อัน + Virtual scroll content-visibility",
@@ -648,7 +669,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.14.4",
-        date: "31 พ.ค. 2569",
+        date: "30 พ.ค. 2569",
         commit: "73757b9",
         commitFull: "73757b97a72e259f29695370a1257fa617b08137",
         title: "Brand visual refresh — icon ปอด 3 สี + Font Manrope + Plus Jakarta Sans + Sidebar ขยาย",
@@ -672,7 +693,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.14.3",
-        date: "31 พ.ค. 2569",
+        date: "30 พ.ค. 2569",
         commit: "4c8dbc7",
         commitFull: "4c8dbc72395ce185faa012aced099c5acd276a1a",
         title: "Patch รวม UX/bug fixes — icon ปอด-ไวรัส, เคอร์เซอร์, search popup, bulk fetch comments, click-outside",
@@ -696,7 +717,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.14.2",
-        date: "31 พ.ค. 2569",
+        date: "30 พ.ค. 2569",
         commit: "b9e10ae",
         commitFull: "b9e10ae10f78ab9ecbada5524be416d4881e9686",
         title: "Changelog: ระบบ Comment ต่อ version (DB + API + Email) + ป้าย \"New\" บน sidebar + Housekeeping + UX polish รอบใหญ่",
@@ -1828,7 +1849,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.4",
-        date: "17 พ.ค. 2569",
+        date: "16 พ.ค. 2569",
         commit: "64637d6",
         commitFull: "64637d6b3e91b4fb32f0354ddc163fc44e511961",
         title: "ระบบถังขยะ + Admin notifications + แก้ 3 บั๊ก infrastructure",
@@ -1876,7 +1897,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.2.4",
-        date: "16 พ.ค. 2569",
+        date: "15 พ.ค. 2569",
         commit: "bfe274a",
         commitFull: "bfe274a2117c6a6a801ad9ff7a04b52bcc084812",
         title: "v0.7.2.4 hotfix — rename index.html to app.html กัน Cloudflare เสิร์ฟ static ข้าม Next.js auth",
@@ -1895,7 +1916,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.2.3",
-        date: "16 พ.ค. 2569",
+        date: "15 พ.ค. 2569",
         commit: "f67023e",
         commitFull: "f67023e44d833324c2e6f191cf154e878df1a241",
         title: "v0.7.2.3 hotfix — server-side auth check ใน root page กัน bypass login บน Cloudflare",
@@ -1919,7 +1940,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.2.2",
-        date: "16 พ.ค. 2569",
+        date: "15 พ.ค. 2569",
         commit: "a2de01d",
         commitFull: "a2de01d19e2720e41f77c17dc6b06dcf4d758b1b",
         title: "v0.7.2.2 hotfix — force-dynamic บน auth pages กัน prerender crash บน Cloudflare",
@@ -1941,7 +1962,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.2.1",
-        date: "16 พ.ค. 2569",
+        date: "15 พ.ค. 2569",
         commit: "e436055",
         commitFull: "e43605560882f76209988b0afd1c6a8656ce9006",
         title: "bump version to v0.7.2.1 (hotfix release tag)",
@@ -1952,7 +1973,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.2",
-        date: "16 พ.ค. 2569",
+        date: "15 พ.ค. 2569",
         commit: "092d2b5",
         commitFull: "092d2b5f6ecf618831f4c27c8ffab62e2733bcf3",
         title: "v0.7.2 — Phase 1 Backend Complete (Supabase Auth จริง + Resend Email + Admin Approval + Profile Real Data)",
@@ -2029,12 +2050,12 @@ window.TB_CHANGELOG = [
     era: "First Real Build",
     icon: "🚀",
     color: "#0891b2",
-    period: "11 พ.ค. – 15 พ.ค. 2569",
+    period: "11 พ.ค. – 14 พ.ค. 2569",
     description: "Full App Build ครั้งแรก — Dashboard, Patient List, Modal ทุกอย่างเปิดตัวพร้อมกัน",
     versions: [
       {
         version: "0.6.21",
-        date: "15 พ.ค. 2569",
+        date: "14 พ.ค. 2569",
         commit: "33d4281",
         commitFull: "33d4281996112d2f254f51b727f1a772fa75f63c",
         title: "v0.6.21 — UI overhaul: login, charts, table, sidebar, search",

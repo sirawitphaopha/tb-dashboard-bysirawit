@@ -26,6 +26,11 @@ import * as React from 'react'
 import { createPortal } from 'react-dom'
 import Cropper from 'react-easy-crop'
 import V2Skeleton from '../components/V2Skeleton'
+import { ADR_LIST, migrateAdr, calcDoses, calcCrCl, crClStage,
+         DRUG_RANGES, REGIMENS, PREFIXES, PATIENT_TYPES, DISEASE_LOCATIONS,
+         EXTRA_PULMONARY_TYPES, TAMBONS, DEFAULT_COMORBIDITIES,
+         CONSULT_TYPES, DRP_TYPES, LAB_GROUPS, getLabStatus, LAB_STATUS_STYLE,
+         Chart, INITIAL_PATIENTS, generateAlerts, DEFAULT_DRUGS, DEFAULT_RESTART_REASONS } from './parts/globals'
 const { useState, useEffect, useRef } = React
 
 /* ════════════════ tb-modals.jsx ════════════════ */
@@ -51,11 +56,7 @@ function useModalAnim(onClose, opts = {}) {
   };
 }
 
-// pull window globals into Babel scope
-const { ADR_LIST, migrateAdr, calcDoses, calcCrCl, crClStage,
-        DRUG_RANGES, REGIMENS, PREFIXES, PATIENT_TYPES, DISEASE_LOCATIONS,
-        EXTRA_PULMONARY_TYPES, TAMBONS, DEFAULT_COMORBIDITIES,
-        CONSULT_TYPES, DRP_TYPES, LAB_GROUPS, getLabStatus, LAB_STATUS_STYLE } = window;
+// window globals (ADR_LIST, calcDoses, Chart, INITIAL_PATIENTS, ...) ย้ายไป import จาก ./parts/globals ที่หัวไฟล์ (เฟส 1a)
 const INP = `w-full p-2.5 border rounded-xl bg-gray-50 outline-none focus:ring-2 focus:ring-teal-400 text-sm`;
 const HOSP_STRENGTHS = {
   R:  [{label:'R300',value:300},{label:'R450',value:450}],
@@ -8953,7 +8954,7 @@ function RequestEditModal({ field, currentValue, onClose }) {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.19.5';
+const APP_VERSION = '0.7.19.6.1';
 const BUILD_DATE = '3 ก.ค. 2569';
 function AboutModal({ onClose, onShowChangelog }) {
   const [closing, setClosing] = React.useState(false);
