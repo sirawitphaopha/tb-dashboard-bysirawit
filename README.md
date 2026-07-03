@@ -86,13 +86,17 @@ app/
   reset-password/       # ลืมรหัส / ตั้งรหัสใหม่
   components/
     TbAppMount.tsx      # dynamic import (ssr:false) + V2Skeleton ระหว่างโหลด
-    TbBundle.tsx        # chain: setup → tb-data → tb-changelog → tb-monolith
+    TbBundle.tsx        # chain: setup → tb-constants/calc/seed/db → tb-changelog → tb-monolith
     V2Skeleton.tsx      # โครงหน้า pulse ระหว่างโหลด
   legacy/
     setup.ts            # เซ็ต window.React/Chart/supabase (แทน CDN เดิม)
-    tb-data.js          # ข้อมูล + ฟังก์ชันบน window.*
+    tb-constants.js     # ค่าคงที่/enum/label            ┐ เดิมเป็น tb-data.js
+    tb-calc.js          # ฟังก์ชันคำนวณ (ขนาดยา/CrCl)     │ ไฟล์เดียว
+    tb-seed.js          # ข้อมูลตัวอย่าง INITIAL_PATIENTS  │ แยก 4 ไฟล์
+    tb-db.js            # Supabase client + โหลด/บันทึก    ┘ (v0.7.19.6.20)
     tb-changelog.js     # ประวัติเวอร์ชัน (auto-generate — ห้ามแก้มือ)
-    tb-monolith.jsx     # ⭐ ตัวแอปทั้งหมด (ทุกหน้า/ทุก modal + APP_VERSION/BUILD_DATE)
+    tb-monolith.jsx     # 🐚 shell บาง ๆ (App + แจ้งเตือน + version + mount)
+    parts/              # ⭐ ตัวแอปจริง แยกโดเมน (dashboard/ admin/ account/ patient-modal/ ฯลฯ)
   api/
     auth/    admin/    patient/    profile/    register/    login-lookup/
 lib/                    # supabase clients, r2, resend, email-templates, helpers
@@ -101,7 +105,7 @@ middleware.ts           # session check + status redirect (อย่าเปล
 next.config.js          # CSP + security headers + allowedDevOrigins
 ```
 
-> ⭐ **`app/legacy/tb-monolith.jsx` คือตัวแอปจริงทั้งหมด** (~9000+ บรรทัด) เขียนด้วย JSX ที่ SWC แปลงตอน build — ตั้งแต่ v0.7.17.0 เลิกใช้ iframe + Babel แล้ว
+> ⭐ **ตัวแอปจริงอยู่ใน `app/legacy/parts/`** (แยกจาก monolith เสร็จช่วง v0.7.19.6.x · `tb-monolith.jsx` เหลือ ~985 บรรทัดเป็น shell) เขียนด้วย JSX ที่ SWC แปลงตอน build — ตั้งแต่ v0.7.17.0 เลิกใช้ iframe + Babel แล้ว
 
 ---
 

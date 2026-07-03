@@ -34,7 +34,7 @@ while ((m = re.exec(log)) !== null) {
 
 // ─── Extract version from subject ────────────────────────────────────────
 function extractVersion(subject) {
-  const m = subject.match(/v?(\d+\.\d+(?:\.\d+){0,2})/);
+  const m = subject.match(/v?(\d+\.\d+(?:\.\d+){0,3})/);
   return m ? m[1] : null;
 }
 function getMajor(version) {
@@ -54,8 +54,8 @@ function thaiDate(d) {
 // ─── Trim body: remove Co-Authored-By + empty lines at end ──────────────
 function trimBody(body) {
   let lines = body.split('\n');
-  // remove Co-Authored-By and Co-authored-by lines
-  lines = lines.filter(l => !/^co-?authored-by:/i.test(l.trim()));
+  // remove Co-Authored-By + Claude-Session trailer lines (noise from cloud/mobile commits)
+  lines = lines.filter(l => !/^co-?authored-by:/i.test(l.trim()) && !/^claude-session:/i.test(l.trim()));
   // strip trailing empty lines
   while (lines.length && lines[lines.length-1].trim() === '') lines.pop();
   while (lines.length && lines[0].trim() === '') lines.shift();
@@ -65,13 +65,20 @@ function trimBody(body) {
 // ─── Extract title from subject (strip "vX.Y.Z" / "feat: " / etc.) ──────
 function extractTitle(subject) {
   let s = subject;
-  // strip type prefixes
-  s = s.replace(/^(feat|fix|chore|docs|refactor|security|style|test):\s*/i, '');
-  // strip leading version + dash/dot/colon
-  s = s.replace(/^v?\d+\.\d+(\.\d+){0,2}\s*[—·:\-]\s*/, '');
-  // strip leading "TB CARE & JOURNEY" / "TB-CARE LINK"
-  s = s.replace(/^TB[- ]?(CARE\s*&?\s*JOURNEY|CARE LINK)\s*[—·:\-]?\s*/i, '');
-  // strip "v0.7.X.X — " from mid (already cleaned)
+  // strip type prefixes (รองรับ scope เช่น refactor(split-r3-4): )
+  s = s.replace(/^(feat|fix|chore|docs|refactor|security|style|test)(\([^)]*\))?:\s*/i, '');
+  // ตัด "หัว" ที่ไม่ใช่เนื้อหา — ชื่อโปรเจกต์ / เลข version / ตัวคั่น — วนจนไม่เหลือ
+  // (commit เก่ามีทั้ง "TB-CARE LINK vX — ..." และ "vX · TB-CARE LINK — ..." สลับลำดับกัน จึงต้องวน)
+  // \p{Pd} = dash ทุกชนิดใน Unicode (-, –, —, ―, ‒) · · = middot · : = colon
+  let prev;
+  do {
+    prev = s;
+    s = s.replace(/^TB[- ]?(CARE\s*&?\s*JOURNEY|CARE LINK)\s*/iu, '');    // ชื่อโปรเจกต์
+    s = s.replace(/^v?\d+\.\d+(?:\.\d+){0,3}\s*(?:hotfix|hf)?\s*/iu, ''); // เลข version (+hotfix)
+    s = s.replace(/^[\p{Pd}·:]\s*/u, '');                                 // ตัวคั่นนำหน้า
+  } while (s !== prev);
+  // strip trailing dash + vX.Y.Z(.W) (ซ้ำกับเลข version ที่โชว์อยู่แล้ว)
+  s = s.replace(/\s*[\p{Pd}·]\s*v?\d+\.\d+(?:\.\d+){0,3}\s*$/u, '');
   return s.trim();
 }
 
