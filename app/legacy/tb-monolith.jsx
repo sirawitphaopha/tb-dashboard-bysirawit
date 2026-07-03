@@ -31,7 +31,8 @@ import { ADR_LIST, migrateAdr, calcDoses, calcCrCl, crClStage,
          EXTRA_PULMONARY_TYPES, TAMBONS, DEFAULT_COMORBIDITIES,
          CONSULT_TYPES, DRP_TYPES, LAB_GROUPS, getLabStatus, LAB_STATUS_STYLE,
          Chart, INITIAL_PATIENTS, generateAlerts, DEFAULT_DRUGS, DEFAULT_RESTART_REASONS } from './parts/globals'
-import { useModalAnim, INP, FormSection, FieldError, RangeStatus, Badge } from './parts/shared'
+import { useModalAnim, INP, FormSection, FieldError, RangeStatus, Badge,
+         ConfirmModal, ToastModal, Field, FilterSelect, StatusBadge, ScrollNav } from './parts/shared'
 const { useState, useEffect, useRef } = React
 
 /* ════════════════ tb-modals.jsx ════════════════ */
@@ -621,25 +622,7 @@ function buildGroupedTimeline(patient) {
 }
 
 // ─── CONFIRM MODAL ───────────────────────────────────────────────────────────
-function ConfirmModal({ message, onConfirm, onCancel }) {
-  const {closing, close, modalCls, overlayCls} = useModalAnim(onCancel);
-  const doConfirm = () => { if (closing) return; setTimeout(onConfirm, 0); close(); };
-  return (
-    <div className={"fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 "+overlayCls}>
-      <div className={"bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center "+modalCls}>
-        <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <i className="fa-solid fa-triangle-exclamation text-red-500 text-2xl"></i>
-        </div>
-        <p className="font-bold text-gray-800 text-base mb-2">{message}</p>
-        <p className="text-sm text-gray-400 mb-6">การกระทำนี้ไม่สามารถยกเลิกได้</p>
-        <div className="flex gap-3">
-          <button type="button" onClick={close} className="flex-1 py-2.5 border border-gray-200 rounded-xl font-bold text-gray-600 hover:bg-gray-50 transition-colors">ยกเลิก</button>
-          <button type="button" onClick={doConfirm} className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-colors">ยืนยันลบ</button>
-        </div>
-      </div>
-    </div>
-  );
-}
+// ConfirmModal ย้ายไป parts/shared.jsx (เฟส 1c)
 
 // ─── VISIT FORM ───────────────────────────────────────────────────────────────
 const EMPTY_VISIT = () => ({
@@ -4124,47 +4107,7 @@ const STATUS_STYLE = {
   rejected: { bg:'#fee2e2', fg:'#991b1b', label:'❌ ปฏิเสธ' },
 };
 
-function ToastModal({ toast, onClose }) {
-  const [closing, setClosing] = React.useState(false);
-  // reset closing state เมื่อ toast ใหม่เข้ามา
-  React.useEffect(() => { if (toast) setClosing(false); }, [toast]);
-  const close = React.useCallback(() => {
-    if (closing) return;
-    setClosing(true);
-    setTimeout(onClose, 280);
-  }, [closing, onClose]);
-  if (!toast) return null;
-  const palette = {
-    success: { bg:'#ecfdf5', bd:'#10b981', fg:'#065f46', icon:'fa-circle-check', btn:'#0d9488', btnHover:'#0f766e' },
-    error:   { bg:'#fef2f2', bd:'#ef4444', fg:'#991b1b', icon:'fa-circle-xmark', btn:'#dc2626', btnHover:'#b91c1c' },
-    info:    { bg:'#eff6ff', bd:'#3b82f6', fg:'#1e3a8a', icon:'fa-circle-info',  btn:'#2563eb', btnHover:'#1d4ed8' },
-  };
-  const c = palette[toast.kind] || palette.info;
-  return (
-    <div className={"fixed inset-0 z-50 flex items-center justify-center p-4 "+(closing?'modal-overlay-out':'')} style={{ background:'rgba(15,23,42,0.45)' }}>
-      <div className={"bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden "+(closing?'modal-toast-out':'modal-toast')}>
-        <div className="px-6 py-5" style={{ background: c.bg, borderLeft: `5px solid ${c.bd}` }}>
-          <div className="flex items-start gap-3">
-            <i className={'fa-solid '+c.icon+' text-2xl mt-0.5'} style={{ color: c.bd }}></i>
-            <div className="flex-1">
-              {toast.title && <h3 className="font-bold text-base mb-1" style={{ color: c.fg }}>{toast.title}</h3>}
-              <p className="text-sm whitespace-pre-line" style={{ color: c.fg }}>{toast.message}</p>
-            </div>
-          </div>
-        </div>
-        <div className="px-6 py-3 bg-white flex justify-end">
-          <button type="button" onClick={close}
-            className="px-5 py-2 rounded-xl text-white text-sm font-bold transition-colors"
-            style={{ background: c.btn }}
-            onMouseEnter={e=>e.currentTarget.style.background=c.btnHover}
-            onMouseLeave={e=>e.currentTarget.style.background=c.btn}>
-            ตกลง
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+// ToastModal ย้ายไป parts/shared.jsx (เฟส 1c)
 
 // ประวัติการเปิด-ปิดบัญชี — รายการเรียงเวลา (ใหม่สุดอยู่บน)
 function ActionHistoryTable({ logs, loading }) {
@@ -5441,14 +5384,7 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
   );
 }
 
-function Field({ label, value }) {
-  return (
-    <div>
-      <p className="text-xs text-gray-400">{label}</p>
-      <p className="text-sm font-semibold mt-0.5 text-gray-800">{value}</p>
-    </div>
-  );
-}
+// Field ย้ายไป parts/shared.jsx (เฟส 1c)
 
 // ─────────────────────────────────────────────────────
 // ActivityLogTab — บันทึกกิจกรรม (timeline รวม เข้า/ออก/รหัสผ่าน/easter)
@@ -5496,18 +5432,7 @@ function activityDeviceIcon(t) {
   return 'fa-desktop'
 }
 // dropdown ที่มีไอคอนนำหน้า + ลูกศรเอง (สวย consistent)
-function FilterSelect({ icon, value, onChange, children }) {
-  return (
-    <div style={{position:'relative'}}>
-      <i className={`fa-solid ${icon}`} style={{position:'absolute',left:'11px',top:'50%',transform:'translateY(-50%)',color:'#0d9488',fontSize:'11px',pointerEvents:'none'}}></i>
-      <select value={value} onChange={onChange}
-        style={{fontSize:'12px',fontWeight:value?600:400,padding:'9px 26px 9px 30px',borderRadius:'9px',border:`1px solid ${value?'#5eead4':'#e5e7eb'}`,background:value?'#f0fdfa':'#fff',color:value?'#0f766e':'#374151',outline:'none',cursor:'pointer',appearance:'none',WebkitAppearance:'none',MozAppearance:'none'}}>
-        {children}
-      </select>
-      <i className="fa-solid fa-chevron-down" style={{position:'absolute',right:'10px',top:'50%',transform:'translateY(-50%)',color:'#9ca3af',fontSize:'9px',pointerEvents:'none'}}></i>
-    </div>
-  )
-}
+// FilterSelect ย้ายไป parts/shared.jsx (เฟส 1c)
 function ActivityLogTab() {
   const [events, setEvents]       = useState([])
   const [loading, setLoading]     = useState(true)
@@ -5945,11 +5870,7 @@ function AuditLogTab() {
 /* ════════════════ tb-app.jsx ════════════════ */
 
 // ===================== STATUS BADGE =====================
-function StatusBadge({ status }) {
-  if (status === 'critical') return <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 w-fit animate-pulse"><i className="fa-solid fa-triangle-exclamation"></i>Lab ผิดปกติ</span>;
-  if (status === 'warning') return <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-xs font-bold">⚠ ติดตาม</span>;
-  return <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold">✓ ปกติ</span>;
-}
+// StatusBadge ย้ายไป parts/shared.jsx (เฟส 1c)
 
 // ===================== DASHBOARD =====================
 const MONTH_LABELS = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
@@ -8931,7 +8852,7 @@ function RequestEditModal({ field, currentValue, onClose }) {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.19.6.2';
+const APP_VERSION = '0.7.19.6.3';
 const BUILD_DATE = '3 ก.ค. 2569';
 function AboutModal({ onClose, onShowChangelog }) {
   const [closing, setClosing] = React.useState(false);
@@ -11633,112 +11554,7 @@ function StatusLegend() {
 //   - ใช้ React Portal → render ที่ document.body
 //     (สำคัญ: ป้องกัน position:fixed ผิดที่ เมื่ออยู่ใน modal-A ที่มี transform)
 //   - คำนวณตำแหน่งจาก bounding rect ของ container → เกาะมุมล่างขวาของ "กรอบ"
-function ScrollNav({ getContainer, zIndex = 30 }) {
-  const [canUp, setCanUp]     = React.useState(false)
-  const [canDown, setCanDown] = React.useState(false)
-  const [pos, setPos]         = React.useState({ right: 22, bottom: 22 })  // px จาก viewport edges
-
-  React.useEffect(() => {
-    const el = getContainer ? getContainer() : null
-    const target = el || window
-    const computePos = () => {
-      if (el) {
-        const r = el.getBoundingClientRect()
-        // ฝัง padding 16px ภายในกรอบ
-        setPos({
-          right:  Math.max(8, window.innerWidth  - r.right  + 16),
-          bottom: Math.max(8, window.innerHeight - r.bottom + 16),
-        })
-      } else {
-        setPos({ right: 22, bottom: 22 })
-      }
-    }
-    const onScroll = () => {
-      let top, scrollHeight, clientHeight
-      if (el) {
-        top = el.scrollTop; scrollHeight = el.scrollHeight; clientHeight = el.clientHeight
-      } else {
-        top = window.scrollY || document.documentElement.scrollTop
-        scrollHeight = document.documentElement.scrollHeight
-        clientHeight = window.innerHeight
-      }
-      setCanUp(top > 50)
-      setCanDown(top + clientHeight < scrollHeight - 50)
-    }
-    computePos()
-    onScroll()
-    target.addEventListener('scroll', onScroll, { passive: true })
-    window.addEventListener('resize', () => { computePos(); onScroll(); })
-    // re-compute ตำแหน่งทุก 1s เผื่อ modal/layout เปลี่ยน
-    const id = setInterval(computePos, 800)
-    return () => {
-      target.removeEventListener('scroll', onScroll)
-      window.removeEventListener('resize', onScroll)
-      clearInterval(id)
-    }
-  }, [getContainer])
-
-  const scrollTo = (kind) => {
-    const el = getContainer ? getContainer() : null
-    const opts = { behavior: 'smooth' }
-    if (kind === 'up') {
-      if (el) el.scrollTo({ top: 0, ...opts }); else window.scrollTo({ top: 0, ...opts })
-    } else {
-      if (el) el.scrollTo({ top: el.scrollHeight, ...opts }); else window.scrollTo({ top: document.documentElement.scrollHeight, ...opts })
-    }
-  }
-
-  if (!canUp && !canDown) return null
-  if (typeof document === 'undefined') return null
-
-  // สีอ่อนใสตอนปกติ → hover ค่อยเข้ม
-  const btn = {
-    width:'40px',height:'40px',borderRadius:'50%',
-    border:'1px solid rgba(13,148,136,0.25)',
-    background:'rgba(255,255,255,0.7)',
-    color:'#0d9488',
-    cursor:'pointer',
-    boxShadow:'0 2px 6px rgba(0,0,0,0.06)',
-    backdropFilter:'blur(4px)',
-    WebkitBackdropFilter:'blur(4px)',
-    fontSize:'14px',display:'inline-flex',alignItems:'center',justifyContent:'center',
-    transition:'transform 0.15s, background 0.2s, color 0.2s, box-shadow 0.2s, border-color 0.2s'
-  }
-  const btnHoverEnter = (e)=>{
-    e.currentTarget.style.background='#0d9488';
-    e.currentTarget.style.color='#fff';
-    e.currentTarget.style.borderColor='#0d9488';
-    e.currentTarget.style.boxShadow='0 6px 18px rgba(13,148,136,0.45)';
-    e.currentTarget.style.transform='translateY(-2px)';
-  }
-  const btnHoverLeave = (e)=>{
-    e.currentTarget.style.background='rgba(255,255,255,0.7)';
-    e.currentTarget.style.color='#0d9488';
-    e.currentTarget.style.borderColor='rgba(13,148,136,0.25)';
-    e.currentTarget.style.boxShadow='0 2px 6px rgba(0,0,0,0.06)';
-    e.currentTarget.style.transform='translateY(0)';
-  }
-
-  // Render ผ่าน Portal ไปที่ document.body → หนีออกจาก subtree ของ modal-A
-  // (modal-A ใช้ transform ใน animation → จะดักให้ position:fixed กลายเป็น relative ต่อ modal)
-  return createPortal(
-    <div style={{position:'fixed',right:pos.right,bottom:pos.bottom,display:'flex',flexDirection:'column',gap:'8px',zIndex}}>
-      {canUp && (
-        <button title="ขึ้นบนสุด" onClick={()=>scrollTo('up')} style={btn}
-          onMouseEnter={btnHoverEnter} onMouseLeave={btnHoverLeave}>
-          <i className="fa-solid fa-chevron-up"></i>
-        </button>
-      )}
-      {canDown && (
-        <button title="ลงล่างสุด" onClick={()=>scrollTo('down')} style={btn}
-          onMouseEnter={btnHoverEnter} onMouseLeave={btnHoverLeave}>
-          <i className="fa-solid fa-chevron-down"></i>
-        </button>
-      )}
-    </div>,
-    document.body
-  )
-}
+// ScrollNav ย้ายไป parts/shared.jsx (เฟส 1c)
 
 // v0.7.17.3 Phase 4B — Pagination component สำหรับ Session History (เลขหน้า 1 2 3 ... N)
 function SessionPagination({ page, totalPages, total, pageSize, onChange }) {
