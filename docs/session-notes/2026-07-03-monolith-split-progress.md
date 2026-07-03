@@ -141,3 +141,39 @@ npm run build
 - **ระบบ AI** → `lib/ai.ts` + `lib/ai-patient-context.ts` + `app/api/ai/*` (ตาม CLAUDE.md · ผู้ใช้ยังไม่เลือก provider)
 
 **ไฟล์ใหญ่สุดที่เหลือตอนนี้:** patient-modal.jsx(2,504 รอ rebuild), changelog.jsx(2,365), admin/users.jsx(1,331), patient-images.jsx(1,271)
+
+---
+
+# 🔧 รอบ 3 — split 4 ไฟล์สุดท้าย + จัดการ dead code
+> แผนเต็ม: `~/.claude/plans/purring-booping-starfish.md` (อนุมัติแล้ว §3.1–3.4)
+> ผู้ใช้ยืนยัน: ทำต่อ 4 ไฟล์ตามลำดับ — patient-modal → changelog → patient-images → tb-data
+
+## ✅ เสร็จแล้ว (เข้า main, gate ผ่านทุกอัน — build "Compiled successfully")
+| ขั้น | เวอร์ชัน | commit | ทำอะไร |
+|---|---|---|---|
+| r3-1 | .17 | 61b0344 | `patient-modal.jsx` (2,504) → โฟลเดอร์ `patient-modal/` 11 ไฟล์ทีละแท็บ + barrel |
+| r3-2 | .18 | c204759 | `changelog.jsx` (2,365) → `changelog/{main,comments}.jsx` + barrel |
+| r3-3 | .19 | e217020 | `patient-images.jsx` (1,271) → `patient-images/{helpers,trash,patient-tab,library}.jsx` + barrel |
+| r3-4 | .20 | 44e322e | `tb-data.js` (1,049) → 4 ไฟล์ `tb-{constants,calc,seed,db}.js` + แก้ TbBundle.tsx import order |
+| r3-5 | .21 | (this) | ลบ dead code `InfoBar` (สำเนาซ้ำหัวสรุปเวชระเบียน) + เอา Badge ออกจาก import |
+
+**patient-modal/ 11 ไฟล์:** sputum-utils.js (leaf) · diagnosis · timeline · lab (Chart.js) · meds · dose-calculator · regimen · dot · adr · pharm-summary · index.jsx (ClinicalModal+AddPatientPage)
+**tb-data split (contiguous, byte-identical):** constants(1–151)+calc(152–314)+seed(315–701)+db(702–1049) → concat = ต้นฉบับเป๊ะ (diff ผ่าน)
+**TbBundle load order ใหม่:** setup → tb-constants → tb-calc → tb-seed → tb-db → tb-changelog → tb-monolith
+
+## 🔎 Dead code report (ผู้ใช้สั่ง: แยกเสร็จรายงานก่อน ห้ามลบเอง)
+เจอ 4 จุดใน patient-modal/ (มีมาตั้งแต่ monolith ไม่ใช่ของใหม่ · ทุกตัว define แต่ไม่ render/call/export):
+| ตัว | ที่อยู่ | ทำอะไร | มติผู้ใช้ |
+|---|---|---|---|
+| `DrugInteractionPanel` | meds.jsx | แผงเตือน drug interaction (เช็ค comorbidity HIV/DM/HT) | **เก็บ** — จะทำ drug interaction ในอนาคต |
+| `labColor` | lab.jsx | คืน class สีค่า Lab (getLabStatus→LAB_STATUS_STYLE) | **เก็บ** — อาจเปลี่ยนสีแลปตอนทำหน้าผู้ป่วย |
+| `labFlag` | lab.jsx | คืนธง C/H/L (critical/high/low) | **เก็บ** — อาจได้ใช้ตอนทำหน้าผู้ป่วย |
+| `InfoBar` | index.jsx | แถบหัวสรุปเวชระเบียน (แก้ inline ได้) — **สำเนาซ้ำ** ของหัวที่ ClinicalModal มีอยู่แล้ว | **ลบทิ้ง** (r3-5) — ของซ้ำ ไม่ใช่ฟีเจอร์อนาคต |
+
+## ⏭️ เหลืออะไรอีก (หลังรอบ 3)
+- **ผู้ใช้เทสต์ localhost/เว็บจริง** โดยเฉพาะ data-layer (โหลด/ลบผู้ป่วย, log, Supabase) + กราฟ Chart.js (Dashboard + Lab) — build จับ runtime ไม่ได้
+- **รื้อหน้าผู้ป่วย** แบบค่อยเป็นค่อยไป (patient-modal/ แยกทีละแท็บไว้แล้ว → ปรับทีละไฟล์) — ยังไม่เริ่ม
+- **ระบบ AI** — `lib/anthropic.ts` (lazy) + `lib/ai-patient-context.ts` + `app/api/ai/summarize` (ผู้ใช้ยังไม่เลือก provider · ดู AI roadmap)
+- dead code ที่เก็บไว้ (DrugInteractionPanel/labColor/labFlag) — ตัดสินใจตอนรื้อหน้าผู้ป่วยจริง
+
+**ไฟล์ใหญ่สุดที่เหลือ:** changelog/main.jsx(~1,200), admin/users.jsx(1,331), account/profile.jsx · ไม่มีไฟล์ part ไหนเกิน ~1,350 แล้ว (จากเดิม monolith 13,476)

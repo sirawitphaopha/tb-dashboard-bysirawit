@@ -1,11 +1,11 @@
 'use client'
 /**
- * patient-modal/index.jsx — ClinicalModal + AddPatientPage (export หลัก) + dead InfoBar (แยกรอบ 3)
+ * patient-modal/index.jsx — ClinicalModal + AddPatientPage (export หลัก)
  * import แท็บทั้งหมด + sputum-utils + PatientImagesTab (cross-part)
  */
 import * as React from 'react'
 const { useState } = React
-import { INP, FormSection, FieldError, Badge } from '../shared'
+import { INP, FormSection, FieldError } from '../shared'
 import { calcCrCl, crClStage, REGIMENS, PREFIXES, PATIENT_TYPES, DISEASE_LOCATIONS,
          EXTRA_PULMONARY_TYPES, TAMBONS, DEFAULT_COMORBIDITIES, ADR_LIST, migrateAdr } from '../globals'
 import { hasResistance } from './sputum-utils'
@@ -19,37 +19,6 @@ import { DOTCalendar } from './dot'
 import { ADRTab } from './adr'
 import { PharmSummaryTab } from './pharm-summary'
 import { PatientImagesTab } from '../patient-images'
-
-function InfoBar({patient,onUpdate}){
-  const [editing,setEditing]=useState(false);
-  const [draft,setDraft]=useState({weight:patient.weight,nextAppt:patient.nextAppt||'',hivStatus:patient.hivStatus||'',hivNote:patient.hivNote||''});
-  const save=()=>{onUpdate({...patient,weight:+draft.weight||patient.weight,nextAppt:draft.nextAppt,hivStatus:draft.hivStatus||null,hivNote:draft.hivNote});setEditing(false);};
-  return(
-    <div className="bg-slate-50 border-b border-gray-200 px-6 py-2.5 flex-shrink-0">
-      <div className="flex flex-wrap gap-x-5 gap-y-1 items-center text-sm">
-        <span className="text-gray-500 text-xs">HN: <strong className="text-gray-800 font-mono">{patient.hn}</strong></span>
-        {patient.age&&<span className="text-gray-500 text-xs">{patient.age} ปี · {patient.gender==='M'?'ชาย':'หญิง'}</span>}
-        {patient.subdistrict&&<span className="text-gray-500 text-xs">ต.<strong>{patient.subdistrict}</strong></span>}
-        {patient.patientType&&<Badge label={patient.patientType} color="bg-blue-100 text-blue-700"/>}
-        {patient.diseaseLocation&&<Badge label={patient.diseaseLocation+(patient.extraPulmonaryType?' — '+patient.extraPulmonaryType:'')} color="bg-indigo-100 text-indigo-700"/>}
-        {!editing?(<>
-          <span className="text-gray-500 text-xs">น้ำหนัก: <strong className="text-teal-700">{patient.weight} kg</strong></span>
-          {patient.nextAppt&&<span className="text-gray-500 text-xs">นัด: <strong>{patient.nextAppt}</strong></span>}
-          {patient.hivStatus&&<Badge label={'HIV: '+patient.hivStatus} color={patient.hivStatus==='Positive'?'bg-red-100 text-red-700':'bg-green-100 text-green-700'}/>}
-          <button type="button" onClick={()=>setEditing(true)} className="ml-auto text-teal-500 hover:text-teal-700 text-xs font-bold flex items-center gap-1"><i className="fa-solid fa-pen"></i>แก้ไข</button>
-        </>):(<div className="flex items-center gap-3 flex-wrap ml-auto">
-          <div className="flex items-center gap-1 text-xs"><label className="text-gray-500 font-bold">น้ำหนัก</label><input type="number" value={draft.weight} onChange={e=>setDraft(d=>({...d,weight:e.target.value}))} className="w-14 p-1 border border-teal-300 rounded-lg text-center font-bold outline-none bg-white text-xs"/><span className="text-gray-400">kg</span></div>
-          <div className="flex items-center gap-1 text-xs"><label className="text-gray-500 font-bold">วันนัด</label><input value={draft.nextAppt} onChange={e=>setDraft(d=>({...d,nextAppt:e.target.value}))} className="p-1 border border-gray-200 rounded-lg outline-none bg-white text-xs w-28"/></div>
-          <div className="flex items-center gap-1 text-xs"><label className="text-gray-500 font-bold">HIV</label>
-            <select value={draft.hivStatus} onChange={e=>setDraft(d=>({...d,hivStatus:e.target.value}))} className="p-1 border border-gray-200 rounded-lg outline-none bg-white text-xs"><option value="">-</option><option value="Positive">Positive</option><option value="Negative">Negative</option></select>
-            {draft.hivStatus==='Positive'&&<input value={draft.hivNote} onChange={e=>setDraft(d=>({...d,hivNote:e.target.value}))} placeholder="CD4..." className="p-1 border border-red-200 rounded-lg outline-none bg-white text-xs w-24"/>}
-          </div>
-          <div className="flex gap-2"><button type="button" onClick={()=>setEditing(false)} className="px-3 py-1 text-xs text-gray-500 hover:bg-gray-200 rounded-lg">ยกเลิก</button><button type="button" onClick={save} className="px-3 py-1 bg-teal-600 text-white rounded-lg text-xs font-bold">บันทึก</button></div>
-        </div>)}
-      </div>
-    </div>
-  );
-}
 
 // ── meta หมวดรูปผู้ป่วย ────────────────────────────────────────────────────
 // รูปภาพผู้ป่วย (PATIENT_IMG_TYPES, loadCache/saveCache/invalidateImgCaches, ImgViewToolbar, CXRComparePanel/Modal, ImageTrashPage, TrashHub, PatientImagesTab, ImageLibraryPage) ย้ายไป parts/patient-images.jsx (เฟส 5)
