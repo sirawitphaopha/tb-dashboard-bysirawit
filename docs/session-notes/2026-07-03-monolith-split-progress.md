@@ -29,12 +29,13 @@
 | 6 | 0.7.19.6.10 | `parts/account.jsx` | UserProfileModal (main, export), ChangePasswordPanel, SessionsPanel, RequestEditModal, AvatarCropModal, AvatarDeleteConfirm + helpers (PwEye, checkPasswordStrength, cropToWebp, resizeToWebp, deviceIcon, SessionPagination ฯลฯ) + DEPARTMENTS/HOSPITAL_TYPES. **shell เอา import Cropper + loadImageEl/AvatarLightbox ออก** (ย้ายมา account หมด · shared ยัง export ให้ patient-images) · account ← loadImageEl/AvatarLightbox จาก shared |
 | 7 | 0.7.19.6.11 | `parts/patient-modal.jsx` | ClinicalModal + AddPatientPage (export) + ทุกแท็บ (Regimen/Lab⚠️Chart.js/ADR/Timeline/Diagnosis/Meds) + DoseCalculator, DOTCalendar, VisitForm, DrugInteractionPanel, PharmSummaryTab, InfoBar + helpers/consts. **notification (useNotifHelpers/NotificationPanel/NotificationFullModal) เก็บไว้ shell** (app-level) → ย้าย 2 ช่วง 48–126 + 233–2628. cross-part: patient-modal ← PatientImagesTab จาก patient-images |
 
-**ผลลัพธ์ปัจจุบัน:** shell เหลือ ~2,406 บรรทัด (จาก 13,476 · เหลือ ~18%) · parts มี 10 ไฟล์: globals.js, shared.jsx, changelog.jsx, storage.jsx, admin.jsx, misc.jsx, patient-images.jsx, account.jsx, patient-modal.jsx
+| 8 | 0.7.19.6.12 | `parts/dashboard.jsx` | Dashboard (⚠️Chart.js), PatientList, ArchiveList, AllPatientsPage, WeeklyPrep, Reports + MONTH_LABELS/FAKE_* + col-config/render helpers. deps: shared(StatusBadge), globals(calcDoses, Chart), storage(StorageMiniCard cross-part) |
 
-## ⏳ เฟสที่เหลือ (1 เฟส สุดท้าย)
-| เฟส | เวอร์ชัน | ไฟล์ | ย้าย |
-|---|---|---|---|
-| 8 (dashboard) | 0.7.19.6.12 | `parts/dashboard.jsx` | Dashboard, PatientList, ArchiveList, AllPatientsPage, WeeklyPrep, Reports + MONTH_LABELS/FAKE_* + col-config/render helpers |
+**🎉 ผลลัพธ์สุดท้าย (จบครบ 8 เฟส):** shell เหลือ ~1,142 บรรทัด (จาก 13,476 · เหลือ ~8.5%) · parts มี 11 ไฟล์: globals.js, shared.jsx, changelog.jsx, storage.jsx, admin.jsx, misc.jsx, patient-images.jsx, account.jsx, patient-modal.jsx, dashboard.jsx
+shell เหลือแค่แกน: App + notification (แจ้งเตือน) + AboutModal + APP_VERSION/BUILD_DATE + mount logic
+
+## ✅ โครงการผ่าไฟล์ — เสร็จสมบูรณ์
+ไม่มีเฟสค้างแล้ว ทุกโดเมนแยกไฟล์ครบ · commit เฟส 8 = 1815786
 
 ## 🛠️ สูตรทำแต่ละเฟส (ทำแบบนี้ทุกครั้ง)
 1. `git checkout main && git pull && git checkout -b refactor/split-phase-X-<name>`
@@ -105,7 +106,8 @@ npm run build
 
 ## 📝 หมายเหตุการ push (รอบนี้)
 - ผู้ใช้อนุมัติให้ **push เข้า main ตรง ไม่แยกกิ่ง/ไม่เปิด PR** · commit ละเอียดระดับ A4
-- เฟส 4 = commit 03e35d7 · เฟส 5 = 0d2d824 · เฟส 6 = 89f160a · เฟส 7 = 906ca41
+- เฟส 4 = commit 03e35d7 · เฟส 5 = 0d2d824 · เฟส 6 = 89f160a · เฟส 7 = 906ca41 · เฟส 8 = 1815786 (จบ)
+- ⏭️ ยังไม่ได้ทำ: regenerate changelog (ต้อง git fetch --unshallow ก่อน — gotcha #5) · ผู้ใช้เทสต์ localhost ทุกหน้า
 - gate ต่อเฟส: `npm run build` (env หลอก) + eslint no-undef + **scan JSX `<[A-Z]>` เอง** (กับดัก #11)
 - ผู้ใช้ยังเทสต์ localhost ไม่ได้รอบนี้ → เทสต์ทีเดียวหลังจบทุกเฟส (build+eslint+scan JSX เป็น gate)
 
