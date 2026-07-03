@@ -26,10 +26,11 @@
 | 3 | 0.7.19.6.7 | `parts/admin.jsx` | AdminUsersTab, ActivityLogTab, AuditLogTab, AdminSettings + tables/activity helpers |
 | 4 | 0.7.19.6.8 | `parts/misc.jsx` | TrashList + KnowledgeBase (ย้ายตรง — พึ่งแค่ useState/useEffect + window.loadTrashedPatients/_sb, ไม่มี cross-dep) |
 | 5 | 0.7.19.6.9 | `parts/patient-images.jsx` (+`shared.jsx`) | PatientImagesTab, ImageLibraryPage, ImageTrashPage, CXRComparePanel/Modal, TrashHub, ImgViewToolbar + image helpers (compressToWebp, decodeImageToDataURL, JustifiedGallery, patientImgInfo ฯลฯ). **ย้าย loadImageEl + AvatarLightbox เข้า shared.jsx** (ใช้ร่วมกับ avatar เฟส 6) · cross-part import แรก: patient-images ← TrashList จาก misc |
+| 6 | 0.7.19.6.10 | `parts/account.jsx` | UserProfileModal (main, export), ChangePasswordPanel, SessionsPanel, RequestEditModal, AvatarCropModal, AvatarDeleteConfirm + helpers (PwEye, checkPasswordStrength, cropToWebp, resizeToWebp, deviceIcon, SessionPagination ฯลฯ) + DEPARTMENTS/HOSPITAL_TYPES. **shell เอา import Cropper + loadImageEl/AvatarLightbox ออก** (ย้ายมา account หมด · shared ยัง export ให้ patient-images) · account ← loadImageEl/AvatarLightbox จาก shared |
 
-**ผลลัพธ์ปัจจุบัน:** shell เหลือ ~6,397 บรรทัด (จาก 13,476) · parts มี 8 ไฟล์: globals.js, shared.jsx, changelog.jsx, storage.jsx, admin.jsx, misc.jsx, patient-images.jsx
+**ผลลัพธ์ปัจจุบัน:** shell เหลือ ~4,878 บรรทัด (จาก 13,476 · เหลือ ~36%) · parts มี 9 ไฟล์: globals.js, shared.jsx, changelog.jsx, storage.jsx, admin.jsx, misc.jsx, patient-images.jsx, account.jsx
 
-## ⏳ เฟสที่เหลือ (3 เฟส)
+## ⏳ เฟสที่เหลือ (2 เฟส)
 | เฟส | เวอร์ชัน | ไฟล์ | ย้าย |
 |---|---|---|---|
 | 6 (account) | 0.7.19.6.10 | `parts/account.jsx` | UserProfileModal, AvatarLightbox, SessionsPanel, ChangePasswordPanel + avatar crop/upload helpers |
@@ -85,14 +86,16 @@ npm run build
 ```
 (ต้อง `npm install` ก่อนถ้า node_modules ยังไม่มี)
 
-## 📍 เฟส 6 (account) — พร้อมทำต่อทันที
-- component ที่ต้องย้าย (grep ใหม่เสมอ): UserProfileModal, AvatarCropModal, AvatarDeleteConfirm,
-  SessionsPanel, ChangePasswordPanel (+ avatar helpers: cropToWebp, resizeToWebp — ยังอยู่ shell)
-- ⚠️ cropToWebp/resizeToWebp ใช้ `loadImageEl` (อยู่ shared.jsx แล้วเฟส 5) → part account ต้อง
-  `import { loadImageEl, AvatarLightbox } from './shared'` (UserProfileModal เรียก AvatarLightbox)
-- deps: createPortal (modal), Cropper (react-easy-crop — shell import อยู่แล้ว ต้อง import ใน part),
-  window.* (avatar upload/presign), fetch /api/profile/avatar/*
-- ต้องเช็ค: putWithProgress? (เฟส 5 บอกว่า avatar upload ไม่ใช้ — ยืนยันอีกที) · bare Chart/supabase
+## 📍 เฟส 7 (patient-modal) — พร้อมทำต่อทันที (⚠️ หนักสุด)
+- component ที่ต้องย้าย (grep ใหม่เสมอ): ClinicalModal (โมดัลเวชระเบียนผู้ป่วย รวม 8 แท็บ) +
+  DoseCalculator, DOTCalendar, VisitForm, DrugInteractionPanel, PharmSummaryTab, InfoBar, AddPatientPage ฯลฯ
+  → กลุ่มนี้อยู่แถวกลางไฟล์ (ClinicalModal เดิม ~3198 ก่อนเฟส 5, ตอนนี้ต้อง grep ใหม่)
+- ⚠️⚠️ ใช้ **Chart.js แท็บ Lab** (กราฟ) — ต้อง `import { Chart } from './globals'` และเทสต์กราฟจริง
+- deps เยอะ: globals (calcDoses, calcCrCl, DRUG_RANGES, REGIMENS, LAB_GROUPS, getLabStatus ฯลฯ),
+  shared (เพียบ), PatientImagesTab (จาก patient-images — cross-part), window.* หลายตัว
+- ClinicalModal เรียก PatientImagesTab (อยู่ patient-images แล้ว) → account เฟสนี้ import cross-part
+- **scan JSX <Capitalized> ให้ครบ** (กับดัก #11) — โมดัลนี้มี sub-component เยอะมาก
+- แนะนำ: เฟสนี้ใหญ่ อาจแบ่งย่อย หรือทำ + เทสต์ละเอียดเป็นพิเศษ (ผู้ใช้เทสต์กราฟ Lab เอง)
 
 ## 🧭 กับดักใหม่ (เจอเฟส 5 — สำคัญ ใช้ทุกเฟสที่เหลือ)
 11. **eslint no-undef จับ JSX component ที่ไม่ได้ import ไม่ได้** (เช็คแค่ call ฟังก์ชัน ไม่เช็ค `<Tag/>`)
@@ -103,7 +106,8 @@ npm run build
 
 ## 📝 หมายเหตุการ push (รอบนี้)
 - ผู้ใช้อนุมัติให้ **push เข้า main ตรง ไม่แยกกิ่ง/ไม่เปิด PR** · commit ละเอียดระดับ A4
-- เฟส 4 = commit 03e35d7 · เฟส 5 = commit 0d2d824
+- เฟส 4 = commit 03e35d7 · เฟส 5 = 0d2d824 · เฟส 6 = 89f160a
+- gate ต่อเฟส: `npm run build` (env หลอก) + eslint no-undef + **scan JSX `<[A-Z]>` เอง** (กับดัก #11)
 - ผู้ใช้ยังเทสต์ localhost ไม่ได้รอบนี้ → เทสต์ทีเดียวหลังจบทุกเฟส (build+eslint+scan JSX เป็น gate)
 
 ## หมายเหตุการเทสต์
