@@ -88,6 +88,49 @@ function App() {
   const [nav, setNavRaw] = useState('dashboard');
   const mainScrollRef = React.useRef(null);  // v0.7.17.3 — สำหรับ ScrollNav
   React.useEffect(() => { if (mainScrollRef.current) mainScrollRef.current.scrollTop = 0; }, [nav]);   // เปลี่ยนหน้า → เลื่อนขึ้นบนสุด (กันค้างตำแหน่งหน้าเดิม)
+  // ── custom overlay scrollbar ทั้งเว็บ (global) — native ถูกซ่อนหมดใน globals.css แล้ววาด thumb ลอย "ตัวเดียว" วิ่งตาม container ที่กำลังเลื่อน
+  //   ครอบทุกที่อัตโนมัติ (หน้าหลัก/sidebar/popup/ตาราง/คลังรูป) · ลอยทับ ไม่กินที่ (hover ไม่เบี้ยว/ไม่ layout shift) · opacity fade เนียน
+  //   (WebKit fade สี native ไม่ได้ → ต้องวาดเอง) · โผล่ 0.6 วิ · หยุดเลื่อน 0.4 วิ → จาง 1.3 วิ · แยกแนวตั้ง(vt)/แนวนอน(ht) · capture จับ scroll ทุก container ซ้อน
+  React.useEffect(() => {
+    const mk = () => { const d = document.createElement('div'); d.className = 'tb-ov-thumb'; document.body.appendChild(d); return d; };
+    const vt = mk(); vt.style.width = '7px';
+    const ht = mk(); ht.style.height = '7px';
+    // หา container ที่เลื่อนได้ (เดินขึ้น ancestor) — แนวตั้ง/แนวนอนแยกกัน
+    const scrollableV = (el) => { while (el && el !== document.body) { if (el.scrollHeight > el.clientHeight + 1) { const o = getComputedStyle(el).overflowY; if (o === 'auto' || o === 'scroll') return el; } el = el.parentElement; } return null; };
+    const scrollableH = (el) => { while (el && el !== document.body) { if (el.scrollWidth > el.clientWidth + 1) { const o = getComputedStyle(el).overflowX; if (o === 'auto' || o === 'scroll') return el; } el = el.parentElement; } return null; };
+    const posV = (el) => { const r = el.getBoundingClientRect(); const th = Math.max(24, el.clientHeight * el.clientHeight / el.scrollHeight); const tt = el.scrollTop / (el.scrollHeight - el.clientHeight) * (el.clientHeight - th); vt.style.height = th + 'px'; vt.style.top = (r.top + tt) + 'px'; vt.style.left = (r.right - 9) + 'px'; vt._el = el; };
+    const posH = (el) => { const r = el.getBoundingClientRect(); const tw = Math.max(24, el.clientWidth * el.clientWidth / el.scrollWidth); const tl = el.scrollLeft / (el.scrollWidth - el.clientWidth) * (el.clientWidth - tw); ht.style.width = tw + 'px'; ht.style.left = (r.left + tl) + 'px'; ht.style.top = (r.bottom - 9) + 'px'; ht._el = el; };
+    // โผล่ 0.6 วิ · หยุด(ไม่ลาก/ไม่ hover) 0.4 วิ → จาง 1.3 วิ · สลับ pointer-events ให้ลาก/hover ได้ตอนโผล่
+    const show = (t) => { t.style.transition = 'opacity 0.6s ease'; t.style.opacity = '1'; t.style.pointerEvents = 'auto'; clearTimeout(t._k); t._k = setTimeout(() => { if (!t._drag && !t._hov) { t.style.transition = 'opacity 1.3s ease'; t.style.opacity = '0'; t.style.pointerEvents = 'none'; } }, 400); };
+    const onScroll = (e) => {
+      let el = e.target;
+      if (el === document || el === window) el = document.scrollingElement || document.documentElement;
+      if (!el || !el.getBoundingClientRect) return;
+      if (el.scrollHeight > el.clientHeight + 1) { posV(el); show(vt); }
+      if (el.scrollWidth > el.clientWidth + 1) { posH(el); show(ht); }
+    };
+    // proximity: เมาส์เข้าใกล้ขอบ (~16px) ของ container ที่เลื่อนได้ → thumb ค่อยๆโผล่ (ให้ลากได้เอง)
+    const onMove = (e) => {
+      if (vt._drag || ht._drag) return;
+      const u = document.elementFromPoint(e.clientX, e.clientY);
+      if (!u || u === vt || u === ht) return;
+      const ev = scrollableV(u);
+      if (ev) { const r = ev.getBoundingClientRect(); if (e.clientX >= r.right - 16 && e.clientX <= r.right + 4 && e.clientY >= r.top && e.clientY <= r.bottom) { posV(ev); show(vt); } }
+      const eh = scrollableH(u);
+      if (eh) { const r = eh.getBoundingClientRect(); if (e.clientY >= r.bottom - 16 && e.clientY <= r.bottom + 4 && e.clientX >= r.left && e.clientX <= r.right) { posH(eh); show(ht); } }
+    };
+    const hoverOn = (t) => () => { t._hov = true; t.style.transition = 'opacity 0.6s ease'; t.style.opacity = '1'; t.style.pointerEvents = 'auto'; };
+    const hoverOff = (t) => () => { t._hov = false; show(t); };
+    vt.addEventListener('mouseenter', hoverOn(vt)); vt.addEventListener('mouseleave', hoverOff(vt));
+    ht.addEventListener('mouseenter', hoverOn(ht)); ht.addEventListener('mouseleave', hoverOff(ht));
+    // ลาก thumb → เลื่อน container (แก้ปัญหาลากแถบแนวนอนไม่ได้)
+    const dragV = (e) => { e.preventDefault(); const el = vt._el; if (!el) return; vt._drag = true; const sy = e.clientY, st = el.scrollTop, th = vt.offsetHeight, range = el.scrollHeight - el.clientHeight, trackH = el.clientHeight - th; const mv = (ev) => { el.scrollTop = st + (ev.clientY - sy) / trackH * range; }; const up = () => { vt._drag = false; document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); show(vt); }; document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up); };
+    const dragH = (e) => { e.preventDefault(); const el = ht._el; if (!el) return; ht._drag = true; const sx = e.clientX, sl = el.scrollLeft, tw = ht.offsetWidth, range = el.scrollWidth - el.clientWidth, trackW = el.clientWidth - tw; const mv = (ev) => { el.scrollLeft = sl + (ev.clientX - sx) / trackW * range; }; const up = () => { ht._drag = false; document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); show(ht); }; document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up); };
+    vt.addEventListener('mousedown', dragV); ht.addEventListener('mousedown', dragH);
+    window.addEventListener('scroll', onScroll, true);
+    document.addEventListener('mousemove', onMove);
+    return () => { window.removeEventListener('scroll', onScroll, true); document.removeEventListener('mousemove', onMove); vt.remove(); ht.remove(); };
+  }, []);
   const [pendingLeave, setPendingLeave] = useState(null); // v0.7.14.7 — target nav รอ user ยืนยันออกจาก draft
   // v0.7.14.7 — wrapper setNav: ดัก draft ค้างก่อนเปลี่ยนหน้า
   const setNav = React.useCallback((target) => {
@@ -638,7 +681,7 @@ function App() {
         </div>
 
         {/* Nav items */}
-        <nav style={{flex:1,overflowY:'auto',padding:'10px 8px 10px 2px'}}>
+        <nav style={{flex:1,overflowY:'auto',padding:'10px 2px'}}>
           {navItems.map(n => {
             const hasBadge = n.badge && n.badge > 0;
             const hasGreenBadge = !hasBadge && n.greenBadge;
@@ -734,9 +777,9 @@ function App() {
       <button
         onClick={()=>setSidebarOpen(o=>!o)}
         title={sidebarOpen?'ซ่อนเมนู':'แสดงเมนู'}
-        style={{position:'absolute',right:'-10px',top:'20px',width:'24px',height:'24px',borderRadius:'50%',border:'1.5px solid #0d9488',background:'#fff',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',zIndex:50,transition:'all 0.15s',boxShadow:'0 1px 3px rgba(0,0,0,0.08)'}}
-        onMouseEnter={e=>{ e.currentTarget.style.background='#0d9488'; const icon = e.currentTarget.querySelector('i'); if (icon) icon.style.color='#fff'; }}
-        onMouseLeave={e=>{ e.currentTarget.style.background='#fff'; const icon = e.currentTarget.querySelector('i'); if (icon) icon.style.color='#0d9488'; }}
+        style={{position:'absolute',right:'-10px',top:'20px',width:'24px',height:'24px',borderRadius:'50%',border:`1.5px solid ${sidebarOpen?'#0d9488':'transparent'}`,background:sidebarOpen?'#fff':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',zIndex:50,transition:'all 0.15s',boxShadow:sidebarOpen?'0 1px 3px rgba(0,0,0,0.08)':'none'}}
+        onMouseEnter={e=>{ e.currentTarget.style.background='#0d9488'; e.currentTarget.style.borderColor='#0d9488'; const icon = e.currentTarget.querySelector('i'); if (icon) icon.style.color='#fff'; }}
+        onMouseLeave={e=>{ e.currentTarget.style.background=sidebarOpen?'#fff':'transparent'; e.currentTarget.style.borderColor=sidebarOpen?'#0d9488':'transparent'; const icon = e.currentTarget.querySelector('i'); if (icon) icon.style.color='#0d9488'; }}
       >
         <i className={`fa-solid ${sidebarOpen?'fa-chevron-left':'fa-chevron-right'}`} style={{fontSize:'9px',color:'#0d9488',transition:'color 0.15s'}}></i>
       </button>
@@ -870,7 +913,7 @@ function App() {
           </div>
         </header>
 
-        <div ref={mainScrollRef} style={{ scrollbarGutter: 'stable' }} className={`flex-1 p-6 min-h-0 ${(nav==='patient-list'||nav==='archive-list'||nav==='all-patients')?'overflow-hidden':'overflow-y-auto'}`}>
+        <div ref={mainScrollRef} className={`flex-1 min-h-0 ${(nav==='patient-list'||nav==='archive-list'||nav==='all-patients')?'pl-6 pt-6 pb-6 overflow-hidden':'p-6 overflow-y-auto'}`}>
           {/* v0.7.17.3 — dbLoading ใช้ V2Skeleton early-return ที่ระดับ App แล้ว → ที่นี่ไม่ต้องมี spinner */}
           {!dbLoading && nav==='dashboard'     && <Dashboard patients={patients.filter(p=>!p.archived)} archivePatients={patients.filter(p=>p.archived)} onDashFilter={f=>{setDashFilter(f);setNav('patient-list');}} onGoArchiveDelayed={()=>{setArchiveDashFilter('delayed');setNav('archive-list');}} onGoAllPatients={()=>setNav('all-patients')} onGoArchiveSuccess={()=>{setArchiveDashFilter('success');setNav('archive-list');}} onOpen={setClinical} onOpenStorage={()=>{window._settingsWantTab='storage';setNav('settings');}} currentUser={currentUser}/>}
           {!dbLoading && nav==='all-patients'  && <AllPatientsPage patients={patients.filter(p=>!p.archived)} archivePatients={patients.filter(p=>p.archived)} onOpen={setClinical} onBack={()=>setNav('dashboard')}/>}
@@ -977,8 +1020,8 @@ const DEMO_USER = {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.19.6.22';
-const BUILD_DATE = '3 ก.ค. 2569';
+const APP_VERSION = '0.7.19.7';
+const BUILD_DATE = '4 ก.ค. 2569';
 // bridge: ให้ parts/* (เช่น changelog.jsx, about.jsx) อ่านเวอร์ชันผ่าน window.* ได้ (เฟส 2 + แยกรอบ 2)
 if (typeof window !== 'undefined') { window.APP_VERSION = APP_VERSION; window.BUILD_DATE = BUILD_DATE; }
 // AboutModal ย้ายไป parts/about.jsx (แยกรอบ 2)

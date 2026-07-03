@@ -175,6 +175,13 @@ The `ยังไม่เผยแพร่` (not yet released) badge stays unt
 - **No `?` question marks in UI strings** anywhere — buttons, headings, modals, labels. Use the statement form: `ยืนยันออกจากระบบ`, not `ยืนยันออกจากระบบ?`.
 - Teal is the brand color (`#0d9488` / `#0f766e`).
 
+### Scrollbar — custom overlay ทั้งเว็บ (global · อย่าทำ scrollbar เอง)
+- **native scrollbar ถูกซ่อนทั้งเว็บ** (`globals.css`: `::-webkit-scrollbar{width:0;height:0}` + `*{scrollbar-width:none}`) เพราะ WebKit ไม่ transition สี `::-webkit-scrollbar-thumb` → native fade ไม่ได้ (หายปุปปัป)
+- แทนที่ด้วย **custom overlay thumb ระบบ global** ใน `tb-monolith.jsx` (useEffect ใน `App`) — วาด thumb ลอย 2 อัน (แนวตั้ง `vt` / แนวนอน `ht`) `position:fixed` วิ่งตาม container ที่กำลังเลื่อน (`window` scroll listener แบบ `capture` → จับ scroll ทุก container ซ้อน) · class `.tb-ov-thumb`
+- พฤติกรรม: ลอยทับ **ไม่กินพื้นที่** (ไม่ layout shift / hover ไม่เบี้ยว) · opacity fade เนียน — โผล่ 0.6 วิ · หยุดเลื่อน 0.4 วิ → จาง 1.3 วิ
+- **ลากได้ (draggable)** + **โผล่เมื่อเมาส์เข้าใกล้ขอบ ~16px หรือ hover ตัว thumb** (เพราะซ่อน native แล้วผู้ใช้ต้องลากแถบเลื่อนเองได้ โดยเฉพาะตารางแนวนอน) · JS สลับ `pointer-events` เป็น auto ตอนโผล่ · `scrollableV/H` เดิน ancestor หา container ที่เลื่อนได้
+- 🚨 **เพจ/คอมโพเนนต์ใหม่ที่มี scroll ไม่ต้องทำอะไรเพิ่ม** — ระบบ global จับให้อัตโนมัติ · **ห้ามใส่ `::-webkit-scrollbar` / `overflow:overlay` / scrollbar-gutter รายจุด** (ซ้ำซ้อน) · ถ้าอยากให้ thumb ชิดขอบจอก็จัด layout ให้ container ชิดขอบ (เช่นหน้ารายการผู้ป่วยดันการ์ดชิดขวา)
+
 ### วิธีทำงาน (Working style) — กฎเต็ม
 - **ตอบตรง ๆ ก่อนเสมอ** — ประโยคแรกคือคำตอบ ไม่วกอ้อม
 - **ก่อนลงมือ สรุปให้พี่กันเข้าใจก่อน** ว่าจะทำอะไร จะเห็นผลอะไร

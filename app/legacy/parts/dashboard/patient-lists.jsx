@@ -210,7 +210,7 @@ function PatientList({ patients, onAdd, onOpen, settings, dashFilter, onClearDas
       ); })()}
 
       {/* Table — flex-1 + min-h-0 ทำให้ scroll container ลอยอยู่ขอบล่างเสมอ */}
-      <div className="flex-1 min-h-0 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="flex-1 min-h-0 bg-white rounded-l-2xl shadow-sm border border-r-0 border-gray-100 overflow-hidden">
         <div className="w-full h-full overflow-auto">
         <table className="w-full min-w-max text-left">
           <thead className="bg-teal-600 text-white text-xs uppercase tracking-wide border-b border-teal-400">
@@ -389,7 +389,7 @@ function ArchiveList({ patients, onOpen, archiveDashFilter, onClearArchiveDashFi
       </div>
 
       {/* Table */}
-      <div className="flex-1 min-h-0 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="flex-1 min-h-0 bg-white rounded-l-2xl shadow-sm border border-r-0 border-gray-100 overflow-hidden">
         <div className="w-full h-full overflow-auto">
         <table className="w-full min-w-max text-left">
           <thead className="bg-teal-600 text-white text-xs uppercase tracking-wide border-b border-teal-400">
@@ -488,7 +488,7 @@ function AllPatientsPage({ patients, archivePatients, onOpen, onBack }) {
           <span className="bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full font-bold">รวม: {allPts.length}</span>
         </div>
       </div>
-      <div className="flex-1 min-h-0 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="flex-1 min-h-0 bg-white rounded-l-2xl shadow-sm border border-r-0 border-gray-100 overflow-hidden">
         <div className="w-full h-full overflow-auto">
         <table className="w-full min-w-max text-left">
           <thead className="bg-teal-600 text-white text-xs uppercase tracking-wide border-b border-teal-400">

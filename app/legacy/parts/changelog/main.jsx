@@ -941,7 +941,7 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
 
       {/* ── Right column: body (timeline / grouped) — scroll อิสระ ── */}
       <div ref={rightColRef}
-        style={{flex:1,minWidth:0,height:'100%',overflowY:'auto',overscrollBehavior:'contain',paddingRight:'8px',position:'relative'}}>
+        style={{flex:1,minWidth:0,height:'100%',overflowY:'auto',overscrollBehavior:'contain',paddingRight:'24px',marginRight:'-24px',position:'relative'}}>
         {view === 'timeline' ? (
           // ─── Timeline view — ขยาย 780→936px (+20%) ───
           <div style={{maxWidth:'936px',margin:'0 auto'}}>

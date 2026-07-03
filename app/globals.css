@@ -6,17 +6,23 @@ body {
   font-family: 'Sarabun', sans-serif;
 }
 
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-thumb {
+/* ── scrollbar ทั้งเว็บ: ซ่อน native หมด + วาด "custom overlay thumb" เอง (ระบบ global ใน tb-monolith) ──
+ * เหตุผล: WebKit ไม่ transition สีของ ::-webkit-scrollbar-thumb → native fade ไม่ได้ (หายปุปปัป)
+ * จึงซ่อน native ทั้งเว็บ แล้ว JS วาด thumb ลอยตัวเดียววิ่งตาม container ที่กำลังเลื่อน (ครอบทุกที่)
+ * ข้อดี: ลอยทับ ไม่กินพื้นที่ (hover ไม่เบี้ยว/ไม่ layout shift) + opacity fade เนียนทุกอัน
+ * 🚨 เพจ/คอมโพเนนต์ใหม่ที่มี scroll ไม่ต้องทำอะไรเพิ่ม — ระบบ global จับ scroll ทุก container อัตโนมัติ */
+::-webkit-scrollbar { width: 0; height: 0; }
+* { scrollbar-width: none; }
+.tb-ov-thumb {
+  position: fixed;
+  border-radius: 4px;
   background: #cbd5e1;
-  border-radius: 10px;
+  opacity: 0;
+  pointer-events: none;   /* JS สลับเป็น auto ตอนโผล่ (ลาก/hover ได้) */
+  z-index: 99999;
+  will-change: top, left, width, height, opacity;
 }
-::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-}
+.tb-ov-thumb:hover { background: #94a3b8; }
 
 .tb-fade { animation: tbFadeIn 0.25s ease; }
 @keyframes tbFadeIn {
