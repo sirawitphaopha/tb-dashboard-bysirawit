@@ -24,13 +24,13 @@
 | 2 | 0.7.19.6.5 | `parts/changelog.jsx` | ChangelogPage, CommitDetailModal, CHANGELOG_STATUS_META, ChangelogCommentSection |
 | 3a | 0.7.19.6.6 | `parts/storage.jsx` | StorageMiniCard, StorageDonut, StorageDetail, StorageAlert + `_settingsWantTab` → `window._settingsWantTab` |
 | 3 | 0.7.19.6.7 | `parts/admin.jsx` | AdminUsersTab, ActivityLogTab, AuditLogTab, AdminSettings + tables/activity helpers |
+| 4 | 0.7.19.6.8 | `parts/misc.jsx` | TrashList + KnowledgeBase (ย้ายตรง — พึ่งแค่ useState/useEffect + window.loadTrashedPatients/_sb, ไม่มี cross-dep) |
 
-**ผลลัพธ์ปัจจุบัน:** shell เหลือ ~8,493 บรรทัด (จาก 13,476) · parts มี 6 ไฟล์: globals.js, shared.jsx, changelog.jsx, storage.jsx, admin.jsx
+**ผลลัพธ์ปัจจุบัน:** shell เหลือ ~8,007 บรรทัด (จาก 13,476) · parts มี 7 ไฟล์: globals.js, shared.jsx, changelog.jsx, storage.jsx, admin.jsx, misc.jsx
 
-## ⏳ เฟสที่เหลือ (5 เฟส)
+## ⏳ เฟสที่เหลือ (4 เฟส)
 | เฟส | เวอร์ชัน | ไฟล์ | ย้าย |
 |---|---|---|---|
-| 4 (misc) | 0.7.19.6.8 | `parts/misc.jsx` | TrashList + KnowledgeBase |
 | 5 (images) | 0.7.19.6.9 | `parts/patient-images.jsx` | PatientImagesTab, ImageLibraryPage, ImageTrashPage, CXRComparePanel/Modal, TrashHub + image helpers |
 | 6 (account) | 0.7.19.6.10 | `parts/account.jsx` | UserProfileModal, AvatarLightbox, SessionsPanel, ChangePasswordPanel + avatar crop/upload helpers |
 | 7 (patient-modal) | 0.7.19.6.11 | `parts/patient-modal.jsx` | ClinicalModal + 8 tabs + DoseCalculator, DOTCalendar, VisitForm, DrugInteractionPanel (**หนักสุด — เทสต์กราฟ Chart.js แท็บ Lab**) |
@@ -85,12 +85,20 @@ npm run build
 ```
 (ต้อง `npm install` ก่อนถ้า node_modules ยังไม่มี)
 
-## 📍 เฟส 4 (misc) — พร้อมทำต่อทันที
-- TrashList: หา boundary ใหม่ด้วย grep (ล่าสุด ~3683–4064 ก่อน admin แยก แต่ต้อง grep ใหม่)
-- KnowledgeBase: (ล่าสุด ~5352–5459 แต่ต้อง grep ใหม่)
-- shell เรียกจาก App: TrashList, KnowledgeBase (grep ยืนยัน)
-- deps: TrashList ใช้ shared UI + window.* (softDeletePatient ฯลฯ) + AvatarCircle; KnowledgeBase น่าจะ self-contained
-- **ยังไม่มี PR/branch สำหรับ misc ที่ commit แล้ว** (branch เก่าถูกทิ้ง ไม่มี commit)
+## 📍 เฟส 5 (images) — พร้อมทำต่อทันที
+- component ที่ต้องย้าย (grep ใหม่เสมอ): PatientImagesTab, ImageLibraryPage, ImageTrashPage,
+  CXRComparePanel, CXRCompareModal, TrashHub (+ image helpers เช่น loadCache)
+  → ล่าสุดกลุ่มนี้อยู่แถว ~2152–2900 ใน shell แต่ต้อง grep ใหม่ (บรรทัดขยับหลังเฟส 4)
+- ⚠️ TrashHub เรียก TrashList (อยู่ parts/misc แล้ว) + ImageTrashPage → part images ต้อง
+  `import { TrashList } from './misc'` ด้วย (cross-part import ครั้งแรกของโครงการ)
+- deps ที่ต้องเช็ค: bare Chart/supabase, createPortal (lightbox/modal), window.* image helpers,
+  heic-to/csp, utif (TIFF), presign/confirm fetch — ระวัง import ให้ครบ
+- เทสต์หนักกว่าเฟส misc (อัปโหลด/ลบ/กู้คืนรูป) — ผู้ใช้เทสต์ localhost ทีเดียวตอนจบ
+
+## 📝 หมายเหตุรอบนี้ (เฟส 4)
+- ผู้ใช้อนุมัติให้ **push เข้า main ตรง ไม่แยกกิ่ง/ไม่เปิด PR** ในรอบนี้ (commit 03e35d7)
+- misc ย้ายตรงได้เพราะ self-contained (ไม่ใช้ AvatarCircle/softDeletePatient อย่างที่โน้ตเก่าคาด —
+  TrashList แสดงตัวย่อชื่อด้วย div เอง, ลบ/กู้คืนผ่าน props onHardDelete/onRestore จาก App)
 
 ## หมายเหตุการเทสต์
 เครื่องคลาวด์เทสต์กดจริงไม่ได้ (ไม่มี key + คนละเครื่องกับ localhost ผู้ใช้) → ใช้ build + eslint no-undef
