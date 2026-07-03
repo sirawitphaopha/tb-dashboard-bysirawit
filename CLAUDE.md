@@ -107,6 +107,18 @@ Earlier versions rendered the dashboard in an `<iframe src="/app.html">` and tra
 - `profile/*` — self-service profile update, edit-request submission, avatar upload
 - `register`, `login-lookup` — public, pre-auth endpoints
 
+### AI features (วางแผนไว้ — ยังไม่สร้างโค้ดจริง)
+> ยังไม่เลือกผู้ให้บริการ (Anthropic Claude / OpenAI / อื่น ๆ). Roadmap ว่าอยากให้ AI ช่วยจุดไหนบ้าง อยู่ที่ **`docs/session-notes/2026-07-03-ai-roadmap.md`** — อ่านก่อนเริ่มทำ AI.
+
+**โครงไฟล์เป้าหมายเมื่อเริ่มทำ** (ตามแพตเทิร์น `lib/` เดิม — provider จะเจ้าไหนก็ใช้โครงนี้):
+- **`lib/ai.ts`** — AI client แบบ **lazy init** (`getAiClient()` สร้าง client ตอน runtime ครั้งแรก — เลียนแบบ `lib/resend.ts` / `lib/r2.ts` **เพื่อกัน Cloudflare build error** ตอน build env ไม่มี key). export ค่าคงที่เช่น model id ไว้ที่นี่.
+- **`lib/ai-patient-context.ts`** — pure function แปลง object ผู้ป่วย → ข้อความ prompt (เลียนแบบ `lib/email-templates.ts` ที่แยก builder ออกจาก client). reuse `getLabStatus()` เพื่อ flag ค่า Lab ผิดปกติ.
+- **`app/api/ai/*`** — โดเมน route ใหม่ (ขนานกับ auth/admin/patient) เช่น `ai/summarize`, `ai/chat`, `ai/lab-interpret`. **ฝั่ง server เท่านั้น**: verify caller (admin/approved) ก่อน → อ่านข้อมูลผู้ป่วยด้วย server/admin Supabase client (**อย่าเชื่อ clinical data ที่ browser ส่งมา**) → เรียก AI → ส่งผลกลับ.
+- **ห้ามให้ browser ถือ API key** — UI (parts/*) เรียกผ่าน `fetch('/api/ai/...')` เท่านั้น.
+- **env ใหม่:** `<PROVIDER>_API_KEY` ต้องใส่ทั้ง `.env.local` และ Cloudflare Pages Runtime (ระวัง env drop หลัง deploy เหมือน ADMIN_EMAIL/R2).
+- **CSP:** ไม่ต้องเปิด origin ใหม่ใน `next.config.js` (เรียก AI จาก server route ไม่ใช่จาก browser).
+- ⚠️ **Privacy/PDPA:** ฟีเจอร์ AI ส่งข้อมูลคนไข้ออกนอกระบบ → พิจารณา PDPA + ข้อตกลงผู้ให้บริการ (DPA/BAA) + แจ้ง/ขอความยินยอมตามบริบท ก่อนเปิดใช้จริง.
+
 ---
 
 ## Version bumping (read before changing version)
