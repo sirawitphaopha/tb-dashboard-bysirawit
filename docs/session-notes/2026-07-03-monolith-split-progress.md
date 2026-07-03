@@ -114,3 +114,30 @@ npm run build
 ## หมายเหตุการเทสต์
 เครื่องคลาวด์เทสต์กดจริงไม่ได้ (ไม่มี key + คนละเครื่องกับ localhost ผู้ใช้) → ใช้ build + eslint no-undef
 เป็น gate · ผู้ใช้เทสต์ localhost เองทีหลัง ถ้าเฟสไหนพัง `git revert <commit>` ได้สะอาด (ย้ายโค้ดล้วน)
+
+---
+
+# 🔧 รอบ 2 — เก็บกวาดต่อ (split round 2) + เตรียม AI + วางโครงหน้าผู้ป่วยใหม่
+> แผนเต็ม: `~/.claude/plans/*.md` (อนุมัติแล้ว) · AI roadmap: `2026-07-03-ai-roadmap.md`
+
+## ✅ เสร็จแล้ว (เข้า main, gate ผ่านทุกอัน)
+| ขั้น | เวอร์ชัน | commit | ทำอะไร |
+|---|---|---|---|
+| r2-1 | .13 | ced9632 | shell → `parts/notifications.jsx` + `parts/about.jsx` · shell 1,142→985 (เพิ่ม bridge window.BUILD_DATE) |
+| — | — | bd99eb6 | docs: AI roadmap + CLAUDE.md หัวข้อ "AI features (วางแผนไว้)" (provider-neutral) |
+| r2-2 | .14 | 56650d9 | `admin.jsx` → `admin/{users,activity-log,audit-log,settings}.jsx` + barrel (2,189→14) |
+| r2-3 | .15 | 6a1839a | `dashboard.jsx` → `dashboard/{overview,patient-lists,weekly-prep,reports}.jsx` + helpers.js + barrel (1,285→15) |
+| r2-4 | .16 | bea3b38 | `account.jsx` → `account/{profile,change-password,sessions}.jsx` + barrel (1,551→10) |
+
+**สูตร barrel:** ไฟล์เดิม (เช่น admin.jsx) กลายเป็น `export { X } from './admin/...'` — shell import path เดิมไม่เปลี่ยน
+(ไฟล์ barrel ชนะโฟลเดอร์ตอน resolve). ไฟล์ในโฟลเดอร์ import จาก `../shared`/`../globals`/`../storage` (ขึ้น 1 ชั้น).
+**eslint รอบ 2 ใช้ recursive glob:** `'app/legacy/parts/**/*.js' 'app/legacy/parts/**/*.jsx'` (ครอบ subfolder)
+
+## ⏳ เหลือ (option — ยังไม่ได้ทำ)
+- `changelog.jsx` (2,365) → `changelog/{page,comments}.jsx` — ตัด 2 ทางสะอาด แต่แต่ละครึ่งยัง ~1,100
+- `patient-images.jsx` (1,271) → `patient-images/{helpers,trash,patient-tab,library}.jsx` — ต้องแยก helpers.jsx ก่อน
+- `tb-data.js` (1,049) → constants/calc/seed/db — ต้องแตะ TbBundle.tsx
+- **หน้าผู้ป่วยรื้อใหม่** → โฟลเดอร์ `parts/patient/*` (patient-modal.jsx 2,504 = ใหญ่สุด, จะถูกเขียนใหม่ ไม่แตะตอนนี้)
+- **ระบบ AI** → `lib/ai.ts` + `lib/ai-patient-context.ts` + `app/api/ai/*` (ตาม CLAUDE.md · ผู้ใช้ยังไม่เลือก provider)
+
+**ไฟล์ใหญ่สุดที่เหลือตอนนี้:** patient-modal.jsx(2,504 รอ rebuild), changelog.jsx(2,365), admin/users.jsx(1,331), patient-images.jsx(1,271)
