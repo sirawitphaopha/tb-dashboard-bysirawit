@@ -31,33 +31,13 @@ import { ADR_LIST, migrateAdr, calcDoses, calcCrCl, crClStage,
          EXTRA_PULMONARY_TYPES, TAMBONS, DEFAULT_COMORBIDITIES,
          CONSULT_TYPES, DRP_TYPES, LAB_GROUPS, getLabStatus, LAB_STATUS_STYLE,
          Chart, INITIAL_PATIENTS, generateAlerts, DEFAULT_DRUGS, DEFAULT_RESTART_REASONS } from './parts/globals'
+import { useModalAnim, INP, FormSection, FieldError, RangeStatus, Badge } from './parts/shared'
 const { useState, useEffect, useRef } = React
 
 /* ════════════════ tb-modals.jsx ════════════════ */
 
-// ── Modal Animation Helper ──────────────────────────────────────────────
-// ใช้กับ popup ทุกตัวที่อยากให้มี animation เปิด/ปิดสม่ำเสมอ (เหมือน AboutModal)
-// pattern: modal-A เปิด 0.9s / modal-A-out + modal-overlay-out ปิด 0.6s
-// วาง global ที่นี่ (tb-modals.jsx โหลดก่อน tb-app.jsx) → ใช้ได้ทั้งสองไฟล์
-function useModalAnim(onClose, opts = {}) {
-  const fast = opts.fast === true;
-  const duration = opts.duration ?? (fast ? 240 : 580);
-  const [closing, setClosing] = React.useState(false);
-  const close = React.useCallback(() => {
-    if (closing) return;
-    setClosing(true);
-    setTimeout(onClose, duration);
-  }, [closing, onClose, duration]);
-  return {
-    closing,
-    close,
-    modalCls:   closing ? (fast ? 'modal-A-out-fast'       : 'modal-A-out')       : 'modal-A',
-    overlayCls: closing ? (fast ? 'modal-overlay-out-fast' : 'modal-overlay-out') : '',
-  };
-}
-
-// window globals (ADR_LIST, calcDoses, Chart, INITIAL_PATIENTS, ...) ย้ายไป import จาก ./parts/globals ที่หัวไฟล์ (เฟส 1a)
-const INP = `w-full p-2.5 border rounded-xl bg-gray-50 outline-none focus:ring-2 focus:ring-teal-400 text-sm`;
+// useModalAnim, INP, FormSection, FieldError, RangeStatus, Badge ย้ายไป parts/shared.jsx (เฟส 1b)
+// window globals ย้ายไป parts/globals.js (เฟส 1a)
 const HOSP_STRENGTHS = {
   R:  [{label:'R300',value:300},{label:'R450',value:450}],
   H:  [{label:'I100',value:100},{label:'Iso Syrup 50mg/ml',value:'syrup'}],
@@ -67,10 +47,7 @@ const HOSP_STRENGTHS = {
   Am: [{label:'Am 250',value:250},{label:'Am 500',value:500}],
 };
 
-function FormSection({icon,title,children}){return(<div><div className="flex items-center gap-2 mb-4"><div className="w-7 h-7 bg-teal-100 text-teal-700 rounded-lg flex items-center justify-center text-xs"><i className={`fa-solid ${icon}`}></i></div><h3 className="font-bold text-gray-800 text-sm">{title}</h3></div>{children}</div>);}
-function FieldError({msg}){return msg?<p className="text-red-500 text-xs mt-1">{msg}</p>:null;}
-function RangeStatus({status,mgkg}){const c={ok:{bg:'bg-green-100',t:'text-green-700',l:'เหมาะสม'},low:{bg:'bg-amber-100',t:'text-amber-700',l:'ต่ำ'},high:{bg:'bg-red-100',t:'text-red-700',l:'สูง'}}[status]||{bg:'bg-gray-100',t:'text-gray-500',l:'-'};return<div className="text-right flex-shrink-0"><p className={'font-bold text-sm '+c.t}>{mgkg}</p><span className={'text-xs px-2 py-0.5 rounded-full font-bold '+c.bg+' '+c.t}>{c.l}</span></div>;}
-function Badge({label,color='bg-gray-100 text-gray-600'}){return<span className={'px-2.5 py-0.5 rounded-full text-xs font-bold '+color}>{label}</span>;}
+// FormSection, FieldError, RangeStatus, Badge ย้ายไป parts/shared.jsx (เฟส 1b)
 
 function DoseCalculator({weight,regimen,manualMode,manualDoses,onToggle,onManualChange,strengths,onStrChange}){
   const w=parseFloat(weight);
@@ -5963,7 +5940,7 @@ function AuditLogTab() {
   )
 }
 
-Object.assign(window,{DoseCalculator,DOTCalendar,DrugInteractionPanel,RegimenHistoryTab,NotificationPanel,NotificationFullModal,AddPatientPage,ClinicalModal,InfoBar,LabTab,ADRTab,TimelineTab,DiagnosisTab,MedsTab,PharmSummaryTab,TrashList,AdminUsersTab,AuditLogTab,ConfirmModal,hasResistance,afbCombined,isAfbPositive,getSputumConversion,isDelayedConversion});
+// (ลบ Object.assign(window,{...}) — dead code มรดกตอน tb-modals/tb-app แยกไฟล์ ไม่มีใครอ่านจาก window เลย, เฟส 1b)
 
 /* ════════════════ tb-app.jsx ════════════════ */
 
@@ -8954,7 +8931,7 @@ function RequestEditModal({ field, currentValue, onClose }) {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.19.6.1';
+const APP_VERSION = '0.7.19.6.2';
 const BUILD_DATE = '3 ก.ค. 2569';
 function AboutModal({ onClose, onShowChangelog }) {
   const [closing, setClosing] = React.useState(false);
