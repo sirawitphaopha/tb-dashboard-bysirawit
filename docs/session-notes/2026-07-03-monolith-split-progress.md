@@ -27,15 +27,14 @@
 | 4 | 0.7.19.6.8 | `parts/misc.jsx` | TrashList + KnowledgeBase (ย้ายตรง — พึ่งแค่ useState/useEffect + window.loadTrashedPatients/_sb, ไม่มี cross-dep) |
 | 5 | 0.7.19.6.9 | `parts/patient-images.jsx` (+`shared.jsx`) | PatientImagesTab, ImageLibraryPage, ImageTrashPage, CXRComparePanel/Modal, TrashHub, ImgViewToolbar + image helpers (compressToWebp, decodeImageToDataURL, JustifiedGallery, patientImgInfo ฯลฯ). **ย้าย loadImageEl + AvatarLightbox เข้า shared.jsx** (ใช้ร่วมกับ avatar เฟส 6) · cross-part import แรก: patient-images ← TrashList จาก misc |
 | 6 | 0.7.19.6.10 | `parts/account.jsx` | UserProfileModal (main, export), ChangePasswordPanel, SessionsPanel, RequestEditModal, AvatarCropModal, AvatarDeleteConfirm + helpers (PwEye, checkPasswordStrength, cropToWebp, resizeToWebp, deviceIcon, SessionPagination ฯลฯ) + DEPARTMENTS/HOSPITAL_TYPES. **shell เอา import Cropper + loadImageEl/AvatarLightbox ออก** (ย้ายมา account หมด · shared ยัง export ให้ patient-images) · account ← loadImageEl/AvatarLightbox จาก shared |
+| 7 | 0.7.19.6.11 | `parts/patient-modal.jsx` | ClinicalModal + AddPatientPage (export) + ทุกแท็บ (Regimen/Lab⚠️Chart.js/ADR/Timeline/Diagnosis/Meds) + DoseCalculator, DOTCalendar, VisitForm, DrugInteractionPanel, PharmSummaryTab, InfoBar + helpers/consts. **notification (useNotifHelpers/NotificationPanel/NotificationFullModal) เก็บไว้ shell** (app-level) → ย้าย 2 ช่วง 48–126 + 233–2628. cross-part: patient-modal ← PatientImagesTab จาก patient-images |
 
-**ผลลัพธ์ปัจจุบัน:** shell เหลือ ~4,878 บรรทัด (จาก 13,476 · เหลือ ~36%) · parts มี 9 ไฟล์: globals.js, shared.jsx, changelog.jsx, storage.jsx, admin.jsx, misc.jsx, patient-images.jsx, account.jsx
+**ผลลัพธ์ปัจจุบัน:** shell เหลือ ~2,406 บรรทัด (จาก 13,476 · เหลือ ~18%) · parts มี 10 ไฟล์: globals.js, shared.jsx, changelog.jsx, storage.jsx, admin.jsx, misc.jsx, patient-images.jsx, account.jsx, patient-modal.jsx
 
-## ⏳ เฟสที่เหลือ (2 เฟส)
+## ⏳ เฟสที่เหลือ (1 เฟส สุดท้าย)
 | เฟส | เวอร์ชัน | ไฟล์ | ย้าย |
 |---|---|---|---|
-| 6 (account) | 0.7.19.6.10 | `parts/account.jsx` | UserProfileModal, AvatarLightbox, SessionsPanel, ChangePasswordPanel + avatar crop/upload helpers |
-| 7 (patient-modal) | 0.7.19.6.11 | `parts/patient-modal.jsx` | ClinicalModal + 8 tabs + DoseCalculator, DOTCalendar, VisitForm, DrugInteractionPanel (**หนักสุด — เทสต์กราฟ Chart.js แท็บ Lab**) |
-| 8 (dashboard) | 0.7.19.6.12 | `parts/dashboard.jsx` | Dashboard, PatientList, ArchiveList, AllPatientsPage, WeeklyPrep, Reports + MONTH_LABELS/FAKE_* |
+| 8 (dashboard) | 0.7.19.6.12 | `parts/dashboard.jsx` | Dashboard, PatientList, ArchiveList, AllPatientsPage, WeeklyPrep, Reports + MONTH_LABELS/FAKE_* + col-config/render helpers |
 
 ## 🛠️ สูตรทำแต่ละเฟส (ทำแบบนี้ทุกครั้ง)
 1. `git checkout main && git pull && git checkout -b refactor/split-phase-X-<name>`
@@ -86,16 +85,16 @@ npm run build
 ```
 (ต้อง `npm install` ก่อนถ้า node_modules ยังไม่มี)
 
-## 📍 เฟส 7 (patient-modal) — พร้อมทำต่อทันที (⚠️ หนักสุด)
-- component ที่ต้องย้าย (grep ใหม่เสมอ): ClinicalModal (โมดัลเวชระเบียนผู้ป่วย รวม 8 แท็บ) +
-  DoseCalculator, DOTCalendar, VisitForm, DrugInteractionPanel, PharmSummaryTab, InfoBar, AddPatientPage ฯลฯ
-  → กลุ่มนี้อยู่แถวกลางไฟล์ (ClinicalModal เดิม ~3198 ก่อนเฟส 5, ตอนนี้ต้อง grep ใหม่)
-- ⚠️⚠️ ใช้ **Chart.js แท็บ Lab** (กราฟ) — ต้อง `import { Chart } from './globals'` และเทสต์กราฟจริง
-- deps เยอะ: globals (calcDoses, calcCrCl, DRUG_RANGES, REGIMENS, LAB_GROUPS, getLabStatus ฯลฯ),
-  shared (เพียบ), PatientImagesTab (จาก patient-images — cross-part), window.* หลายตัว
-- ClinicalModal เรียก PatientImagesTab (อยู่ patient-images แล้ว) → account เฟสนี้ import cross-part
-- **scan JSX <Capitalized> ให้ครบ** (กับดัก #11) — โมดัลนี้มี sub-component เยอะมาก
-- แนะนำ: เฟสนี้ใหญ่ อาจแบ่งย่อย หรือทำ + เทสต์ละเอียดเป็นพิเศษ (ผู้ใช้เทสต์กราฟ Lab เอง)
+## 📍 เฟส 8 (dashboard) — เฟสสุดท้าย พร้อมทำต่อทันที
+- component ที่ต้องย้าย (grep ใหม่เสมอ): Dashboard (⚠️ Chart.js — กราฟรายเดือน/รายปี), PatientList,
+  ArchiveList, AllPatientsPage, WeeklyPrep, Reports + consts (MONTH_LABELS, FAKE_MONTHLY, FAKE_YEARLY,
+  DEFAULT_COL_CONFIG, DEFAULT_ARCHIVE_COL_CONFIG) + helpers (getTotalMonths, fmtDateApp, renderPatientCell,
+  getBannerColors) — อยู่ท้าย shell ก่อน App (grep ใหม่ บรรทัดขยับ)
+- ⚠️ Dashboard ใช้ Chart.js เหมือน LabTab → import { Chart } from './globals' + ผู้ใช้เทสต์กราฟ
+- ⚠️ เก็บไว้ shell: App, AboutModal, notification (useNotifHelpers/NotificationPanel/NotificationFullModal),
+  APP_VERSION/BUILD_DATE, PROFESSION_LABELS_TH, mount logic → shell จะเหลือแค่ "แกน App + แจ้งเตือน + version"
+- ตรวจว่า Dashboard/PatientList ใช้อะไรจาก globals/shared → import ให้ครบ + scan JSX (กับดัก #11)
+- เสร็จเฟสนี้ = จบโครงการผ่าไฟล์ 🎉 (regenerate changelog ตอนนี้ได้ ถ้า git fetch --unshallow ก่อน — ดูกับดัก #5)
 
 ## 🧭 กับดักใหม่ (เจอเฟส 5 — สำคัญ ใช้ทุกเฟสที่เหลือ)
 11. **eslint no-undef จับ JSX component ที่ไม่ได้ import ไม่ได้** (เช็คแค่ call ฟังก์ชัน ไม่เช็ค `<Tag/>`)
@@ -106,7 +105,7 @@ npm run build
 
 ## 📝 หมายเหตุการ push (รอบนี้)
 - ผู้ใช้อนุมัติให้ **push เข้า main ตรง ไม่แยกกิ่ง/ไม่เปิด PR** · commit ละเอียดระดับ A4
-- เฟส 4 = commit 03e35d7 · เฟส 5 = 0d2d824 · เฟส 6 = 89f160a
+- เฟส 4 = commit 03e35d7 · เฟส 5 = 0d2d824 · เฟส 6 = 89f160a · เฟส 7 = 906ca41
 - gate ต่อเฟส: `npm run build` (env หลอก) + eslint no-undef + **scan JSX `<[A-Z]>` เอง** (กับดัก #11)
 - ผู้ใช้ยังเทสต์ localhost ไม่ได้รอบนี้ → เทสต์ทีเดียวหลังจบทุกเฟส (build+eslint+scan JSX เป็น gate)
 
