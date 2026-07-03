@@ -235,3 +235,68 @@ export function ScrollNav({ getContainer, zIndex = 30 }) {
     document.body
   )
 }
+
+// ── time helper (ใช้ข้าม domain: changelog, sessions ฯลฯ) — เฟส 1d ──
+export function relTime(iso) {
+  if (!iso) return '';
+  const ms = Date.now() - new Date(iso).getTime();
+  const m  = Math.floor(ms / 60000);
+  if (m < 1)  return 'เมื่อสักครู่';
+  if (m < 60) return `${m} นาทีที่แล้ว`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} ชั่วโมงที่แล้ว`;
+  const d = Math.floor(h / 24);
+  if (d < 30) return `${d} วันที่แล้ว`;
+  const mo = Math.floor(d / 30);
+  if (mo < 12) return `${mo} เดือนที่แล้ว`;
+  return new Date(iso).toLocaleDateString('th-TH');
+}
+
+// ── avatar display helpers (ใช้ข้าม domain: changelog, admin, account, dashboard) — เฟส 1d ──
+export function r2AvatarUrl(key, updatedAt) {
+  if (!key) return null;
+  const base = (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_R2_AVATAR_URL) || 'https://img.tbjourney.care';
+  const v = updatedAt ? new Date(updatedAt).getTime() : '';
+  return `${base}/${key}?v=${v}`;
+}
+// ตัดคำนำหน้า (นาย/นาง/ภญ. ฯลฯ) — ถ้ามี 3 คำขึ้นไป เอา 2 คำท้าย (ชื่อ+นามสกุล) → key มาตรฐานเดียวทุกที่
+export function normName(name) {
+  let p = (name || '').trim().split(/\s+/).filter(Boolean);
+  if (p.length > 2) p = p.slice(-2);
+  return p.join(' ');
+}
+// ตัวอักษรย่อจากชื่อ (ตัดคำนำหน้าแล้ว)
+export function nameInitials(name) {
+  const p = normName(name).split(/\s+/).filter(Boolean);
+  if (p.length === 0) return '?';
+  if (p.length === 1) return p[0].slice(0, 2).toUpperCase();
+  return (p[0][0] + p[1][0]).toUpperCase();
+}
+// คู่สี pastel (พื้นอ่อน + ตัวอักษรเข้ม) — hash จาก key (ควรเป็น user_id → สีคงที่ต่อคน)
+export const AVATAR_PALETTE = [
+  { bg: '#ccfbf1', fg: '#0f766e' }, { bg: '#fef3c7', fg: '#b45309' }, { bg: '#fce7f3', fg: '#be185d' },
+  { bg: '#dbeafe', fg: '#1d4ed8' }, { bg: '#f3e8ff', fg: '#7e22ce' }, { bg: '#cffafe', fg: '#0e7490' },
+  { bg: '#dcfce7', fg: '#15803d' }, { bg: '#ffedd5', fg: '#c2410c' }, { bg: '#fee2e2', fg: '#b91c1c' },
+  { bg: '#e0e7ff', fg: '#4338ca' }, { bg: '#e0f2fe', fg: '#0369a1' }, { bg: '#fef9c3', fg: '#a16207' },
+];
+export function colorFromName(key) {
+  const s = (key == null ? '' : String(key)).toLowerCase();
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return AVATAR_PALETTE[h % AVATAR_PALETTE.length];
+}
+// วงกลม avatar ใช้ซ้ำได้ — มีรูป → แสดงรูป · ไม่มี/รูปเสีย → ตัวอักษรย่อ
+export function AvatarCircle({ urlKey, updatedAt, fallback, name, colorKey, size = 32, fontSize, bg, onClick, title, style }) {
+  const [err, setErr] = React.useState(false);
+  React.useEffect(() => { setErr(false); }, [urlKey, updatedAt]);   // เปลี่ยนรูป → reset error
+  const url = !err ? r2AvatarUrl(urlKey, updatedAt) : null;
+  const fs = fontSize || Math.max(8, Math.round(size * 0.36));
+  const key = (colorKey != null && colorKey !== '') ? String(colorKey) : normName(name || fallback || '');
+  const pair = colorFromName(key);
+  return (
+    <div onClick={onClick} title={title}
+      style={{ width: size, height: size, borderRadius: '50%', overflow: 'hidden', background: bg || pair.bg, color: bg ? '#fff' : pair.fg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: fs, flexShrink: 0, cursor: onClick ? 'pointer' : 'default', ...(style || {}) }}>
+      {url ? <img src={url} onError={() => setErr(true)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (fallback || '?')}
+    </div>
+  );
+}
