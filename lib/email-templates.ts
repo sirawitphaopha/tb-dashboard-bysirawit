@@ -271,6 +271,88 @@ export function deleteRequestRejectedEmail(firstName: string, patientName: strin
 }
 
 // ═════════════════════════════════════════════════════════
+// 7a) Admin Image Delete Request — มีคนขอลบรูปผู้ป่วย (เฟส 2)
+// ═════════════════════════════════════════════════════════
+export function adminImageDeleteRequestEmail(
+  patientName: string, patientHn: string, imgTypeLabel: string,
+  reason: string, requesterName: string, requesterProfession: string, baseUrl: string
+) {
+  const goUrl = `${baseUrl}/`
+  const subject = `🗑️ คำขอลบรูปผู้ป่วย: ${patientName} (HN: ${patientHn})`
+  const body = `
+    <h2 style="margin:0 0 16px;color:#991b1b;font-size:18px;">คำขอลบรูปผู้ป่วย</h2>
+    <p style="margin:0 0 20px;font-size:14px;color:#4b5563;">มีผู้ใช้ส่งคำขอลบรูปของผู้ป่วยออกจากระบบ กรุณาตรวจสอบและพิจารณา</p>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:16px;margin-bottom:20px;">
+      <tr><td style="padding:6px 0;font-size:12px;color:#6b7280;width:130px;">ผู้ป่วย</td>
+          <td style="padding:6px 0;font-size:14px;font-weight:700;color:#1f2937;">${patientName}</td></tr>
+      <tr><td style="padding:6px 0;font-size:12px;color:#6b7280;">HN</td>
+          <td style="padding:6px 0;font-size:14px;font-weight:700;color:#1f2937;font-family:monospace;">${patientHn || '—'}</td></tr>
+      <tr><td style="padding:6px 0;font-size:12px;color:#6b7280;">ประเภทรูป</td>
+          <td style="padding:6px 0;font-size:14px;font-weight:600;color:#1f2937;">${imgTypeLabel || '—'}</td></tr>
+      <tr><td style="padding:6px 0;font-size:12px;color:#6b7280;">ผู้ขอลบ</td>
+          <td style="padding:6px 0;font-size:14px;font-weight:600;color:#1f2937;">${requesterName}</td></tr>
+      <tr><td style="padding:6px 0;font-size:12px;color:#6b7280;">วิชาชีพ</td>
+          <td style="padding:6px 0;font-size:14px;font-weight:600;color:#1f2937;">${requesterProfession || '—'}</td></tr>
+      <tr><td style="padding:6px 0;font-size:12px;color:#6b7280;">เหตุผล</td>
+          <td style="padding:6px 0;font-size:14px;color:#7f1d1d;line-height:1.6;">${reason}</td></tr>
+    </table>
+
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr><td align="center" style="padding:8px 0;">
+        <a href="${goUrl}" style="display:inline-block;padding:14px 32px;background:#dc2626;color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px;">
+          🗑️ ไปที่คลังรูป — อนุมัติ/ปฏิเสธ
+        </a>
+      </td></tr>
+    </table>
+
+    <p style="margin:16px 0 0;font-size:12px;color:#9ca3af;text-align:center;">คลิกปุ่มข้างบนเพื่อไปพิจารณาคำขอนี้ในระบบ</p>
+  `
+  return { subject, html: wrap(subject, body) }
+}
+
+// ═════════════════════════════════════════════════════════
+// 7b) User Image Delete Approved — แอดมินอนุมัติลบรูป
+// ═════════════════════════════════════════════════════════
+export function imageDeleteApprovedEmail(firstName: string, patientName: string, imgTypeLabel: string) {
+  const subject = `✅ คำขอลบรูปได้รับการอนุมัติ: ${patientName}`
+  const body = `
+    <h2 style="margin:0 0 16px;color:${BRAND_TEAL_DARK};font-size:18px;">เรียน คุณ${firstName}</h2>
+    <p style="margin:0 0 16px;font-size:14px;color:#4b5563;line-height:1.7;">
+      ผู้ดูแลระบบได้อนุมัติคำขอลบรูปของท่านเรียบร้อยแล้ว
+    </p>
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px;margin:20px 0;">
+      <p style="margin:0 0 6px;font-size:12px;color:#166534;font-weight:700;">รูปที่ถูกลบ</p>
+      <p style="margin:0;font-size:16px;font-weight:700;color:#15803d;">${imgTypeLabel} · ${patientName}</p>
+      <p style="margin:6px 0 0;font-size:12px;color:#166534;">รูปถูกย้ายไปถังขยะ — Admin สามารถกู้คืนได้ภายใน 60 วัน</p>
+    </div>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB JOURNEY &amp; CARE</p>
+  `
+  return { subject, html: wrap(subject, body) }
+}
+
+// ═════════════════════════════════════════════════════════
+// 7c) User Image Delete Rejected — แอดมินปฏิเสธคำขอลบรูป
+// ═════════════════════════════════════════════════════════
+export function imageDeleteRejectedEmail(firstName: string, patientName: string, imgTypeLabel: string, note?: string) {
+  const subject = `ℹ️ คำขอลบรูปไม่ได้รับการอนุมัติ: ${patientName}`
+  const body = `
+    <h2 style="margin:0 0 16px;color:${BRAND_TEAL_DARK};font-size:18px;">เรียน คุณ${firstName}</h2>
+    <p style="margin:0 0 16px;font-size:14px;color:#4b5563;line-height:1.7;">
+      ขอเรียนแจ้งให้ทราบว่า คำขอลบรูป <strong>${imgTypeLabel} · ${patientName}</strong> ไม่ได้รับการอนุมัติในครั้งนี้ รูปยังอยู่ในระบบตามปกติ
+    </p>
+    ${note ? `
+    <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:10px;padding:16px;margin:20px 0;">
+      <p style="margin:0 0 6px;font-size:12px;color:#92400e;font-weight:700;">หมายเหตุจาก Admin</p>
+      <p style="margin:0;font-size:14px;color:#78350f;line-height:1.6;">${note}</p>
+    </div>` : ''}
+    <p style="margin:0 0 8px;font-size:14px;color:#4b5563;">หากมีข้อสงสัย กรุณาติดต่อผู้ดูแลระบบโดยตรง</p>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB JOURNEY &amp; CARE</p>
+  `
+  return { subject, html: wrap(subject, body) }
+}
+
+// ═════════════════════════════════════════════════════════
 // 8) User Delete Restored — admin กู้คืนผู้ป่วยที่ user ขอลบ
 // ═════════════════════════════════════════════════════════
 export function deleteRequestRestoredEmail(firstName: string, patientName: string) {

@@ -16,7 +16,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       .eq('id', id)
       .maybeSingle()
     if (!im || im.deleted_at) return NextResponse.json({ error: 'not found' }, { status: 404 })
-    if (im.uploaded_by !== user.id && !isAdmin) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+    // v0.7.20 — ลบรูปตรง = แอดมินเท่านั้น (เหมือนระบบผู้ป่วย) · คนอื่นต้องใช้ request-delete (ขอลบ → รออนุมัติ)
+    if (!isAdmin) return NextResponse.json({ error: 'admin only' }, { status: 403 })
 
     const body = await req.json().catch(() => ({} as any))
     const reason = (body?.reason ? String(body.reason).trim().slice(0, 300) : '') || null

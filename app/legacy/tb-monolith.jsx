@@ -202,6 +202,7 @@ function App() {
   // จำนวน user ที่รออนุมัติ (สำหรับ badge ใน sidebar)
   const [pendingUserCount, setPendingUserCount] = useState(0);
   const [pendingDeleteRequests, setPendingDeleteRequests] = useState([]);
+  const [pendingImageRequests, setPendingImageRequests] = useState([]);   // v0.7.20 — คำขอลบรูปรออนุมัติ (แอดมิน)
   const [cancelledDeleteCount, setCancelledDeleteCount] = useState(0);
   // v0.7.17.0 — userDbNotifs ย้ายขึ้นไป declared บนสุดแล้ว (ใกล้ readAlerts useEffect)
   // คำขอแก้ไขข้อมูลที่รออนุมัติ (admin) + user ที่จะ highlight เมื่อกดจากกระดิ่ง
@@ -223,6 +224,7 @@ function App() {
           setCancelledDeleteCount(cancelled);
           const editReqs = await window.loadPendingEditRequests();
           setPendingEditRequests(editReqs);
+          try { const ir = await fetch('/api/patient/images/pending-requests'); if (ir.ok) { const d = await ir.json(); setPendingImageRequests(d.requests || []); } } catch {}
         } catch (e) { console.error('Load pending count failed:', e); }
       })();
     } else {
@@ -248,6 +250,18 @@ function App() {
           const cancelled = await window.loadCancelledDeleteCount();
           setCancelledDeleteCount(cancelled);
         } catch (e) { console.error('Realtime reload failed:', e); }
+      })
+      .subscribe();
+    return () => { window._sb.removeChannel(channel); };
+  }, [currentUser]);
+
+  // Realtime: คำขอลบรูป (สำหรับ admin) — รูปใดตั้ง/เคลียร์ delete_req → reload กระดิ่ง
+  useEffect(() => {
+    if (currentUser?.role !== 'admin') return;
+    const channel = window._sb
+      .channel('img-delete-requests-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tb_patient_images' }, async () => {
+        try { const ir = await fetch('/api/patient/images/pending-requests'); if (ir.ok) { const d = await ir.json(); setPendingImageRequests(d.requests || []); } } catch {}
       })
       .subscribe();
     return () => { window._sb.removeChannel(channel); };
@@ -396,6 +410,15 @@ function App() {
       msg: `มี ${pendingDeleteRequests.length} คำขอลบผู้ป่วยรออนุมัติ — คลิกเพื่อจัดการ`,
       time: 'ใหม่',
     }] : []),
+    ...(currentUser?.role === 'admin' && pendingImageRequests.length > 0 ? [{
+      id: 'admin-pending-img-deletes',
+      type: 'warning',
+      patient: null,
+      patientId: null,
+      navTarget: 'image-library',
+      msg: `มี ${pendingImageRequests.length} คำขอลบรูปรออนุมัติ — คลิกเพื่อจัดการ`,
+      time: 'ใหม่',
+    }] : []),
     ...(currentUser?.role === 'admin' && cancelledDeleteCount > 0 ? [{
       id: 'admin-cancelled-deletes',
       type: 'info',
@@ -427,7 +450,7 @@ function App() {
     return {
       id: 'user-notif-' + n.id,
       dbNotifId: n.id,
-      type: (n.type === 'delete_rejected' || n.type === 'edit_request_rejected') ? 'warning' : 'info',
+      type: (n.type === 'delete_rejected' || n.type === 'edit_request_rejected' || n.type === 'img_delete_rejected') ? 'warning' : 'info',
       patient: n.patient_name || null,
       patientId: (n.type === 'delete_rejected' || n.type === 'delete_restored') ? n.patient_id : null,
       navTarget: isComment ? 'changelog' : null,
@@ -446,6 +469,8 @@ function App() {
          : n.type === 'comment_mention'         ? `${n.note} เรียกคุณในความคิดเห็น v${n.comment_version}`
          : n.type === 'comment_resolved'        ? `${n.note} ปิดประเด็นของคุณใน v${n.comment_version}`
          : n.type === 'comment_new'             ? `${n.note} เขียนความคิดเห็นใหม่ใน v${n.comment_version}`
+         : n.type === 'img_delete_approved'     ? `Admin อนุมัติลบรูปของ "${n.patient_name}" แล้ว`
+         : n.type === 'img_delete_rejected'     ? `Admin ไม่อนุมัติลบรูปของ "${n.patient_name}"${n.note ? ` — ${n.note}` : ''}`
          : `"${n.patient_name}" ถูกลบถาวรแล้ว`,
       time: new Date(n.created_at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }),
     };
@@ -1020,7 +1045,7 @@ const DEMO_USER = {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.19.8';
+const APP_VERSION = '0.7.20';
 const BUILD_DATE = '4 ก.ค. 2569';
 // bridge: ให้ parts/* (เช่น changelog.jsx, about.jsx) อ่านเวอร์ชันผ่าน window.* ได้ (เฟส 2 + แยกรอบ 2)
 if (typeof window !== 'undefined') { window.APP_VERSION = APP_VERSION; window.BUILD_DATE = BUILD_DATE; }

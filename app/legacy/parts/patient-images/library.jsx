@@ -6,7 +6,7 @@ const { useState, useEffect, useCallback } = React
 import { AvatarLightbox } from '../shared'
 import { compressToWebp, putWithProgress, JustifiedGallery, IMG_SORTS, imgInRange, imgSortCmp,
   patientImgInfo, PATIENT_IMG_TYPES, CACHE_TTL, loadCache, saveCache, invalidateImgCaches,
-  IMG_VIEW_SIZES, ImgViewToolbar } from './helpers'
+  IMG_VIEW_SIZES, ImgViewToolbar, PendingDeleteOverlay, ImageRequestDeleteModal, ImageReviewDeleteModal } from './helpers'
 
 function ImageLibraryPage({ currentUser }) {
   const _lc0 = loadCache('tb_libimg');
@@ -20,6 +20,8 @@ function ImageLibraryPage({ currentUser }) {
   const [uploaderFilter, setUploaderFilter] = React.useState('all');
   const [q, setQ]           = React.useState('');
   const [lightbox, setLightbox] = React.useState(null);
+  const [reqTarget, setReqTarget] = React.useState(null);        // v0.7.20 — รูปที่กำลัง "ขอลบ"
+  const [reviewTarget, setReviewTarget] = React.useState(null);  // v0.7.20 — {im, action} แอดมินอนุมัติ/ปฏิเสธ
   const [editTarget, setEditTarget] = React.useState(null);
   const [editType, setEditType]   = React.useState('cxr');
   const [editNote, setEditNote]   = React.useState('');
@@ -57,7 +59,7 @@ function ImageLibraryPage({ currentUser }) {
         if (ev === 'DELETE') { if (o && o.id) setImages(arr => (arr||[]).filter(x => x.id !== o.id)); }
         else if (ev === 'UPDATE') {
           if (n && n.deleted_at) setImages(arr => (arr||[]).filter(x => x.id !== n.id));
-          else if (n) setImages(arr => (arr||[]).map(x => x.id === n.id ? { ...x, type: n.type, note: n.note, title: n.title, width: n.width, height: n.height, size_bytes: n.size_bytes, quality: n.quality } : x));  // แก้หมวด/คำอธิบาย → อัปเดตตรงๆ
+          else if (n) setImages(arr => (arr||[]).map(x => x.id === n.id ? { ...x, type: n.type, note: n.note, title: n.title, width: n.width, height: n.height, size_bytes: n.size_bytes, quality: n.quality, delete_req_by: n.delete_req_by, delete_req_name: n.delete_req_name, delete_req_at: n.delete_req_at, delete_req_reason: n.delete_req_reason } : x));  // แก้หมวด/คำอธิบาย/สถานะขอลบ → อัปเดตตรงๆ
         }
         else load(true, true);   // INSERT
       })
@@ -122,6 +124,22 @@ function ImageLibraryPage({ currentUser }) {
       .catch(() => { setErr('ลบไม่สำเร็จ — กู้รายการกลับมา'); load(true, true); });
   };
 
+  // ── ขอลบรูป (v0.7.20) — คนไม่ใช่แอดมิน · แอดมินอนุมัติ/ปฏิเสธ · ผู้ขอยกเลิก ──
+  const cancelImgRequest = async (im) => {
+    setImages(arr => (arr||[]).map(x => x.id===im.id ? { ...x, delete_req_by:null, delete_req_name:null, delete_req_at:null, delete_req_reason:null } : x));
+    invalidateImgCaches(); setLightbox(null);
+    try { await fetch('/api/patient/images/'+im.id+'/request-delete', { method:'DELETE' }); } catch {}
+  };
+  const onReqDone = (im, reason) => {   // ส่งคำขอสำเร็จ → ฝ้าขาวทันที
+    setImages(arr => (arr||[]).map(x => x.id===im.id ? { ...x, delete_req_by: currentUser?.id || 'me', delete_req_name:'(คุณ)', delete_req_at:new Date().toISOString(), delete_req_reason: reason } : x));
+    invalidateImgCaches(); setLightbox(null);
+  };
+  const onReviewDone = (im, action) => {   // แอดมิน approve = ไปถังขยะ · reject = กลับปกติ
+    if (action === 'approve') setImages(arr => (arr||[]).filter(x => x.id !== im.id));
+    else setImages(arr => (arr||[]).map(x => x.id===im.id ? { ...x, delete_req_by:null, delete_req_name:null, delete_req_at:null, delete_req_reason:null } : x));
+    invalidateImgCaches(); setLightbox(null);
+  };
+
   const [vMode, setVMode] = React.useState('card');   // มุมมองรูป: การ์ด/แถว
   const [vSize, setVSize] = React.useState(1);         // ขนาด 0/1/2
   const [pSort, setPSort] = React.useState('name-asc');   // เรียงกลุ่มผู้ป่วย: name/hn
@@ -146,6 +164,7 @@ function ImageLibraryPage({ currentUser }) {
         onClick={(e)=>openImage(im, e.currentTarget.getBoundingClientRect())}
         style={{position:'relative',width:'100%',height:'100%',background:'#0b0f19',borderRadius:'10px',overflow:'hidden',cursor:'zoom-in',border:'1px solid #e5e7eb'}}>
         <img src={im.thumbUrl || im.url} alt="" loading="lazy" draggable={false} onContextMenu={e=>e.preventDefault()} style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+        {im.delete_req_by && <PendingDeleteOverlay/>}
         <div className="tb-img-zoomicon" style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.22)',pointerEvents:'none'}}><i className="fa-solid fa-magnifying-glass-plus" style={{color:'#fff',fontSize:'18px',textShadow:'0 1px 5px rgba(0,0,0,0.6)'}}></i></div>
         <span style={{position:'absolute',top:'5px',right:'5px',fontSize:'9px',fontWeight:800,padding:'2px 6px',borderRadius:'999px',background:meta.bg,color:meta.fg}}>{meta.label}</span>
         <span style={{position:'absolute',bottom:0,left:0,right:0,padding:'10px 6px 4px',background:'linear-gradient(transparent,rgba(0,0,0,0.6))',color:'#fff',fontSize:'9px'}}>{new Date(im.uploaded_at).toLocaleDateString('th-TH',{day:'numeric',month:'short'})}</span>
@@ -161,9 +180,10 @@ function ImageLibraryPage({ currentUser }) {
     const dimF = (im.width&&im.height)?im.width+' × '+im.height+' px':'—';
     const qual = im.mime==='image/gif' ? 'GIF' : 'WebP '+(im.type==='cxr'?92:87)+'%';
     return (
-      <div key={im.id} onClick={(e)=>openImage(im, e.currentTarget.getBoundingClientRect())} style={{display:'flex',alignItems:'center',gap:'10px',border:'1px solid #e5e7eb',borderRadius:'10px',padding:'7px 10px',background:'#fff',cursor:'zoom-in',marginBottom:'8px'}}>
+      <div key={im.id} onClick={(e)=>openImage(im, e.currentTarget.getBoundingClientRect())} style={{display:'flex',alignItems:'center',gap:'10px',border:'1px solid '+(im.delete_req_by?'#fcd34d':'#e5e7eb'),borderRadius:'10px',padding:'7px 10px',background:im.delete_req_by?'#fffbeb':'#fff',cursor:'zoom-in',marginBottom:'8px'}}>
         <div style={{width:th+'px',height:th+'px',flexShrink:0,borderRadius:'8px',overflow:'hidden',background:'#0b0f19'}}><img src={im.thumbUrl||im.url} alt="" loading="lazy" draggable={false} onContextMenu={e=>e.preventDefault()} style={{width:'100%',height:'100%',objectFit:'cover'}}/></div>
         <span style={{flexShrink:0,width:'52px',fontSize:'10px',fontWeight:800,padding:'2px 0',textAlign:'center',borderRadius:'999px',background:meta.bg,color:meta.fg}}>{meta.label}</span>
+        {im.delete_req_by && <span style={{flexShrink:0,fontSize:'9px',fontWeight:800,padding:'2px 7px',borderRadius:'999px',background:'#fef3c7',color:'#92400e',border:'1px solid #fcd34d',whiteSpace:'nowrap'}}><i className="fa-solid fa-clock" style={{marginRight:'3px'}}></i>รออนุมัติลบ</span>}
         <div style={{flexShrink:0,width:'146px'}}><p style={{fontSize:'10px',color:'#9ca3af',margin:0}}>อัปโหลด</p><p style={{fontSize:'12px',color:'#374151',margin:0}}>{up}</p></div>
         <div style={{flexShrink:0,width:'112px'}}><p style={{fontSize:'10px',color:'#9ca3af',margin:0}}>ขนาดภาพ</p><p style={{fontSize:'12px',color:'#374151',margin:0}}>{dimF}</p></div>
         <div style={{flexShrink:0,width:'82px'}}><p style={{fontSize:'10px',color:'#9ca3af',margin:0}}>คุณภาพ</p><p style={{fontSize:'12px',color:'#374151',margin:0}}>{qual}</p></div>
@@ -280,15 +300,29 @@ function ImageLibraryPage({ currentUser }) {
           </div>
         </div>, document.body
       )}
+      {reqTarget && <ImageRequestDeleteModal image={reqTarget} lightboxOpen={!!lightbox} onClose={()=>setReqTarget(null)} onDone={(reason)=>onReqDone(reqTarget, reason)}/>}
+      {reviewTarget && <ImageReviewDeleteModal image={reviewTarget.im} action={reviewTarget.action} lightboxOpen={!!lightbox} onClose={()=>setReviewTarget(null)} onDone={(action)=>onReviewDone(reviewTarget.im, action)}/>}
       {lightbox && (()=>{
         const cur = flat[lightbox.idx]; if (!cur) return null;
         const meta = PATIENT_IMG_TYPES[cur.type] || PATIENT_IMG_TYPES.other;
         const name = meta.label + ' · ' + cur.patient_name + (cur.patient_hn ? ' (' + cur.patient_hn + ')' : '');
-        const canDel = cur.uploaded_by===currentUser?.id || isAdmin;
-        const acts = canDel ? [
-          { icon:'fa-pen', label:'แก้หมวด / คำอธิบาย', onClick:()=>{ openEdit(cur); } },
-          { icon:'fa-trash-can', label:'ลบรูป', danger:true, onClick:()=>{ setDelReason(''); setDelHn(''); setDelStep2(false); setDelTarget(cur); } },
-        ] : [];
+        const mine = cur.uploaded_by===currentUser?.id;
+        const canEdit = mine || isAdmin;
+        const pending = !!cur.delete_req_by;
+        const myReq = cur.delete_req_by === currentUser?.id;
+        const acts = [];
+        if (canEdit && !pending) acts.push({ icon:'fa-pen', label:'แก้หมวด / คำอธิบาย', onClick:()=>{ openEdit(cur); } });
+        if (isAdmin) {
+          if (pending) {
+            acts.push({ icon:'fa-check', label:'อนุมัติลบรูป', onClick:()=>{ setReviewTarget({ im: cur, action:'approve' }); } });
+            acts.push({ icon:'fa-xmark', label:'ปฏิเสธคำขอลบ', danger:true, onClick:()=>{ setReviewTarget({ im: cur, action:'reject' }); } });
+          } else {
+            acts.push({ icon:'fa-trash-can', label:'ลบรูป', danger:true, onClick:()=>{ setDelReason(''); setDelHn(''); setDelStep2(false); setDelTarget(cur); } });
+          }
+        } else {
+          if (pending && myReq) acts.push({ icon:'fa-rotate-left', label:'ยกเลิกคำขอลบ', onClick:()=>{ cancelImgRequest(cur); } });
+          else if (!pending) acts.push({ icon:'fa-trash-can', label:'ขอลบรูป', onClick:()=>{ setReqTarget(cur); } });
+        }
         const info = patientImgInfo(cur, meta, name);
         info.noteEditable = canDel;
         info.onSaveNote = async (text) => { await fetch('/api/patient/images/'+cur.id,{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({note:text||null})}); setImages(arr=>(arr||[]).map(x=>x.id===cur.id?{...x,note:text||null}:x)); invalidateImgCaches(); };

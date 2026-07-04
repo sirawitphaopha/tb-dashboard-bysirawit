@@ -7,7 +7,7 @@ import { loadImageEl, AvatarLightbox } from '../shared'
 import { compressToWebp, putWithProgress, decodeImageToDataURL, isAnimatedGif, JustifiedGallery,
   fmtFileSize, mimeLabel, detectDevice, IMG_SORTS, imgInRange, imgSortCmp, patientImgInfo,
   PATIENT_IMG_TYPES, CXRCompareModal, CACHE_TTL, loadCache, saveCache, invalidateImgCaches,
-  IMG_VIEW_SIZES, ImgViewToolbar } from './helpers'
+  IMG_VIEW_SIZES, ImgViewToolbar, PendingDeleteOverlay, ImageRequestDeleteModal, ImageReviewDeleteModal } from './helpers'
 
 function PatientImagesTab({ patient, currentUser, locked }) {
   const LSKEY = 'tb_patimg_' + patient.id;
@@ -28,6 +28,8 @@ function PatientImagesTab({ patient, currentUser, locked }) {
   const [dateTo, setDateTo]     = React.useState('');
   const [uploaderFilter, setUploaderFilter] = React.useState('all');
   const [lightbox, setLightbox] = React.useState(null);
+  const [reqTarget, setReqTarget] = React.useState(null);        // v0.7.20 — รูปที่กำลัง "ขอลบ"
+  const [reviewTarget, setReviewTarget] = React.useState(null);  // v0.7.20 — {im, action} แอดมินอนุมัติ/ปฏิเสธ
   const [delTarget, setDelTarget] = React.useState(null);
   const [delReason, setDelReason] = React.useState('');   // เหตุผลการลบ (บังคับ — ลบยากเหมือนผู้ป่วย)
   const [delHn, setDelHn] = React.useState('');           // พิมพ์ HN ยืนยันตอนย้ายเข้าถัง
@@ -73,7 +75,7 @@ function PatientImagesTab({ patient, currentUser, locked }) {
           if (n && n.deleted_at) setImages(arr => (arr||[]).filter(x => x.id !== n.id));   // soft-delete → เอาออก
           else if (n) setImages(arr => {
             if (!(arr||[]).some(x => x.id === n.id)) { load(true, true); return arr; }   // กู้คืนจากถังขยะ (ไม่มีในลิสต์) → โหลดใหม่
-            return (arr||[]).map(x => x.id === n.id ? { ...x, type: n.type, note: n.note, title: n.title, width: n.width, height: n.height, size_bytes: n.size_bytes, quality: n.quality } : x);   // แก้หมวด/คำอธิบาย → อัปเดต field ตรงๆ (ไม่ refetch)
+            return (arr||[]).map(x => x.id === n.id ? { ...x, type: n.type, note: n.note, title: n.title, width: n.width, height: n.height, size_bytes: n.size_bytes, quality: n.quality, delete_req_by: n.delete_req_by, delete_req_name: n.delete_req_name, delete_req_at: n.delete_req_at, delete_req_reason: n.delete_req_reason } : x);   // แก้หมวด/คำอธิบาย/สถานะขอลบ → อัปเดต field ตรงๆ (ไม่ refetch)
           });
         }
         else load(true, true);   // INSERT → ต้องดึง url ใหม่
@@ -199,6 +201,22 @@ function PatientImagesTab({ patient, currentUser, locked }) {
     setCompare({ left:a, right:b });
   };
 
+  // ── ขอลบรูป (v0.7.20) — คนไม่ใช่แอดมิน · แอดมินอนุมัติ/ปฏิเสธ · ผู้ขอยกเลิก ──
+  const cancelImgRequest = async (im) => {
+    setImages(arr => (arr||[]).map(x => x.id===im.id ? { ...x, delete_req_by:null, delete_req_name:null, delete_req_at:null, delete_req_reason:null } : x));
+    invalidateImgCaches(); setLightbox(null);
+    try { await fetch('/api/patient/images/'+im.id+'/request-delete', { method:'DELETE' }); } catch {}
+  };
+  const onReqDone = (im, reason) => {
+    setImages(arr => (arr||[]).map(x => x.id===im.id ? { ...x, delete_req_by: currentUser?.id || 'me', delete_req_name:'(คุณ)', delete_req_at:new Date().toISOString(), delete_req_reason: reason } : x));
+    invalidateImgCaches(); setLightbox(null);
+  };
+  const onReviewDone = (im, action) => {
+    if (action === 'approve') setImages(arr => (arr||[]).filter(x => x.id !== im.id));
+    else setImages(arr => (arr||[]).map(x => x.id===im.id ? { ...x, delete_req_by:null, delete_req_name:null, delete_req_at:null, delete_req_reason:null } : x));
+    invalidateImgCaches(); setLightbox(null);
+  };
+
   const uploaders = [...new Set((images || []).map(im => im.uploader_name).filter(Boolean))];
   const shown = (images || []).filter(im => (filter==='all' || im.type===filter) && (uploaderFilter==='all' || im.uploader_name===uploaderFilter) && imgInRange(im, dateFrom, dateTo)).sort(imgSortCmp(sortBy));
   const cxrCount = (images || []).filter(im => im.type==='cxr').length;
@@ -273,6 +291,7 @@ function PatientImagesTab({ patient, currentUser, locked }) {
               onClick={(e)=>selectableForCompare?toggleSel(im):openImage(im, e.currentTarget.getBoundingClientRect())}
               style={{position:'relative',width:'100%',height:'100%',background:'#0b0f19',borderRadius:'10px',overflow:'hidden',cursor:selectableForCompare?'pointer':'zoom-in',border:'1px solid #e5e7eb',outline:selIdx>=0?'3px solid #0d9488':'none',outlineOffset:'-3px'}}>
               <img src={im.thumbUrl || im.url} alt="" loading="lazy" draggable={false} onContextMenu={e=>e.preventDefault()} style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+              {im.delete_req_by && <PendingDeleteOverlay/>}
               {!selectableForCompare && <div className="tb-img-zoomicon" style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.22)',pointerEvents:'none'}}><i className="fa-solid fa-magnifying-glass-plus" style={{color:'#fff',fontSize:'18px',textShadow:'0 1px 5px rgba(0,0,0,0.6)'}}></i></div>}
               {selectableForCompare && <div style={{position:'absolute',top:'6px',left:'6px',width:'22px',height:'22px',borderRadius:'50%',background:selIdx>=0?'#0d9488':'rgba(255,255,255,0.85)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'11px',fontWeight:800,border:'2px solid #fff'}}>{selIdx>=0?selIdx+1:''}</div>}
               <span style={{position:'absolute',top:'6px',right:'6px',fontSize:'10px',fontWeight:800,padding:'2px 7px',borderRadius:'999px',background:meta.bg,color:meta.fg}}>{meta.label}</span>
@@ -293,9 +312,10 @@ function PatientImagesTab({ patient, currentUser, locked }) {
             const dimF=(im.width&&im.height)?im.width+' × '+im.height+' px':'—';
             const qual=im.mime==='image/gif' ? 'GIF' : 'WebP '+(im.type==='cxr'?92:87)+'%';
             return (
-              <div key={im.id} onClick={(e)=>openImage(im, e.currentTarget.getBoundingClientRect())} style={{display:'flex',alignItems:'center',gap:'10px',border:'1px solid #e5e7eb',borderRadius:'10px',padding:'7px 10px',background:'#fff',cursor:'zoom-in'}}>
+              <div key={im.id} onClick={(e)=>openImage(im, e.currentTarget.getBoundingClientRect())} style={{display:'flex',alignItems:'center',gap:'10px',border:'1px solid '+(im.delete_req_by?'#fcd34d':'#e5e7eb'),borderRadius:'10px',padding:'7px 10px',background:im.delete_req_by?'#fffbeb':'#fff',cursor:'zoom-in'}}>
                 <div style={{width:th+'px',height:th+'px',flexShrink:0,borderRadius:'8px',overflow:'hidden',background:'#0b0f19'}}><img src={im.thumbUrl||im.url} alt="" loading="lazy" draggable={false} onContextMenu={e=>e.preventDefault()} style={{width:'100%',height:'100%',objectFit:'cover'}}/></div>
                 <span style={{flexShrink:0,width:'52px',fontSize:'10px',fontWeight:800,padding:'2px 0',textAlign:'center',borderRadius:'999px',background:meta.bg,color:meta.fg}}>{meta.label}</span>
+                {im.delete_req_by && <span style={{flexShrink:0,fontSize:'9px',fontWeight:800,padding:'2px 7px',borderRadius:'999px',background:'#fef3c7',color:'#92400e',border:'1px solid #fcd34d',whiteSpace:'nowrap'}}><i className="fa-solid fa-clock" style={{marginRight:'3px'}}></i>รออนุมัติลบ</span>}
                 <div style={{flexShrink:0,width:'146px'}}><p style={{fontSize:'10px',color:'#9ca3af',margin:0}}>อัปโหลด</p><p style={{fontSize:'12px',color:'#374151',margin:0}}>{up}</p></div>
                 <div style={{flexShrink:0,width:'112px'}}><p style={{fontSize:'10px',color:'#9ca3af',margin:0}}>ขนาดภาพ</p><p style={{fontSize:'12px',color:'#374151',margin:0}}>{dimF}</p></div>
                 <div style={{flexShrink:0,width:'82px'}}><p style={{fontSize:'10px',color:'#9ca3af',margin:0}}>คุณภาพ</p><p style={{fontSize:'12px',color:'#374151',margin:0}}>{qual}</p></div>
@@ -312,11 +332,23 @@ function PatientImagesTab({ patient, currentUser, locked }) {
         const cur = shown[lightbox.idx]; if (!cur) return null;
         const meta = PATIENT_IMG_TYPES[cur.type] || PATIENT_IMG_TYPES.other;
         const name = meta.label + ' · ' + (cur.title || (cur.storage_key||'').split('/').pop());
-        const canDel = !locked && (cur.uploaded_by===currentUser?.id || isAdmin);
-        const acts = canDel ? [
-          { icon:'fa-pen', label:'แก้หมวด / คำอธิบาย', onClick:()=>{ openEdit(cur); } },
-          { icon:'fa-trash-can', label:'ลบรูป', danger:true, onClick:()=>{ setDelReason(''); setDelHn(''); setDelStep2(false); setDelTarget(cur); } },
-        ] : [];
+        const mine = cur.uploaded_by===currentUser?.id;
+        const canEdit = !locked && (mine || isAdmin);
+        const pending = !!cur.delete_req_by;
+        const myReq = cur.delete_req_by === currentUser?.id;
+        const acts = [];
+        if (canEdit && !pending) acts.push({ icon:'fa-pen', label:'แก้หมวด / คำอธิบาย', onClick:()=>{ openEdit(cur); } });
+        if (!locked && isAdmin) {
+          if (pending) {
+            acts.push({ icon:'fa-check', label:'อนุมัติลบรูป', onClick:()=>{ setReviewTarget({ im: cur, action:'approve' }); } });
+            acts.push({ icon:'fa-xmark', label:'ปฏิเสธคำขอลบ', danger:true, onClick:()=>{ setReviewTarget({ im: cur, action:'reject' }); } });
+          } else {
+            acts.push({ icon:'fa-trash-can', label:'ลบรูป', danger:true, onClick:()=>{ setDelReason(''); setDelHn(''); setDelStep2(false); setDelTarget(cur); } });
+          }
+        } else if (!locked && !isAdmin) {
+          if (pending && myReq) acts.push({ icon:'fa-rotate-left', label:'ยกเลิกคำขอลบ', onClick:()=>{ cancelImgRequest(cur); } });
+          else if (!pending) acts.push({ icon:'fa-trash-can', label:'ขอลบรูป', onClick:()=>{ setReqTarget(cur); } });
+        }
         const info = patientImgInfo(cur, meta, name);
         info.noteEditable = canDel;
         info.onSaveNote = async (text) => { await fetch('/api/patient/images/'+cur.id,{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({note:text||null})}); setImages(arr=>(arr||[]).map(x=>x.id===cur.id?{...x,note:text||null}:x)); invalidateImgCaches(); };
@@ -328,6 +360,8 @@ function PatientImagesTab({ patient, currentUser, locked }) {
           onClose={()=>setLightbox(null)}/>;
       })()}
       {compare && <CXRCompareModal left={compare.left} right={compare.right} onClose={()=>setCompare(null)}/>}
+      {reqTarget && <ImageRequestDeleteModal image={reqTarget} lightboxOpen={!!lightbox} onClose={()=>setReqTarget(null)} onDone={(reason)=>onReqDone(reqTarget, reason)}/>}
+      {reviewTarget && <ImageReviewDeleteModal image={reviewTarget.im} action={reviewTarget.action} lightboxOpen={!!lightbox} onClose={()=>setReviewTarget(null)} onDone={(action)=>onReviewDone(reviewTarget.im, action)}/>}
       {pendingUpload && createPortal(
         <div className={lightbox?'':'tb-backdrop'} style={{position:'fixed',inset:0,...(lightbox?{background:'rgba(15,23,42,0.65)'}:{}),zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={uploading?undefined:cancelUpload}>
           <div className="modal-A" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'440px',overflow:'hidden',boxShadow:'0 25px 60px rgba(0,0,0,0.3)',maxHeight:'90vh',display:'flex',flexDirection:'column'}}>

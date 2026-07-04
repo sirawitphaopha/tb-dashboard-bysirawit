@@ -287,9 +287,104 @@ function ImgViewToolbar({ mode, setMode, size, setSize }) {
   );
 }
 
+// ══════════ ระบบ "ขอลบรูป" เฟส 2 (v0.7.20) — overlay ฝ้าขาว + popup ขอลบ/อนุมัติ ══════════
+
+// overlay "รออนุมัติลบ" (ฝ้าขาว) ทับ thumbnail รูปที่มีคำขอลบค้าง · pointer-events:none ให้กดทะลุเปิดตัวดูรูปได้
+function PendingDeleteOverlay() {
+  return (
+    <div style={{position:'absolute',inset:0,background:'rgba(255,251,235,0.80)',backdropFilter:'blur(2px)',WebkitBackdropFilter:'blur(2px)',display:'flex',alignItems:'center',justifyContent:'center',pointerEvents:'none',zIndex:3}}>
+      <span style={{display:'inline-flex',alignItems:'center',gap:'5px',fontSize:'10px',fontWeight:800,padding:'3px 9px',borderRadius:'999px',background:'#fef3c7',color:'#92400e',border:'1px solid #fcd34d',whiteSpace:'nowrap'}}>
+        <i className="fa-solid fa-clock"></i>รออนุมัติลบ
+      </span>
+    </div>
+  );
+}
+
+// popup "ขอลบรูป" (คนที่ไม่ใช่แอดมินกด) — กรอกเหตุผล → POST request-delete
+function ImageRequestDeleteModal({ image, lightboxOpen, onClose, onDone }) {
+  const [reason, setReason] = React.useState('');
+  const [busy, setBusy]     = React.useState(false);
+  const [err, setErr]       = React.useState('');
+  const submit = async () => {
+    const r = reason.trim();
+    if (r.length < 3) { setErr('กรุณากรอกเหตุผลการขอลบ'); return; }
+    setBusy(true); setErr('');
+    try {
+      const res = await fetch('/api/patient/images/' + image.id + '/request-delete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: r }),
+      });
+      if (!res.ok) { const d = await res.json().catch(()=>({})); throw new Error(d.error === 'already requested' ? 'รูปนี้มีคำขอลบค้างอยู่แล้ว' : (d.error || 'ส่งคำขอไม่สำเร็จ')); }
+      onDone(r); onClose();
+    } catch (e) { setErr(e.message || 'เกิดข้อผิดพลาด'); setBusy(false); }
+  };
+  return createPortal(
+    <div className={lightboxOpen?'':'tb-backdrop'} style={{position:'fixed',inset:0,...(lightboxOpen?{background:'rgba(15,23,42,0.6)'}:{}),zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={busy?undefined:onClose}>
+      <div className="modal-A" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'340px',padding:'22px',textAlign:'center'}}>
+        <div style={{width:'50px',height:'50px',borderRadius:'50%',background:'#fef3c7',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 12px'}}><i className="fa-solid fa-trash-can" style={{color:'#b45309',fontSize:'20px'}}></i></div>
+        <p style={{fontSize:'15px',fontWeight:700,color:'#111827',margin:'0 0 5px'}}>ขอลบรูปนี้</p>
+        <p style={{fontSize:'12.5px',color:'#6b7280',margin:'0 0 14px',lineHeight:1.5}}>รูปจะขึ้นสถานะ "รออนุมัติลบ" จนกว่าแอดมินจะอนุมัติ</p>
+        <div style={{textAlign:'left'}}>
+          <label style={{fontSize:'12px',fontWeight:700,color:'#4b5563',display:'block',marginBottom:'5px'}}>เหตุผลการขอลบ <span style={{color:'#dc2626'}}>*</span></label>
+          <textarea value={reason} onChange={e=>setReason(e.target.value)} disabled={busy} rows={2} placeholder="เช่น อัปผิดคน / รูปซ้ำ / ภาพไม่ชัด" style={{width:'100%',padding:'9px 10px',borderRadius:'8px',border:'1px solid #d1d5db',fontSize:'13px',boxSizing:'border-box',resize:'vertical',fontFamily:'inherit'}}/>
+        </div>
+        {err && <p style={{fontSize:'12px',color:'#dc2626',margin:'8px 0 0',textAlign:'left'}}><i className="fa-solid fa-circle-exclamation" style={{marginRight:'5px'}}></i>{err}</p>}
+        <div style={{display:'flex',gap:'10px',marginTop:'14px'}}>
+          <button onClick={onClose} disabled={busy} style={{flex:1,padding:'10px',borderRadius:'10px',background:'#f3f4f6',color:'#4b5563',fontWeight:700,fontSize:'13px',border:'none',cursor:'pointer'}}>ยกเลิก</button>
+          <button onClick={submit} disabled={busy} style={{flex:1,padding:'10px',borderRadius:'10px',background:busy?'#5eead4':'#0d9488',color:'#fff',fontWeight:700,fontSize:'13px',border:'none',cursor:busy?'wait':'pointer'}}>{busy?'กำลังส่ง...':'ส่งคำขอลบ'}</button>
+        </div>
+      </div>
+    </div>, document.body
+  );
+}
+
+// popup แอดมิน "อนุมัติ/ปฏิเสธ" คำขอลบรูป → POST review-delete
+function ImageReviewDeleteModal({ image, action, lightboxOpen, onClose, onDone }) {
+  const [note, setNote] = React.useState('');
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr]   = React.useState('');
+  const approve = action === 'approve';
+  const submit = async () => {
+    setBusy(true); setErr('');
+    try {
+      const res = await fetch('/api/patient/images/' + image.id + '/review-delete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, note: note.trim() || null }),
+      });
+      if (!res.ok) { const d = await res.json().catch(()=>({})); throw new Error(d.error || 'ดำเนินการไม่สำเร็จ'); }
+      onDone(action); onClose();
+    } catch (e) { setErr(e.message || 'เกิดข้อผิดพลาด'); setBusy(false); }
+  };
+  return createPortal(
+    <div className={lightboxOpen?'':'tb-backdrop'} style={{position:'fixed',inset:0,...(lightboxOpen?{background:'rgba(15,23,42,0.6)'}:{}),zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={busy?undefined:onClose}>
+      <div className="modal-A" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'350px',padding:'22px',textAlign:'center'}}>
+        <div style={{width:'50px',height:'50px',borderRadius:'50%',background:approve?'#ccfbf1':'#fee2e2',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 12px'}}><i className={approve?'fa-solid fa-check':'fa-solid fa-xmark'} style={{color:approve?'#0d9488':'#dc2626',fontSize:'20px'}}></i></div>
+        <p style={{fontSize:'15px',fontWeight:700,color:'#111827',margin:'0 0 5px'}}>{approve?'อนุมัติลบรูปนี้':'ปฏิเสธคำขอลบ'}</p>
+        <p style={{fontSize:'12.5px',color:'#6b7280',margin:'0 0 12px',lineHeight:1.5}}>{approve?'รูปจะถูกย้ายไปถังขยะ (กู้คืนได้ 60 วัน)':'รูปจะกลับมาแสดงตามปกติ'}</p>
+        {(image.delete_req_name || image.delete_req_reason) && (
+          <div style={{background:'#f9fafb',border:'1px solid #e5e7eb',borderRadius:'10px',padding:'9px 11px',margin:'0 0 12px',fontSize:'12px',color:'#4b5563',textAlign:'left',lineHeight:1.55}}>
+            {image.delete_req_name && <div><b style={{color:'#374151'}}>ผู้ขอ:</b> {image.delete_req_name}</div>}
+            {image.delete_req_reason && <div><b style={{color:'#374151'}}>เหตุผล:</b> {image.delete_req_reason}</div>}
+          </div>
+        )}
+        {!approve && (
+          <div style={{textAlign:'left'}}>
+            <label style={{fontSize:'12px',fontWeight:700,color:'#4b5563',display:'block',marginBottom:'5px'}}>หมายเหตุถึงผู้ขอ (ไม่บังคับ)</label>
+            <textarea value={note} onChange={e=>setNote(e.target.value)} disabled={busy} rows={2} placeholder="เช่น รูปยังจำเป็นต้องเก็บ" style={{width:'100%',padding:'9px 10px',borderRadius:'8px',border:'1px solid #d1d5db',fontSize:'13px',boxSizing:'border-box',resize:'vertical',fontFamily:'inherit'}}/>
+          </div>
+        )}
+        {err && <p style={{fontSize:'12px',color:'#dc2626',margin:'8px 0 0',textAlign:'left'}}><i className="fa-solid fa-circle-exclamation" style={{marginRight:'5px'}}></i>{err}</p>}
+        <div style={{display:'flex',gap:'10px',marginTop:'14px'}}>
+          <button onClick={onClose} disabled={busy} style={{flex:1,padding:'10px',borderRadius:'10px',background:'#f3f4f6',color:'#4b5563',fontWeight:700,fontSize:'13px',border:'none',cursor:'pointer'}}>ยกเลิก</button>
+          <button onClick={submit} disabled={busy} style={{flex:1,padding:'10px',borderRadius:'10px',background:busy?(approve?'#5eead4':'#fca5a5'):(approve?'#0d9488':'#dc2626'),color:'#fff',fontWeight:700,fontSize:'13px',border:'none',cursor:busy?'wait':'pointer'}}>{busy?'กำลังทำ...':(approve?'ยืนยันอนุมัติ':'ยืนยันปฏิเสธ')}</button>
+        </div>
+      </div>
+    </div>, document.body
+  );
+}
+
 // ── ถังขยะรูปรวมทุกผู้ป่วย (จัดกลุ่มตามผู้ป่วย + กรอง + มุมมอง · กู้คืน/ลบถาวร = แอดมิน) ──
 
 export { compressToWebp, putWithProgress, blobToDataURL, decodeImageToDataURL, isAnimatedGif,
   JustifiedGallery, fmtFileSize, mimeLabel, detectDevice, IMG_SORTS, imgInRange, imgSortCmp,
   patientImgInfo, PATIENT_IMG_TYPES, CXRComparePanel, CXRCompareModal, CACHE_TTL, loadCache,
-  saveCache, invalidateImgCaches, IMG_VIEW_SIZES, ImgViewToolbar }
+  saveCache, invalidateImgCaches, IMG_VIEW_SIZES, ImgViewToolbar,
+  PendingDeleteOverlay, ImageRequestDeleteModal, ImageReviewDeleteModal }
