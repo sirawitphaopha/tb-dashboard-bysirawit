@@ -8,7 +8,7 @@ import { compressToWebp, putWithProgress, JustifiedGallery, IMG_SORTS, imgInRang
   patientImgInfo, PATIENT_IMG_TYPES, CACHE_TTL, loadCache, saveCache, invalidateImgCaches,
   IMG_VIEW_SIZES, ImgViewToolbar, PendingDeleteOverlay, ImageRequestDeleteModal, ImageReviewDeleteModal } from './helpers'
 
-function ImageLibraryPage({ currentUser }) {
+function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onConsumeWant }) {
   const _lc0 = loadCache('tb_libimg');
   const [images, setImages] = React.useState(_lc0 ? _lc0.data : null);
   const [loading, setLoading] = React.useState(!_lc0);
@@ -32,6 +32,10 @@ function ImageLibraryPage({ currentUser }) {
   const [delStep2, setDelStep2] = React.useState(false);  // ป๊อปอัปยืนยันซ้ำ (สเต็ป 2)
   const [deleting, setDeleting] = React.useState(false);
   const isAdmin = currentUser?.role === 'admin';
+  const pendingCount = pendingImageRequests?.length || 0;
+  const [pendingMode, setPendingMode] = React.useState(false);   // v0.7.20.1 — โหมดกรองเฉพาะรูปที่ขอลบ
+  const [pendingImgs, setPendingImgs] = React.useState(null);
+  const [pendingLoading, setPendingLoading] = React.useState(false);
 
   // โหลดทุกรูปครั้งเดียว → กรอง/ค้นหาในเครื่อง + cache (เปิดซ้ำ/รีเฟรชไม่โหลดใหม่)
   const load = React.useCallback(async (force, silent) => {
@@ -67,6 +71,15 @@ function ImageLibraryPage({ currentUser }) {
     return () => { try { window._sb.removeChannel(ch); } catch {} };
   }, [load]);
 
+  // v0.7.20.1 — โหมด "เฉพาะรูปที่ขอลบ": server ส่งเฉพาะรูป pending (โหลดเบา ไม่ต้องดึงทั้งพัน)
+  const loadPending = React.useCallback(async () => {
+    setPendingLoading(true);
+    try { const r = await fetch('/api/patient/images/all?pending=1'); const d = await r.json(); if (r.ok) setPendingImgs(d.images || []); } catch {}
+    setPendingLoading(false);
+  }, []);
+  React.useEffect(() => { if (wantPending) { setPendingMode(true); if (onConsumeWant) onConsumeWant(); } }, [wantPending]);   // มาจากกระดิ่ง → เปิดตัวกรองอัตโนมัติ
+  React.useEffect(() => { if (pendingMode) loadPending(); }, [pendingMode, pendingCount, loadPending]);   // เปิดโหมด/จำนวนคำขอเปลี่ยน → โหลดใหม่
+
   const qq = q.trim().toLowerCase();
   const uploaders = [...new Set((images || []).map(im => im.uploader_name).filter(Boolean))];
   const flat = (images || []).filter(im =>
@@ -75,8 +88,16 @@ function ImageLibraryPage({ currentUser }) {
     imgInRange(im, dateFrom, dateTo) &&
     (!qq || (im.patient_name || '').toLowerCase().includes(qq) || (im.patient_hn || '').toLowerCase().includes(qq))
   ).sort(imgSortCmp(sortBy));
+  const pendingDisplay = (pendingImgs || []).filter(im =>
+    (filter === 'all' || im.type === filter) &&
+    (uploaderFilter === 'all' || im.uploader_name === uploaderFilter) &&
+    imgInRange(im, dateFrom, dateTo) &&
+    (!qq || (im.patient_name || '').toLowerCase().includes(qq) || (im.patient_hn || '').toLowerCase().includes(qq))
+  ).sort(imgSortCmp(sortBy));
+  const displayList = pendingMode ? pendingDisplay : flat;
+  const showLoading = pendingMode ? (pendingImgs === null || pendingLoading) : loading;
   const openImage = (im, rect) => {   // เปิดด้วย index → ลูกศรเลื่อนข้ามทุกผู้ป่วยได้
-    const idx = flat.findIndex(x => x.id === im.id);
+    const idx = displayList.findIndex(x => x.id === im.id);
     if (idx >= 0) setLightbox({ idx, rect });
   };
   const openEdit = (im) => { setEditTarget(im); setEditType(im.type); setEditNote(im.note || ''); setErr(''); };
@@ -127,6 +148,7 @@ function ImageLibraryPage({ currentUser }) {
   // ── ขอลบรูป (v0.7.20) — คนไม่ใช่แอดมิน · แอดมินอนุมัติ/ปฏิเสธ · ผู้ขอยกเลิก ──
   const cancelImgRequest = async (im) => {
     setImages(arr => (arr||[]).map(x => x.id===im.id ? { ...x, delete_req_by:null, delete_req_name:null, delete_req_at:null, delete_req_reason:null } : x));
+    setPendingImgs(arr => arr ? arr.filter(x=>x.id!==im.id) : arr);   // ออกจากมุมมอง pending ทันที
     invalidateImgCaches(); setLightbox(null);
     try { await fetch('/api/patient/images/'+im.id+'/request-delete', { method:'DELETE' }); } catch {}
   };
@@ -137,6 +159,7 @@ function ImageLibraryPage({ currentUser }) {
   const onReviewDone = (im, action) => {   // แอดมิน approve = ไปถังขยะ · reject = กลับปกติ
     if (action === 'approve') setImages(arr => (arr||[]).filter(x => x.id !== im.id));
     else setImages(arr => (arr||[]).map(x => x.id===im.id ? { ...x, delete_req_by:null, delete_req_name:null, delete_req_at:null, delete_req_reason:null } : x));
+    setPendingImgs(arr => arr ? arr.filter(x=>x.id!==im.id) : arr);   // ออกจากมุมมอง pending ทันที
     invalidateImgCaches(); setLightbox(null);
   };
 
@@ -145,7 +168,7 @@ function ImageLibraryPage({ currentUser }) {
   const [pSort, setPSort] = React.useState('name-asc');   // เรียงกลุ่มผู้ป่วย: name/hn
 
   const groups = {};
-  for (const im of flat) {
+  for (const im of displayList) {
     if (!groups[im.patient_id]) groups[im.patient_id] = { name: im.patient_name, hn: im.patient_hn, items: [] };
     groups[im.patient_id].items.push(im);
   }
@@ -164,7 +187,7 @@ function ImageLibraryPage({ currentUser }) {
         onClick={(e)=>openImage(im, e.currentTarget.getBoundingClientRect())}
         style={{position:'relative',width:'100%',height:'100%',background:'#0b0f19',borderRadius:'10px',overflow:'hidden',cursor:'zoom-in',border:'1px solid #e5e7eb'}}>
         <img src={im.thumbUrl || im.url} alt="" loading="lazy" draggable={false} onContextMenu={e=>e.preventDefault()} style={{width:'100%',height:'100%',objectFit:'cover'}}/>
-        {im.delete_req_by && <PendingDeleteOverlay/>}
+        {im.delete_req_by && <PendingDeleteOverlay image={im} isAdmin={isAdmin} isRequester={im.delete_req_by===currentUser?.id} onCancel={()=>cancelImgRequest(im)} onApprove={()=>setReviewTarget({im, action:'approve'})} onReject={()=>setReviewTarget({im, action:'reject'})}/>}
         <div className="tb-img-zoomicon" style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.22)',pointerEvents:'none'}}><i className="fa-solid fa-magnifying-glass-plus" style={{color:'#fff',fontSize:'18px',textShadow:'0 1px 5px rgba(0,0,0,0.6)'}}></i></div>
         <span style={{position:'absolute',top:'5px',right:'5px',fontSize:'9px',fontWeight:800,padding:'2px 6px',borderRadius:'999px',background:meta.bg,color:meta.fg}}>{meta.label}</span>
         <span style={{position:'absolute',bottom:0,left:0,right:0,padding:'10px 6px 4px',background:'linear-gradient(transparent,rgba(0,0,0,0.6))',color:'#fff',fontSize:'9px'}}>{new Date(im.uploaded_at).toLocaleDateString('th-TH',{day:'numeric',month:'short'})}</span>
@@ -200,6 +223,14 @@ function ImageLibraryPage({ currentUser }) {
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'10px',marginBottom:'16px',flexWrap:'wrap'}}>
         <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
           {['all',...Object.keys(PATIENT_IMG_TYPES)].map(k=>{const active=filter===k;const v=PATIENT_IMG_TYPES[k];return <button key={k} onClick={()=>setFilter(k)} style={{padding:'5px 14px',borderRadius:'999px',fontSize:'12px',fontWeight:700,border:'1px solid '+(active?'#0d9488':'#e5e7eb'),background:active?'#0d9488':'#fff',color:active?'#fff':'#6b7280',cursor:'pointer'}}>{k==='all'?'ทั้งหมด':v.label}</button>;})}
+          {/* v0.7.20.1 — ปุ่มกรองเฉพาะรูปที่ขอลบ · เรืองแสงเมื่อมีคำขอ · จางกดไม่ได้เมื่อไม่มี */}
+          <button onClick={()=>{ if(pendingCount>0) setPendingMode(m=>!m); }} disabled={pendingCount===0}
+            title={pendingCount===0?'ไม่มีรูปที่ขอลบ':'ดูเฉพาะรูปที่ขอลบ'}
+            className={pendingCount>0 && !pendingMode ? 'tb-pend-glow' : ''}
+            style={{display:'inline-flex',alignItems:'center',gap:'6px',fontSize:'12px',fontWeight:800,padding:'5px 14px',borderRadius:'999px',cursor:pendingCount===0?'not-allowed':'pointer',...(pendingMode?{background:'#f59e0b',color:'#fff',border:'1.5px solid #f59e0b'}:pendingCount>0?{background:'#fef3c7',color:'#92400e',border:'1.5px solid #f59e0b'}:{background:'#fff',color:'#cbd5e1',border:'1px solid #e5e7eb'})}}>
+            <i className="fa-solid fa-clock"></i>เฉพาะรูปที่ขอลบ
+            {pendingCount>0 && <span style={{background:pendingMode?'#fff':'#dc2626',color:pendingMode?'#b45309':'#fff',fontSize:'10px',fontWeight:800,minWidth:'17px',height:'17px',borderRadius:'999px',display:'inline-flex',alignItems:'center',justifyContent:'center',padding:'0 4px'}}>{pendingCount}</span>}
+          </button>
         </div>
         <div style={{display:'flex',gap:'8px',alignItems:'center',flexWrap:'wrap'}}>
           <select value={sortBy} onChange={e=>setSortBy(e.target.value)} title="เรียงลำดับ" style={{padding:'7px 10px',borderRadius:'10px',border:'1px solid #d1d5db',fontSize:'13px',color:'#6b7280',cursor:'pointer'}}>
@@ -223,7 +254,7 @@ function ImageLibraryPage({ currentUser }) {
       {err && <p style={{color:'#dc2626',fontSize:'13px'}}><i className="fa-solid fa-circle-exclamation" style={{marginRight:'5px'}}></i>{err}</p>}
 
       {/* กำลังโหลด → โครงร่างเบลอ (สื่อว่ามีรูปกำลังมา ไม่ใช่รูปหาย) */}
-      {loading && [0,1].map(g=>(
+      {showLoading && [0,1].map(g=>(
         <div key={g} style={{marginBottom:'22px'}}>
           <div className="tb-skel" style={{height:'14px',width:'170px',borderRadius:'6px',marginBottom:'10px'}}/>
           <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
@@ -232,16 +263,17 @@ function ImageLibraryPage({ currentUser }) {
         </div>
       ))}
 
-      {!loading && flat.length===0 && (
+      {!showLoading && displayList.length===0 && (
         <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'60px 20px'}}>
-          <div style={{width:'80px',height:'80px',borderRadius:'50%',background:'#f3f4f6',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'16px'}}>
-            <i className="fa-solid fa-images" style={{fontSize:'32px',color:'#cbd5e1'}}></i>
+          <div style={{width:'80px',height:'80px',borderRadius:'50%',background:pendingMode?'#fffbeb':'#f3f4f6',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'16px'}}>
+            <i className={pendingMode?'fa-solid fa-clock':'fa-solid fa-images'} style={{fontSize:'32px',color:pendingMode?'#fcd34d':'#cbd5e1'}}></i>
           </div>
-          <p style={{fontSize:'15px',fontWeight:700,color:'#6b7280',margin:'0 0 4px'}}>{(q||filter!=='all'||dateFrom||dateTo||uploaderFilter!=='all')?'ไม่พบรูปที่ตรงกับตัวกรอง':'ยังไม่มีรูปในระบบ'}</p>
-          <p style={{fontSize:'12px',color:'#9ca3af',margin:0,textAlign:'center'}}>{(q||filter!=='all'||dateFrom||dateTo||uploaderFilter!=='all')?'ลองล้างตัวกรองหรือเปลี่ยนคำค้นหา':'อัปโหลดรูปได้จากแท็บ "รูปภาพ" ในหน้าผู้ป่วย'}</p>
+          <p style={{fontSize:'15px',fontWeight:700,color:'#6b7280',margin:'0 0 4px'}}>{pendingMode?'ไม่มีรูปที่ขอลบ':((q||filter!=='all'||dateFrom||dateTo||uploaderFilter!=='all')?'ไม่พบรูปที่ตรงกับตัวกรอง':'ยังไม่มีรูปในระบบ')}</p>
+          <p style={{fontSize:'12px',color:'#9ca3af',margin:0,textAlign:'center'}}>{pendingMode?'ไม่มีคำขอลบรูปรออนุมัติในตอนนี้':((q||filter!=='all'||dateFrom||dateTo||uploaderFilter!=='all')?'ลองล้างตัวกรองหรือเปลี่ยนคำค้นหา':'อัปโหลดรูปได้จากแท็บ "รูปภาพ" ในหน้าผู้ป่วย')}</p>
+          {pendingMode && <button onClick={()=>setPendingMode(false)} style={{marginTop:'14px',fontSize:'13px',fontWeight:700,color:'#0f766e',background:'#fff',border:'1px solid #99e1cb',borderRadius:'8px',padding:'8px 16px',cursor:'pointer'}}><i className="fa-solid fa-arrow-left" style={{marginRight:'6px'}}></i>ดูรูปทั้งหมด</button>}
         </div>
       )}
-      {!loading && groupEntries.map(([pid,g])=>(
+      {!showLoading && groupEntries.map(([pid,g])=>(
         <div key={pid} style={{marginBottom:'22px'}}>
           <p style={{fontWeight:700,fontSize:'14px',color:'#1f2937',margin:'0 0 8px',borderLeft:'3px solid #0d9488',paddingLeft:'8px'}}>{g.name}{g.hn?<span style={{color:'#9ca3af',fontWeight:400,fontSize:'12px'}}> · HN {g.hn}</span>:null} <span style={{color:'#9ca3af',fontWeight:400,fontSize:'12px'}}>({g.items.length})</span></p>
           {vMode==='card'
@@ -303,7 +335,7 @@ function ImageLibraryPage({ currentUser }) {
       {reqTarget && <ImageRequestDeleteModal image={reqTarget} lightboxOpen={!!lightbox} onClose={()=>setReqTarget(null)} onDone={(reason)=>onReqDone(reqTarget, reason)}/>}
       {reviewTarget && <ImageReviewDeleteModal image={reviewTarget.im} action={reviewTarget.action} lightboxOpen={!!lightbox} onClose={()=>setReviewTarget(null)} onDone={(action)=>onReviewDone(reviewTarget.im, action)}/>}
       {lightbox && (()=>{
-        const cur = flat[lightbox.idx]; if (!cur) return null;
+        const cur = displayList[lightbox.idx]; if (!cur) return null;
         const meta = PATIENT_IMG_TYPES[cur.type] || PATIENT_IMG_TYPES.other;
         const name = meta.label + ' · ' + cur.patient_name + (cur.patient_hn ? ' (' + cur.patient_hn + ')' : '');
         const mine = cur.uploaded_by===currentUser?.id;
@@ -324,12 +356,12 @@ function ImageLibraryPage({ currentUser }) {
           else if (!pending) acts.push({ icon:'fa-trash-can', label:'ขอลบรูป', onClick:()=>{ setReqTarget(cur); } });
         }
         const info = patientImgInfo(cur, meta, name);
-        info.noteEditable = canDel;
+        info.noteEditable = canEdit;
         info.onSaveNote = async (text) => { await fetch('/api/patient/images/'+cur.id,{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({note:text||null})}); setImages(arr=>(arr||[]).map(x=>x.id===cur.id?{...x,note:text||null}:x)); invalidateImgCaches(); };
         return <AvatarLightbox src={cur.url} thumb={cur.thumbUrl} originRect={lightbox.rect} info={info} menuActions={acts}
-          hasPrev={lightbox.idx>0} hasNext={lightbox.idx<flat.length-1}
+          hasPrev={lightbox.idx>0} hasNext={lightbox.idx<displayList.length-1}
           onPrev={()=>setLightbox(l=>({ idx: Math.max(0, l.idx-1) }))}
-          onNext={()=>setLightbox(l=>({ idx: Math.min(flat.length-1, l.idx+1) }))}
+          onNext={()=>setLightbox(l=>({ idx: Math.min(displayList.length-1, l.idx+1) }))}
           onExpire={async()=>{ try { const r=await fetch(`/api/patient/images/${cur.id}/url`); if(r.ok){ const d=await r.json(); return d.url; } } catch {} return null; }}
           onClose={()=>setLightbox(null)}/>;
       })()}

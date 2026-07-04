@@ -59,6 +59,9 @@ body {
 @keyframes tbBkDrift1 { 0%{transform:translate(0,0) scale(1)} 100%{transform:translate(14px,-16px) scale(1.06)} }
 @keyframes tbBkDrift2 { 0%{transform:translate(0,0) scale(1)} 100%{transform:translate(-16px,-10px) scale(1.05)} }
 @keyframes tbBkFade { 0%,100%{opacity:.5} 50%{opacity:1} }
+/* v0.7.20.1 — ปุ่มกรอง "เฉพาะรูปที่ขอลบ" เรืองแสงเตือนเมื่อมีคำขอค้าง */
+@keyframes tbPendGlow { 0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,0.4)} 50%{box-shadow:0 0 13px 3px rgba(245,158,11,0.7)} }
+.tb-pend-glow{animation:tbPendGlow 1.6s ease-in-out infinite}
 
 .tb-fade { animation: tbFadeIn 0.25s ease; }
 @keyframes tbFadeIn {

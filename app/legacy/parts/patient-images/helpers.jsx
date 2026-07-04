@@ -289,48 +289,69 @@ function ImgViewToolbar({ mode, setMode, size, setSize }) {
 
 // ══════════ ระบบ "ขอลบรูป" เฟส 2 (v0.7.20) — overlay ฝ้าขาว + popup ขอลบ/อนุมัติ ══════════
 
-// overlay "รออนุมัติลบ" (ฝ้าขาว) ทับ thumbnail รูปที่มีคำขอลบค้าง · pointer-events:none ให้กดทะลุเปิดตัวดูรูปได้
-function PendingDeleteOverlay() {
+// overlay "รออนุมัติลบ" (ฝ้าขาว) ทับ thumbnail · แยกมุมมอง: ผู้ขอเห็น "ยกเลิกคำขอ" · แอดมินเห็น "อนุมัติ/ปฏิเสธ"
+// พื้นฝ้า pointer-events:none (กดทะลุเปิดตัวดูรูปได้) · ปุ่ม pointer-events:auto + stopPropagation
+function PendingDeleteOverlay({ image, isAdmin, isRequester, onCancel, onApprove, onReject }) {
+  const stop = (e, fn) => { e.stopPropagation(); e.preventDefault(); if (fn) fn(); };
   return (
-    <div style={{position:'absolute',inset:0,background:'rgba(255,251,235,0.80)',backdropFilter:'blur(2px)',WebkitBackdropFilter:'blur(2px)',display:'flex',alignItems:'center',justifyContent:'center',pointerEvents:'none',zIndex:3}}>
+    <div onClick={e=>e.stopPropagation()} style={{position:'absolute',inset:0,background:'rgba(255,251,235,0.82)',backdropFilter:'blur(2px)',WebkitBackdropFilter:'blur(2px)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'7px',padding:'8px',boxSizing:'border-box',cursor:'default',zIndex:3,overflow:'hidden'}}>
       <span style={{display:'inline-flex',alignItems:'center',gap:'5px',fontSize:'10px',fontWeight:800,padding:'3px 9px',borderRadius:'999px',background:'#fef3c7',color:'#92400e',border:'1px solid #fcd34d',whiteSpace:'nowrap'}}>
         <i className="fa-solid fa-clock"></i>รออนุมัติลบ
       </span>
+      {isAdmin ? (<>
+        {(image?.delete_req_name || image?.delete_req_reason) && (
+          <p style={{margin:0,fontSize:'9.5px',color:'#78716c',textAlign:'center',lineHeight:1.35,maxWidth:'98%',overflow:'hidden',textOverflow:'ellipsis'}}>
+            {image.delete_req_name && <span>{image.delete_req_name} ขอลบ</span>}{image.delete_req_reason && <><br/>“{image.delete_req_reason}”</>}
+          </p>
+        )}
+        <div style={{display:'flex',gap:'6px',pointerEvents:'auto',flexWrap:'wrap',justifyContent:'center'}}>
+          <button onClick={e=>stop(e,onApprove)} style={{fontSize:'11px',fontWeight:700,color:'#fff',background:'#0d9488',border:'none',borderRadius:'8px',padding:'6px 11px',cursor:'pointer',display:'inline-flex',alignItems:'center',gap:'4px',whiteSpace:'nowrap'}}><i className="fa-solid fa-check"></i>อนุมัติ</button>
+          <button onClick={e=>stop(e,onReject)} style={{fontSize:'11px',fontWeight:700,color:'#dc2626',background:'#fee2e2',border:'none',borderRadius:'8px',padding:'6px 11px',cursor:'pointer',display:'inline-flex',alignItems:'center',gap:'4px',whiteSpace:'nowrap'}}><i className="fa-solid fa-xmark"></i>ปฏิเสธ</button>
+        </div>
+      </>) : isRequester ? (
+        <button onClick={e=>stop(e,onCancel)} style={{fontSize:'11px',fontWeight:700,color:'#4b5563',background:'#fff',border:'1px solid #d1d5db',borderRadius:'8px',padding:'6px 12px',cursor:'pointer',display:'inline-flex',alignItems:'center',gap:'5px',whiteSpace:'nowrap',pointerEvents:'auto'}}><i className="fa-solid fa-rotate-left"></i>ยกเลิกคำขอ</button>
+      ) : null}
     </div>
   );
 }
 
-// popup "ขอลบรูป" (คนที่ไม่ใช่แอดมินกด) — กรอกเหตุผล → POST request-delete
+// popup "ขอลบรูป" (คนที่ไม่ใช่แอดมินกด) — กรอกเหตุผล + พิมพ์ HN ยืนยัน (เหมือนตอนแอดมินลบ) → POST request-delete
 function ImageRequestDeleteModal({ image, lightboxOpen, onClose, onDone }) {
   const [reason, setReason] = React.useState('');
+  const [hn, setHn]         = React.useState('');
   const [busy, setBusy]     = React.useState(false);
   const [err, setErr]       = React.useState('');
+  const reasonOk = reason.trim().length >= 3;
+  const hnOk = hn.trim() === String(image.patient_hn || '');
+  const disabled = busy || !reasonOk || !hnOk;
   const submit = async () => {
-    const r = reason.trim();
-    if (r.length < 3) { setErr('กรุณากรอกเหตุผลการขอลบ'); return; }
+    if (!reasonOk) { setErr('กรุณากรอกเหตุผลการขอลบ'); return; }
+    if (!hnOk) { setErr('HN ไม่ตรง — พิมพ์ให้ตรงกับผู้ป่วย'); return; }
     setBusy(true); setErr('');
     try {
       const res = await fetch('/api/patient/images/' + image.id + '/request-delete', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: r }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: reason.trim() }),
       });
       if (!res.ok) { const d = await res.json().catch(()=>({})); throw new Error(d.error === 'already requested' ? 'รูปนี้มีคำขอลบค้างอยู่แล้ว' : (d.error || 'ส่งคำขอไม่สำเร็จ')); }
-      onDone(r); onClose();
+      onDone(reason.trim()); onClose();
     } catch (e) { setErr(e.message || 'เกิดข้อผิดพลาด'); setBusy(false); }
   };
   return createPortal(
     <div className={lightboxOpen?'':'tb-backdrop'} style={{position:'fixed',inset:0,...(lightboxOpen?{background:'rgba(15,23,42,0.6)'}:{}),zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={busy?undefined:onClose}>
-      <div className="modal-A" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'340px',padding:'22px',textAlign:'center'}}>
+      <div className="modal-A" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'350px',padding:'22px',textAlign:'center',boxSizing:'border-box'}}>
         <div style={{width:'50px',height:'50px',borderRadius:'50%',background:'#fef3c7',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 12px'}}><i className="fa-solid fa-trash-can" style={{color:'#b45309',fontSize:'20px'}}></i></div>
         <p style={{fontSize:'15px',fontWeight:700,color:'#111827',margin:'0 0 5px'}}>ขอลบรูปนี้</p>
         <p style={{fontSize:'12.5px',color:'#6b7280',margin:'0 0 14px',lineHeight:1.5}}>รูปจะขึ้นสถานะ "รออนุมัติลบ" จนกว่าแอดมินจะอนุมัติ</p>
         <div style={{textAlign:'left'}}>
           <label style={{fontSize:'12px',fontWeight:700,color:'#4b5563',display:'block',marginBottom:'5px'}}>เหตุผลการขอลบ <span style={{color:'#dc2626'}}>*</span></label>
-          <textarea value={reason} onChange={e=>setReason(e.target.value)} disabled={busy} rows={2} placeholder="เช่น อัปผิดคน / รูปซ้ำ / ภาพไม่ชัด" style={{width:'100%',padding:'9px 10px',borderRadius:'8px',border:'1px solid #d1d5db',fontSize:'13px',boxSizing:'border-box',resize:'vertical',fontFamily:'inherit'}}/>
+          <textarea value={reason} onChange={e=>setReason(e.target.value)} disabled={busy} rows={2} placeholder="เช่น อัปผิดคน / รูปซ้ำ / ภาพไม่ชัด" style={{width:'100%',padding:'9px 10px',borderRadius:'8px',border:'1px solid #d1d5db',fontSize:'13px',boxSizing:'border-box',resize:'vertical',fontFamily:'inherit',marginBottom:'12px'}}/>
+          <label style={{fontSize:'12px',fontWeight:700,color:'#4b5563',display:'block',marginBottom:'5px'}}>พิมพ์ HN <span style={{color:'#dc2626'}}>{image.patient_hn || '-'}</span> เพื่อยืนยัน</label>
+          <input value={hn} onChange={e=>setHn(e.target.value)} disabled={busy} style={{width:'100%',padding:'9px 10px',borderRadius:'8px',border:'1px solid '+(hn && !hnOk ? '#fca5a5':'#d1d5db'),fontSize:'13px',boxSizing:'border-box'}}/>
         </div>
         {err && <p style={{fontSize:'12px',color:'#dc2626',margin:'8px 0 0',textAlign:'left'}}><i className="fa-solid fa-circle-exclamation" style={{marginRight:'5px'}}></i>{err}</p>}
         <div style={{display:'flex',gap:'10px',marginTop:'14px'}}>
           <button onClick={onClose} disabled={busy} style={{flex:1,padding:'10px',borderRadius:'10px',background:'#f3f4f6',color:'#4b5563',fontWeight:700,fontSize:'13px',border:'none',cursor:'pointer'}}>ยกเลิก</button>
-          <button onClick={submit} disabled={busy} style={{flex:1,padding:'10px',borderRadius:'10px',background:busy?'#5eead4':'#0d9488',color:'#fff',fontWeight:700,fontSize:'13px',border:'none',cursor:busy?'wait':'pointer'}}>{busy?'กำลังส่ง...':'ส่งคำขอลบ'}</button>
+          <button onClick={submit} disabled={disabled} style={{flex:1,padding:'10px',borderRadius:'10px',background:disabled?'#a7f3d0':'#0d9488',color:'#fff',fontWeight:700,fontSize:'13px',border:'none',cursor:disabled?'not-allowed':'pointer'}}>{busy?'กำลังส่ง...':'ส่งคำขอลบ'}</button>
         </div>
       </div>
     </div>, document.body

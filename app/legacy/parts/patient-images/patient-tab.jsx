@@ -291,7 +291,7 @@ function PatientImagesTab({ patient, currentUser, locked }) {
               onClick={(e)=>selectableForCompare?toggleSel(im):openImage(im, e.currentTarget.getBoundingClientRect())}
               style={{position:'relative',width:'100%',height:'100%',background:'#0b0f19',borderRadius:'10px',overflow:'hidden',cursor:selectableForCompare?'pointer':'zoom-in',border:'1px solid #e5e7eb',outline:selIdx>=0?'3px solid #0d9488':'none',outlineOffset:'-3px'}}>
               <img src={im.thumbUrl || im.url} alt="" loading="lazy" draggable={false} onContextMenu={e=>e.preventDefault()} style={{width:'100%',height:'100%',objectFit:'cover'}}/>
-              {im.delete_req_by && <PendingDeleteOverlay/>}
+              {im.delete_req_by && <PendingDeleteOverlay image={im} isAdmin={isAdmin} isRequester={im.delete_req_by===currentUser?.id} onCancel={()=>cancelImgRequest(im)} onApprove={()=>setReviewTarget({im, action:'approve'})} onReject={()=>setReviewTarget({im, action:'reject'})}/>}
               {!selectableForCompare && <div className="tb-img-zoomicon" style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.22)',pointerEvents:'none'}}><i className="fa-solid fa-magnifying-glass-plus" style={{color:'#fff',fontSize:'18px',textShadow:'0 1px 5px rgba(0,0,0,0.6)'}}></i></div>}
               {selectableForCompare && <div style={{position:'absolute',top:'6px',left:'6px',width:'22px',height:'22px',borderRadius:'50%',background:selIdx>=0?'#0d9488':'rgba(255,255,255,0.85)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'11px',fontWeight:800,border:'2px solid #fff'}}>{selIdx>=0?selIdx+1:''}</div>}
               <span style={{position:'absolute',top:'6px',right:'6px',fontSize:'10px',fontWeight:800,padding:'2px 7px',borderRadius:'999px',background:meta.bg,color:meta.fg}}>{meta.label}</span>
@@ -350,7 +350,7 @@ function PatientImagesTab({ patient, currentUser, locked }) {
           else if (!pending) acts.push({ icon:'fa-trash-can', label:'ขอลบรูป', onClick:()=>{ setReqTarget(cur); } });
         }
         const info = patientImgInfo(cur, meta, name);
-        info.noteEditable = canDel;
+        info.noteEditable = canEdit;
         info.onSaveNote = async (text) => { await fetch('/api/patient/images/'+cur.id,{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({note:text||null})}); setImages(arr=>(arr||[]).map(x=>x.id===cur.id?{...x,note:text||null}:x)); invalidateImgCaches(); };
         return <AvatarLightbox src={cur.url} thumb={cur.thumbUrl} originRect={lightbox.rect} info={info} menuActions={acts}
           hasPrev={lightbox.idx>0} hasNext={lightbox.idx<shown.length-1}

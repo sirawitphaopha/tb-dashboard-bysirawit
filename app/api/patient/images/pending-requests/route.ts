@@ -4,9 +4,9 @@ import { getRequester } from '@/lib/patient-image-helpers'
 
 export async function GET(req: NextRequest) {
   try {
-    const { user, isApproved, isAdmin, admin } = await getRequester(req)
+    const { user, isApproved, admin } = await getRequester(req)
     if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-    if (!isApproved || !isAdmin) return NextResponse.json({ error: 'admin only' }, { status: 403 })
+    if (!isApproved) return NextResponse.json({ error: 'forbidden' }, { status: 403 })   // v0.7.20.1 — ทุก approved user เห็นได้ (badge/filter คำขอลบ)
 
     const { data, error } = await admin.from('tb_patient_images')
       .select('id, patient_id, type, delete_req_by, delete_req_name, delete_req_at, delete_req_reason')

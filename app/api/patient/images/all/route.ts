@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
     const type = req.nextUrl.searchParams.get('type')
     const q = (req.nextUrl.searchParams.get('q') || '').trim().toLowerCase()
     const trash = req.nextUrl.searchParams.get('trash') === '1'   // ถังขยะรวม = รูปที่ลบแล้ว
+    const pending = req.nextUrl.searchParams.get('pending') === '1'   // v0.7.20.1 — เฉพาะรูปที่ "ขอลบ" รออนุมัติ (โหลดเบา ไม่ต้องดึงทั้งพัน)
 
     let query = admin
       .from('tb_patient_images')
@@ -20,7 +21,9 @@ export async function GET(req: NextRequest) {
       .limit(500)
     query = trash
       ? query.not('deleted_at', 'is', null).order('deleted_at', { ascending: false })
-      : query.is('deleted_at', null).order('uploaded_at', { ascending: false })
+      : pending
+        ? query.not('delete_req_by', 'is', null).is('deleted_at', null).order('delete_req_at', { ascending: false })
+        : query.is('deleted_at', null).order('uploaded_at', { ascending: false })
     if (type && type !== 'all') query = query.eq('type', type)
     const { data, error } = await query
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })

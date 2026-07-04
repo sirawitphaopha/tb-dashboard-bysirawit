@@ -202,7 +202,8 @@ function App() {
   // จำนวน user ที่รออนุมัติ (สำหรับ badge ใน sidebar)
   const [pendingUserCount, setPendingUserCount] = useState(0);
   const [pendingDeleteRequests, setPendingDeleteRequests] = useState([]);
-  const [pendingImageRequests, setPendingImageRequests] = useState([]);   // v0.7.20 — คำขอลบรูปรออนุมัติ (แอดมิน)
+  const [pendingImageRequests, setPendingImageRequests] = useState([]);   // v0.7.20 — คำขอลบรูปรออนุมัติ (ทุกคนเห็น)
+  const [imgWantPending, setImgWantPending] = useState(false);   // v0.7.20.1 — มาจากกระดิ่ง → เปิดตัวกรอง "ขอลบ" ในคลังภาพ
   const [cancelledDeleteCount, setCancelledDeleteCount] = useState(0);
   // v0.7.17.0 — userDbNotifs ย้ายขึ้นไป declared บนสุดแล้ว (ใกล้ readAlerts useEffect)
   // คำขอแก้ไขข้อมูลที่รออนุมัติ (admin) + user ที่จะ highlight เมื่อกดจากกระดิ่ง
@@ -224,7 +225,6 @@ function App() {
           setCancelledDeleteCount(cancelled);
           const editReqs = await window.loadPendingEditRequests();
           setPendingEditRequests(editReqs);
-          try { const ir = await fetch('/api/patient/images/pending-requests'); if (ir.ok) { const d = await ir.json(); setPendingImageRequests(d.requests || []); } } catch {}
         } catch (e) { console.error('Load pending count failed:', e); }
       })();
     } else {
@@ -236,6 +236,8 @@ function App() {
     window.loadUserNotifications()
       .then(notifs => setUserDbNotifs(notifs))
       .catch(() => {});
+    // v0.7.20.1 — คำขอลบรูป (ทุก approved user เห็น badge/filter · ไม่ใช่แค่แอดมิน)
+    (async () => { try { const ir = await fetch('/api/patient/images/pending-requests'); if (ir.ok) { const d = await ir.json(); setPendingImageRequests(d.requests || []); } } catch {} })();
   }, [currentUser]);
 
   // Realtime: ฟังการเปลี่ยนแปลงของ tb_delete_requests (สำหรับ admin)
@@ -255,9 +257,9 @@ function App() {
     return () => { window._sb.removeChannel(channel); };
   }, [currentUser]);
 
-  // Realtime: คำขอลบรูป (สำหรับ admin) — รูปใดตั้ง/เคลียร์ delete_req → reload กระดิ่ง
+  // Realtime: คำขอลบรูป (ทุก approved user — badge/filter) — รูปใดตั้ง/เคลียร์ delete_req → reload
   useEffect(() => {
-    if (currentUser?.role !== 'admin') return;
+    if (!currentUser?.id) return;
     const channel = window._sb
       .channel('img-delete-requests-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tb_patient_images' }, async () => {
@@ -416,7 +418,8 @@ function App() {
       patient: null,
       patientId: null,
       navTarget: 'image-library',
-      msg: `มี ${pendingImageRequests.length} คำขอลบรูปรออนุมัติ — คลิกเพื่อจัดการ`,
+      imgPending: true,
+      msg: `มี ${pendingImageRequests.length} คำขอลบรูปรออนุมัติ — คลิกเพื่อดู`,
       time: 'ใหม่',
     }] : []),
     ...(currentUser?.role === 'admin' && cancelledDeleteCount > 0 ? [{
@@ -653,7 +656,7 @@ function App() {
     { id:'weekly-prep',   icon:'fa-calendar-check',   label:'เตรียมเคสรายสัปดาห์' },
     { id:'reports',       icon:'fa-file-contract',    label:'รายงาน & สถิติ' },
     { id:'knowledge',     icon:'fa-book-open-reader', label:'คลังความรู้วัณโรค' },
-    { id:'image-library', icon:'fa-images',           label:'คลังรูปภาพ' },
+    { id:'image-library', icon:'fa-images',           label:'คลังรูปภาพ', badge: pendingImageRequests.length > 0 ? pendingImageRequests.length : undefined },
     { id:'settings',      icon:'fa-gear',             label:'ตั้งค่าระบบ', divider:true },
     ...(currentUser?.role === 'admin' ? [{ id:'admin-users', icon:'fa-user-shield', label:'จัดการผู้ใช้', badge: pendingUserCount > 0 ? pendingUserCount : undefined }] : []),
     { id:'trash', icon:'fa-trash', label:'ถังขยะ', badge: currentUser?.role==='admin' && pendingDeleteRequests.length > 0 ? pendingDeleteRequests.length : undefined, greenBadge: currentUser?.role==='admin' && pendingDeleteRequests.length === 0 && cancelledDeleteCount > 0 },
@@ -661,6 +664,13 @@ function App() {
     ...(currentUser?.role === 'admin' ? [{ id:'audit-log', icon:'fa-clock-rotate-left', label:'ประวัติลบถาวร' }] : []),
     { id:'changelog', icon:'fa-scroll', label:'ประวัติเวอร์ชั่น', divider:true, redDot: changelogUnseen },
   ];
+  // v0.7.20.1 — badge แจ้งเตือนกลาง (ใช้ทุก nav item · กฎ: เตือนใหม่ต้องใช้ตัวนี้)
+  //   กาง = วงกลมแดงมีเลข (count) หรือวงแดงว่าง (isNew = มีของใหม่ ไม่นับ) วูบวาบ · ยุบ = จุดแดงเล็กที่มุม icon
+  const renderNotif = (count, isNew, collapsed, color = '#ef4444') => {
+    if (!((count && count > 0) || isNew)) return null;
+    if (collapsed) return <span className="tb-pulse-badge" style={{position:'absolute',top:'3px',right:'5px',width:'9px',height:'9px',background:color,border:'1.5px solid #fff',borderRadius:'50%',display:'block'}}/>;
+    return <span className="tb-pulse-badge" style={{marginLeft:'auto',flexShrink:0,background:color,color:'#fff',fontSize:'10px',fontWeight:800,minWidth:'20px',height:'20px',borderRadius:'999px',display:'inline-flex',alignItems:'center',justifyContent:'center',padding:'0 5px',lineHeight:1,boxSizing:'border-box'}}>{count && count > 0 ? count : ''}</span>;
+  };
   const titles = { dashboard:'Dashboard', 'patient-list':'ทะเบียนผู้ป่วย Active', 'archive-list':'ทะเบียนจบการรักษา', 'all-patients':'ทะเบียนผู้ป่วยทั้งหมด', 'add-patient':'ลงทะเบียนผู้ป่วยใหม่', 'weekly-prep':'เตรียมเคสรายสัปดาห์', reports:'รายงาน และ สถิติ', knowledge:'คลังความรู้วัณโรค', settings:'ตั้งค่าระบบ', 'admin-users':'จัดการผู้ใช้', trash:'ถังขยะ', 'activity-log':'บันทึกกิจกรรม', 'audit-log':'ประวัติการลบถาวร', changelog:'ประวัติเวอร์ชั่น', 'image-library':'คลังรูปภาพผู้ป่วย' };
   const pageIcons = { dashboard:'fa-chart-pie', 'patient-list':'fa-users', 'archive-list':'fa-box-archive', 'all-patients':'fa-users', 'add-patient':'fa-user-plus', 'weekly-prep':'fa-calendar-check', reports:'fa-file-contract', knowledge:'fa-book-open-reader', settings:'fa-gear', 'admin-users':'fa-user-shield', trash:'fa-trash', 'activity-log':'fa-wave-square', 'audit-log':'fa-clock-rotate-left', changelog:'fa-scroll', 'image-library':'fa-images' };
 
@@ -708,8 +718,10 @@ function App() {
         {/* Nav items */}
         <nav style={{flex:1,overflowY:'auto',padding:'10px 2px'}}>
           {navItems.map(n => {
-            const hasBadge = n.badge && n.badge > 0;
-            const hasGreenBadge = !hasBadge && n.greenBadge;
+            const cnt = (n.badge && n.badge > 0) ? n.badge : 0;
+            const isNew = !!n.redDot;                                        // "มีเวอร์ชันใหม่" = วงแดงเปล่า (ไม่นับ)
+            const green = (cnt === 0 && n.greenBadge) ? cancelledDeleteCount : 0;
+            const notif = cnt > 0 || isNew;
             return (
             <div key={n.id}>
               {n.divider && <div style={{margin:'6px 0',borderTop:'1px solid #f1f5f9'}}></div>}
@@ -720,28 +732,26 @@ function App() {
                   }
                   if (n.external) { window.top.location.href = n.external; return; }
                   setNav(n.id);setLogoClicks(0);if(n.id!=='add-patient')setFormDirty(false);
-                  // ล้างป้าย "New" บน sidebar เมื่อเข้าหน้า changelog
+                  // ล้างเตือน "เวอร์ชันใหม่" เมื่อเข้าหน้า changelog
                   if (n.id==='changelog') {
                     try { localStorage.setItem('tb_changelog_last_seen', APP_VERSION); } catch {}
                     setChangelogUnseen(false);
                   }
                 }}
                 title={!sidebarOpen?n.label:undefined}
-                style={{display:'flex',width:'100%',alignItems:'center',padding:'9px 8px',borderRadius:'8px',border:'none',cursor:'pointer',marginBottom:'2px',transition:'background 0.15s',background:hasBadge?'#fef2f2':(nav===n.id?'#ccfbf1':'transparent'),fontWeight:nav===n.id||hasBadge?700:500,fontSize:'14px',color:hasBadge?'#b91c1c':(nav===n.id?'#0f766e':'#374151')}}
-                onMouseEnter={e=>{if(nav!==n.id&&!hasBadge){e.currentTarget.style.background='#f0fdfa';e.currentTarget.style.color='#0f766e';}}}
-                onMouseLeave={e=>{if(nav!==n.id&&!hasBadge){e.currentTarget.style.background='transparent';e.currentTarget.style.color='#374151';}}}
+                style={{display:'flex',width:'100%',alignItems:'center',padding:'9px 10px 9px 8px',borderRadius:'8px',border:'none',cursor:'pointer',marginBottom:'2px',transition:'background 0.15s',background:nav===n.id?'#ccfbf1':'transparent',fontWeight:nav===n.id?700:500,fontSize:'14px',color:nav===n.id?'#0f766e':'#374151'}}
+                onMouseEnter={e=>{if(nav!==n.id){e.currentTarget.style.background='#f0fdfa';e.currentTarget.style.color='#0f766e';}}}
+                onMouseLeave={e=>{if(nav!==n.id){e.currentTarget.style.background='transparent';e.currentTarget.style.color='#374151';}}}
               >
-                {/* icon 36px · ล็อกตำแหน่งกลางไว้นิ่งสนิท (marginLeft คงที่ ไม่ขยับตอนเปิด/ปิด) */}
+                {/* icon 36px · ล็อกตำแหน่งกลางไว้นิ่งสนิท · ยุบ = จุดแดงที่มุม icon */}
                 <span style={{width:'36px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,position:'relative',marginLeft:'0px'}}>
-                  <i className={`fa-solid ${n.icon}`} style={{fontSize:'17px',color:hasBadge?'#dc2626':'#0f766e'}}></i>
-                  {n.redDot && <span className="tb-pulse-badge" style={{position:'absolute',top:'2px',right:'4px',width:'8px',height:'8px',background:'#ef4444',borderRadius:'50%',display:'block'}}/>}
+                  <i className={`fa-solid ${n.icon}`} style={{fontSize:'17px',color:'#0f766e'}}></i>
+                  {!sidebarOpen && notif && renderNotif(cnt, isNew, true)}
+                  {!sidebarOpen && green > 0 && renderNotif(green, false, true, '#16a34a')}
                 </span>
-                <span style={{overflow:'hidden',whiteSpace:'nowrap',maxWidth:sidebarOpen?'160px':'0px',opacity:sidebarOpen?1:0,transition:'max-width 0.2s ease,opacity 0.15s ease',display:'flex',alignItems:'center',gap:'6px'}}>
-                  {n.label}
-                  {hasBadge && sidebarOpen && <span className="tb-pulse-badge" style={{background:'#ef4444',color:'#fff',fontSize:'10px',fontWeight:700,padding:'1px 7px',borderRadius:'10px'}}>{n.badge}</span>}
-                  {hasGreenBadge && sidebarOpen && <span style={{background:'#16a34a',color:'#fff',fontSize:'10px',fontWeight:700,padding:'1px 7px',borderRadius:'10px'}}>{cancelledDeleteCount}</span>}
-                  {n.redDot && sidebarOpen && <span style={{background:'#ef4444',color:'#fff',fontSize:'9px',fontWeight:700,padding:'1px 6px',borderRadius:'10px',marginLeft:'auto'}}>New</span>}
-                </span>
+                <span style={{overflow:'hidden',whiteSpace:'nowrap',maxWidth:sidebarOpen?'160px':'0px',opacity:sidebarOpen?1:0,transition:'max-width 0.2s ease,opacity 0.15s ease'}}>{n.label}</span>
+                {sidebarOpen && notif && renderNotif(cnt, isNew, false)}
+                {sidebarOpen && green > 0 && renderNotif(green, false, false, '#16a34a')}
               </button>
             </div>
           )})}
@@ -930,7 +940,7 @@ function App() {
                 alerts={alerts} patients={patients} readAlerts={readAlerts}
                 onRead={markRead} onReadAll={markAllRead}
                 onOpen={p=>{openFromNotif(p);setShowNotifs(false);}}
-                onNavTarget={(target, highlight, alert)=>{ setNav(target); if(highlight) setHighlightUserId(highlight); if(alert?.commentId){ setHighlightCommentTarget({ version: alert.commentVersion, commentId: alert.commentId, ts: Date.now() }); } setShowNotifs(false); }}
+                onNavTarget={(target, highlight, alert)=>{ setNav(target); if(highlight) setHighlightUserId(highlight); if(alert?.imgPending) setImgWantPending(true); if(alert?.commentId){ setHighlightCommentTarget({ version: alert.commentVersion, commentId: alert.commentId, ts: Date.now() }); } setShowNotifs(false); }}
                 onClose={()=>setShowNotifs(false)}
                 onExpand={()=>{setShowNotifs(false);setShowFullNotifs(true);}}
               />}
@@ -948,7 +958,7 @@ function App() {
           {!dbLoading && nav==='weekly-prep'   && <WeeklyPrep patients={patients.filter(p=>!p.archived)} onOpen={setClinical}/>}
           {!dbLoading && nav==='reports'       && <Reports patients={patients}/>}
           {!dbLoading && nav==='knowledge'     && <KnowledgeBase/>}
-          {!dbLoading && nav==='image-library' && <ImageLibraryPage currentUser={currentUser}/>}
+          {!dbLoading && nav==='image-library' && <ImageLibraryPage currentUser={currentUser} pendingImageRequests={pendingImageRequests} wantPending={imgWantPending} onConsumeWant={()=>setImgWantPending(false)}/>}
           {!dbLoading && nav==='settings'      && <AdminSettings settings={settings} setSettings={setSettings} setNav={setNav} currentUser={currentUser}/>}
           {!dbLoading && nav==='admin-users'   && <AdminUsersTab currentUser={currentUser} onPendingChange={setPendingUserCount} highlightUserId={highlightUserId} onClearHighlight={()=>setHighlightUserId(null)}/>}
           {!dbLoading && nav==='trash'         && <TrashHub currentUser={currentUser} onRestore={restorePatient} onHardDelete={hardDeletePatient} pendingDeleteRequests={pendingDeleteRequests} onApproveDelete={approveDeleteRequest} onRejectDelete={rejectDeleteRequest} onAcknowledgeCancelled={async () => { await window.acknowledgeCancelledRequests(); setCancelledDeleteCount(0); }}/>}
@@ -988,7 +998,7 @@ function App() {
         alerts={alerts} patients={patients} readAlerts={readAlerts}
         onRead={markRead} onReadAll={markAllRead}
         onOpen={p=>{openFromNotif(p);}}
-        onNavTarget={(target, highlight, alert)=>{ setNav(target); if(highlight) setHighlightUserId(highlight); if(alert?.commentId){ setHighlightCommentTarget({ version: alert.commentVersion, commentId: alert.commentId, ts: Date.now() }); } setShowFullNotifs(false); }}
+        onNavTarget={(target, highlight, alert)=>{ setNav(target); if(highlight) setHighlightUserId(highlight); if(alert?.imgPending) setImgWantPending(true); if(alert?.commentId){ setHighlightCommentTarget({ version: alert.commentVersion, commentId: alert.commentId, ts: Date.now() }); } setShowFullNotifs(false); }}
         onClose={()=>setShowFullNotifs(false)}
       />}
 
@@ -1045,7 +1055,7 @@ const DEMO_USER = {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.20';
+const APP_VERSION = '0.7.20.1';
 const BUILD_DATE = '4 ก.ค. 2569';
 // bridge: ให้ parts/* (เช่น changelog.jsx, about.jsx) อ่านเวอร์ชันผ่าน window.* ได้ (เฟส 2 + แยกรอบ 2)
 if (typeof window !== 'undefined') { window.APP_VERSION = APP_VERSION; window.BUILD_DATE = BUILD_DATE; }
