@@ -190,7 +190,7 @@ function StorageAlert({ currentUser }) {   // popup เตือน >=80% ทุ
   if (storagePct(alert.db.total,alert.db.quota)>=80) items.push({ label:'ฐานข้อมูล (Supabase)', pct:storagePctStr(alert.db.total,alert.db.quota) });
   if (storagePct(alert.r2.total,alert.r2.quota)>=80) items.push({ label:'รูปภาพ (Cloudflare R2)', pct:storagePctStr(alert.r2.total,alert.r2.quota) });
   return createPortal(
-    <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',zIndex:10005,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={()=>setClosed(true)}>
+    <div className="tb-backdrop" style={{position:'fixed',inset:0,zIndex:10005,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={()=>setClosed(true)}>
       <div className="modal-A" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'380px',padding:'24px',textAlign:'center'}}>
         <div style={{width:'54px',height:'54px',borderRadius:'50%',background:'#fee2e2',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 14px'}}><i className="fa-solid fa-triangle-exclamation" style={{color:'#dc2626',fontSize:'22px'}}></i></div>
         <p style={{fontSize:'16px',fontWeight:700,color:'#111827',margin:'0 0 8px'}}>พื้นที่จัดเก็บใกล้เต็ม</p>

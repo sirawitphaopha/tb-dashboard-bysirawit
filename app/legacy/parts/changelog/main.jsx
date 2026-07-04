@@ -1197,8 +1197,7 @@ function CommitDetailModal({ entry, color, copiedHash, copiedFull, onCopy, onCop
     ? `https://github.com/sirawitphaopha/tb-dashboard-bysirawit/commit/${entry.commitFull || entry.commit}`
     : null;
   return (
-    <div className={"fixed inset-0 z-[70] flex items-center justify-center p-4 "+overlayCls}
-      style={{background:'rgba(15,23,42,0.55)',backdropFilter:'blur(3px)'}}
+    <div className={"fixed inset-0 tb-backdrop z-[70] flex items-center justify-center p-4 "+overlayCls}
       onClick={close}>
       <div className={modalCls} onClick={e=>e.stopPropagation()}
         style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'760px',maxHeight:'85vh',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'0 24px 60px rgba(0,0,0,0.3)'}}>

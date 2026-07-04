@@ -1041,7 +1041,7 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
 
       {/* Hard delete user modal — ลบถาวร rejected user */}
       {hardDelTarget && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 tb-backdrop flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 modal-A">
             <h3 className="text-lg font-bold text-red-700 mb-2">
               <i className="fa-solid fa-fire mr-2"></i>ลบถาวร "{hardDelTarget.first_name} {hardDelTarget.last_name}"
@@ -1079,7 +1079,7 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
 
       {/* Deactivate user modal */}
       {deactivateTarget && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 tb-backdrop flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 modal-A">
             <h3 className="text-lg font-bold text-orange-600 mb-2">
               <i className="fa-solid fa-user-slash mr-2"></i>ปิดบัญชี "{deactivateTarget.first_name} {deactivateTarget.last_name}"
@@ -1111,7 +1111,7 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
 
       {/* ── Dialog อนุมัติผู้ใช้ — ยืนยัน (ไม่ต้องกรอกเหตุผล) ── */}
       {approveUserTarget && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 tb-backdrop flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 modal-A">
             <h3 className="text-lg font-bold text-teal-700 mb-2">
               <i className="fa-solid fa-circle-check mr-2"></i>อนุมัติ "{approveUserTarget.first_name} {approveUserTarget.last_name}"
@@ -1137,7 +1137,7 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
 
       {/* ── Dialog กู้คืนบัญชีผู้ใช้ — ยืนยัน + ใส่เหตุผล ── */}
       {restoreUserTarget && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 tb-backdrop flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 modal-A">
             <h3 className="text-lg font-bold text-teal-700 mb-2">
               <i className="fa-solid fa-rotate-left mr-2"></i>กู้คืนบัญชี "{restoreUserTarget.first_name} {restoreUserTarget.last_name}"
@@ -1168,7 +1168,7 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
 
       {/* Reject edit-request modal — ปฏิเสธคำขอแก้ไขข้อมูล (ใส่เหตุผลได้) */}
       {rejectReqTarget && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 tb-backdrop flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 modal-A">
             <h3 className="text-lg font-bold text-red-600 mb-2">
               <i className="fa-solid fa-xmark mr-2"></i>ปฏิเสธคำขอแก้ไขข้อมูล
@@ -1201,7 +1201,7 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
 
       {/* Edit User Modal */}
       {editingUser && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 tb-backdrop flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto modal-A">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-base font-bold text-teal-900">
@@ -1304,7 +1304,7 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
 
       {/* Reject Modal */}
       {rejectingId && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 tb-backdrop flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 modal-A">
             <h3 className="text-lg font-bold text-red-700 mb-2">
               <i className="fa-solid fa-circle-xmark mr-2"></i>ปฏิเสธคำขอสมัคร

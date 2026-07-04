@@ -85,7 +85,7 @@ function RequestEditModal({ field, currentValue, onClose }) {
   };
 
   return (
-    <div className={overlayCls} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.5)',backdropFilter:'blur(3px)',zIndex:60,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}}
+    <div className={'tb-backdrop '+overlayCls} style={{position:'fixed',inset:0,zIndex:60,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}}
       onClick={e=>{if(e.target===e.currentTarget)close();}}>
       <div className={modalCls} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'420px',boxShadow:'0 20px 60px rgba(0,0,0,0.2)',overflow:'hidden'}}>
 
@@ -186,7 +186,7 @@ function AvatarCropModal({ src, uploading, error, onCancel, onConfirm }) {
   const [pixels, setPixels] = React.useState(null);
   const onComplete = React.useCallback((_, p) => setPixels(p), []);
   return createPortal(
-    <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',zIndex:10000,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={uploading?undefined:onCancel}>
+    <div className="tb-backdrop" style={{position:'fixed',inset:0,zIndex:10000,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={uploading?undefined:onCancel}>
       <div className="modal-A" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'400px',overflow:'hidden',boxShadow:'0 25px 60px rgba(0,0,0,0.3)'}}>
         <div style={{padding:'16px 20px',borderBottom:'1px solid #f3f4f6'}}>
           <p style={{fontSize:'15px',fontWeight:700,color:'#0f766e',margin:0}}><i className="fa-solid fa-crop-simple" style={{marginRight:'8px'}}></i>ปรับรูปโปรไฟล์</p>
@@ -238,7 +238,7 @@ function AvatarCropModal({ src, uploading, error, onCancel, onConfirm }) {
 // AvatarLightbox ย้ายไป parts/shared.jsx (เฟส 5 — ใช้ร่วมกับ avatar/UserProfileModal)
 function AvatarDeleteConfirm({ uploading, error, onCancel, onConfirm }) {
   return createPortal(
-    <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={uploading?undefined:onCancel}>
+    <div className="tb-backdrop" style={{position:'fixed',inset:0,zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={uploading?undefined:onCancel}>
       <div className="modal-A" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'360px',overflow:'hidden',boxShadow:'0 25px 60px rgba(0,0,0,0.3)'}}>
         <div style={{padding:'24px 22px 18px',textAlign:'center'}}>
           <div style={{width:'52px',height:'52px',borderRadius:'50%',background:'#fee2e2',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 14px'}}>
@@ -528,7 +528,7 @@ function UserProfileModal({ onClose }) {
 
   return (
     <>
-      <div className={overlayCls} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.4)',backdropFilter:'blur(2px)',zIndex:50,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}}>
+      <div className={'tb-backdrop '+overlayCls} style={{position:'fixed',inset:0,zIndex:50,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}}>
         <div className={modalCls} style={{background:'#fff',borderRadius:'20px',width:'100%',maxWidth:'920px',
           // v0.7.17.3 — หน้าโปรไฟล์ปล่อยให้กรอบหดตาม content (ไม่โล่ง)
           //             หน้าอื่น (อุปกรณ์ / เปลี่ยนรหัสผ่าน) ล็อค height ไว้ ไม่ขยับตอนกรอง
@@ -540,6 +540,8 @@ function UserProfileModal({ onClose }) {
           {/* ═══ LEFT: Header column ═══ */}
           <div style={{background:'linear-gradient(160deg,#0f766e,#14b8a6)',padding:'32px 24px',width:'280px',flexShrink:0,display:'flex',flexDirection:'column',position:'relative'}}>
 
+            {/* avatar + สถิติ — เลื่อนได้ (กันแผงซ้ายล้นบนจอเตี้ย) */}
+            <div style={{flex:1,minHeight:0,overflowY:'auto',margin:'0 -8px',padding:'0 8px'}}>
             <div style={{textAlign:'center',marginTop:'10px'}}>
               <div style={{position:'relative',width:'90px',margin:'0 auto 16px'}}>
                 <div ref={avatarCircleRef} onClick={openLightbox} title={avatarPublicUrl ? 'กดดูรูปเต็ม' : undefined}
@@ -610,8 +612,10 @@ function UserProfileModal({ onClose }) {
               </div>
             </div>
 
-            {/* Footer buttons inside left col */}
-            <div style={{marginTop:'auto',paddingTop:'20px',display:'flex',flexDirection:'column',gap:'8px'}}>
+            </div>{/* /scroll area (avatar+สถิติ) */}
+
+            {/* Footer buttons — คงที่ล่างสุด (ปุ่มปิดไม่โดนตัดบนจอเตี้ย 768) */}
+            <div style={{flexShrink:0,paddingTop:'16px',display:'flex',flexDirection:'column',gap:'8px'}}>
               <button onClick={()=>setMode('changePassword')}
                 style={{width:'100%',padding:'10px',borderRadius:'10px',border:'1.5px solid rgba(255,255,255,0.35)',background:'rgba(255,255,255,0.15)',color:'#fff',fontWeight:600,fontSize:'12px',cursor:'pointer',transition:'background 0.15s'}}
                 onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,0.25)'}

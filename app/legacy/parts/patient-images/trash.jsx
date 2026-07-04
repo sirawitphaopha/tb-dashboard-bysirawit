@@ -185,7 +185,7 @@ function ImageTrashPage({ currentUser, isAdmin }) {
       })()}
 
       {restoreT && createPortal(
-        <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={busy?undefined:()=>setRestoreT(null)}>
+        <div className={lightbox?'':'tb-backdrop'} style={{position:'fixed',inset:0,...(lightbox?{background:'rgba(15,23,42,0.6)'}:{}),zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={busy?undefined:()=>setRestoreT(null)}>
           <div className="modal-A" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'340px',padding:'22px',textAlign:'center'}}>
             <div style={{width:'50px',height:'50px',borderRadius:'50%',background:'#ccfbf1',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 12px'}}><i className="fa-solid fa-rotate-left" style={{color:'#0d9488',fontSize:'19px'}}></i></div>
             <p style={{fontSize:'15px',fontWeight:700,color:'#111827',margin:'0 0 6px'}}>กู้คืนรูปนี้</p>
@@ -199,7 +199,7 @@ function ImageTrashPage({ currentUser, isAdmin }) {
         </div>, document.body
       )}
       {hardT && createPortal(
-        <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={busy?undefined:()=>{setHardT(null);setHardStep2(false);}}>
+        <div className={lightbox?'':'tb-backdrop'} style={{position:'fixed',inset:0,...(lightbox?{background:'rgba(15,23,42,0.6)'}:{}),zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={busy?undefined:()=>{setHardT(null);setHardStep2(false);}}>
           <div className="modal-A" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'360px',padding:'22px',minHeight:'366px',display:'flex',flexDirection:'column',boxSizing:'border-box'}}>
             <div style={{width:'50px',height:'50px',borderRadius:'50%',background:'#fee2e2',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 12px'}}><i className="fa-solid fa-fire" style={{color:'#dc2626',fontSize:'19px'}}></i></div>
             <p style={{fontSize:'15px',fontWeight:700,color:'#111827',margin:'0 0 6px',textAlign:'center'}}>ลบรูปนี้ถาวร</p>

@@ -80,8 +80,8 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="w-full h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #134e4a 0%, #0d9488 100%)' }}>
-      <div style={{ background: '#fff', borderRadius: '24px', boxShadow: '0 25px 60px rgba(0,0,0,0.2)', width: '100%', maxWidth: '420px', padding: '40px', textAlign: 'center' }}>
+    <div style={{ width: '100%', minHeight: '100vh', display: 'flex', flexDirection: 'column', overflowY: 'auto', padding: '24px 16px', boxSizing: 'border-box', background: 'linear-gradient(135deg, #134e4a 0%, #0d9488 100%)' }}>
+      <div style={{ background: '#fff', borderRadius: '24px', boxShadow: '0 25px 60px rgba(0,0,0,0.2)', width: '100%', maxWidth: '420px', padding: '40px', textAlign: 'center', margin: 'auto', flexShrink: 0 }}>
 
         <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'center' }}>
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512" width="130" height="104" style={{filter:'drop-shadow(0 6px 14px rgba(13,148,136,0.25))'}}>
@@ -167,7 +167,7 @@ export default function LoginPage() {
         <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #f3f4f6' }}>
           <p style={{ fontSize: '11px', color: '#9ca3af', margin: '0 0 2px 0' }}>พัฒนาโดย เภสัชกร สิรวิชญ์ เผ่าผา</p>
           <p style={{ fontSize: '11px', color: '#9ca3af', margin: '0 0 4px 0' }}>โรงพยาบาลปรางค์กู่</p>
-          <p style={{ fontSize: '11px', color: '#d1d5db', margin: '0 0 4px 0' }}>Version 0.7.19.7 · <span style={{ color: '#fbbf24', fontWeight: 600 }}>ยังไม่เผยแพร่</span></p>
+          <p style={{ fontSize: '11px', color: '#d1d5db', margin: '0 0 4px 0' }}>Version 0.7.19.8 · <span style={{ color: '#fbbf24', fontWeight: 600 }}>ยังไม่เผยแพร่</span></p>
           <p style={{ fontSize: '11px', color: '#d1d5db', margin: 0 }}>© 2026 TB JOURNEY &amp; CARE</p>
         </div>
       </div>

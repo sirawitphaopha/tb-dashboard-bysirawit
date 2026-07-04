@@ -84,7 +84,7 @@ function NotificationFullModal({alerts,patients,readAlerts,onRead,onReadAll,onOp
   const {closing, close, modalCls, overlayCls} = useModalAnim(onClose);
   const {sorted,renderItem}=useNotifHelpers(alerts,patients,readAlerts,onRead,onOpen,close,onNavTarget);
   return(
-    <div className={"fixed inset-0 z-50 flex items-center justify-center p-4 "+overlayCls} style={{background:'rgba(0,0,0,0.45)'}}>
+    <div className={"fixed inset-0 tb-backdrop z-50 flex items-center justify-center p-4 "+overlayCls}>
       <div className={"bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden "+modalCls} style={{width:'min(90vw,920px)',maxHeight:'82vh'}}>
         <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center flex-shrink-0">
           <div>

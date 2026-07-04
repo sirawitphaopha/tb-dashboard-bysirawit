@@ -138,7 +138,7 @@ function PharmSummaryTab({ patient, currentUser, onSoftDelete, onRequestDelete, 
 
       {/* ── Modal ยืนยันยกเลิกคำขอลบ ── */}
       {showCancelConfirm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 tb-backdrop flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 modal-A">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0">
@@ -169,7 +169,7 @@ function PharmSummaryTab({ patient, currentUser, onSoftDelete, onRequestDelete, 
 
       {/* ── Dialog 1: ใส่เหตุผล ── */}
       {deleteStep === 1 && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 tb-backdrop flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 modal-A">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center text-red-600"><i className="fa-solid fa-triangle-exclamation"></i></div>
@@ -194,7 +194,7 @@ function PharmSummaryTab({ patient, currentUser, onSoftDelete, onRequestDelete, 
 
       {/* ── Dialog 2: ยืนยันสุดท้าย 60 วัน ── */}
       {deleteStep === 2 && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 tb-backdrop flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 modal-A">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600"><i className="fa-solid fa-trash-can"></i></div>
@@ -218,7 +218,7 @@ function PharmSummaryTab({ patient, currentUser, onSoftDelete, onRequestDelete, 
 
       {/* ── Dialog ขอลบ step 1: ใส่เหตุผล ── */}
       {requestStep === 1 && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 tb-backdrop flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 modal-A">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600"><i className="fa-solid fa-paper-plane"></i></div>
@@ -246,7 +246,7 @@ function PharmSummaryTab({ patient, currentUser, onSoftDelete, onRequestDelete, 
 
       {/* ── Dialog ขอลบ step 2: ยืนยัน ── */}
       {requestStep === 2 && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 tb-backdrop flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 modal-A">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600"><i className="fa-solid fa-circle-exclamation"></i></div>

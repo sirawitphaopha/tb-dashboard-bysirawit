@@ -258,7 +258,7 @@ function TrashList({ currentUser, onRestore, onHardDelete, pendingDeleteRequests
 
       {/* ── Dialog ลบถาวร: พิมพ์ HN + checkbox ── */}
       {hardDelTarget && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 tb-backdrop flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 modal-A">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center text-red-600"><i className="fa-solid fa-fire"></i></div>
@@ -296,7 +296,7 @@ function TrashList({ currentUser, onRestore, onHardDelete, pendingDeleteRequests
 
       {/* ── Dialog กู้คืนผู้ป่วย ── */}
       {restoreTarget && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 tb-backdrop flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 modal-A">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl bg-teal-100 flex items-center justify-center text-teal-600 flex-shrink-0">
@@ -328,7 +328,7 @@ function TrashList({ currentUser, onRestore, onHardDelete, pendingDeleteRequests
 
       {/* ── Dialog อนุมัติลบ ── */}
       {approveTarget && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 tb-backdrop flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 modal-A">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center text-red-600 flex-shrink-0">
@@ -364,7 +364,7 @@ function TrashList({ currentUser, onRestore, onHardDelete, pendingDeleteRequests
 
       {/* ── Dialog ปฏิเสธคำขอลบ ── */}
       {rejectTarget && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 tb-backdrop flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 modal-A">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center text-gray-600"><i className="fa-solid fa-xmark"></i></div>

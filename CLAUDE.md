@@ -182,6 +182,15 @@ The `ยังไม่เผยแพร่` (not yet released) badge stays unt
 - **ลากได้ (draggable)** + **โผล่เมื่อเมาส์เข้าใกล้ขอบ ~16px หรือ hover ตัว thumb** (เพราะซ่อน native แล้วผู้ใช้ต้องลากแถบเลื่อนเองได้ โดยเฉพาะตารางแนวนอน) · JS สลับ `pointer-events` เป็น auto ตอนโผล่ · `scrollableV/H` เดิน ancestor หา container ที่เลื่อนได้
 - 🚨 **เพจ/คอมโพเนนต์ใหม่ที่มี scroll ไม่ต้องทำอะไรเพิ่ม** — ระบบ global จับให้อัตโนมัติ · **ห้ามใส่ `::-webkit-scrollbar` / `overflow:overlay` / scrollbar-gutter รายจุด** (ซ้ำซ้อน) · ถ้าอยากให้ thumb ชิดขอบจอก็จัด layout ให้ container ชิดขอบ (เช่นหน้ารายการผู้ป่วยดันการ์ดชิดขวา)
 
+### Popup backdrop — เทล + โบเก้ (global class `.tb-backdrop`)
+- popup เนื้อหาทั่วไปใช้ overlay class **`.tb-backdrop`** (`globals.css`) แทนพื้นดำเดิม (`bg-black/40` / `rgba(15,23,42,..)`) → ได้ฉากหลัง **เบลอเห็นเว็บทะลุ + tint เทลจาง (`rgba(12,68,62,0.35)`) + โบเก้อำพันลอย/วิบวับ** (วาดด้วย CSS ล้วน `::before`/`::after` — popup ไหนมี class นี้ได้เอฟเฟกต์เอง ไม่ต้องแทรก component)
+- `isolation:isolate` + `.tb-backdrop > * { z-index:1 }` กันโบเก้ (z-index 0) ทับเข้ามาในการ์ด popup · โบเก้ fade-in นุ่ม (`animation-fill-mode:both` กันแวบสว่างจ้าตอนเปิดครั้งแรก) + `will-change` ให้วาดครั้งแรกลื่น
+- **จัดกลุ่ม popup 3 แบบ:**
+  - 🟢 **A — เบลอเทลเสมอ:** popup เนื้อหาทั่วไป (ยืนยัน/About/โปรไฟล์/แจ้งเตือน/จัดการผู้ใช้/ถังขยะผู้ป่วย/สรุปเภสัช ฯลฯ) → ใส่ `tb-backdrop`
+  - ⚫ **B — พื้นดำเสมอ (ห้ามเบลอ):** ตัวดูรูปใหญ่ (`AvatarLightbox` ใน `shared.jsx`, ตัวดูรูปใน `patient-images/helpers`) — คงพื้นดำเพื่อเห็นรูปชัด
+  - 🔀 **C — มีเงื่อนไข:** popup ยืนยันเกี่ยวกับรูป (ลบ/แก้/กู้คืน/อัป + ครอบ/ลบ avatar) ใน `patient-images/*` → `className={lightbox?'':'tb-backdrop'}` + พื้นดำเฉพาะตอน `lightbox` เปิด (popup เด้งทับตัวดูรูป) · เบลอตอนเปิดจากแกลเลอรี/ถังขยะ (ไม่ได้กดดูรูปใหญ่)
+- 🚨 **popup ใหม่:** เนื้อหาทั่วไป → ใส่ `tb-backdrop` · ถ้าเด้งทับตัวดูรูป → พื้นดำ (อย่าใส่ `tb-backdrop`)
+
 ### วิธีทำงาน (Working style) — กฎเต็ม
 - **ตอบตรง ๆ ก่อนเสมอ** — ประโยคแรกคือคำตอบ ไม่วกอ้อม
 - **ก่อนลงมือ สรุปให้พี่กันเข้าใจก่อน** ว่าจะทำอะไร จะเห็นผลอะไร

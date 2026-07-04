@@ -43,7 +43,7 @@ export function ConfirmModal({ message, onConfirm, onCancel }) {
   const {closing, close, modalCls, overlayCls} = useModalAnim(onCancel);
   const doConfirm = () => { if (closing) return; setTimeout(onConfirm, 0); close(); };
   return (
-    <div className={"fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 "+overlayCls}>
+    <div className={"fixed inset-0 tb-backdrop z-[60] flex items-center justify-center p-4 "+overlayCls}>
       <div className={"bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center "+modalCls}>
         <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
           <i className="fa-solid fa-triangle-exclamation text-red-500 text-2xl"></i>

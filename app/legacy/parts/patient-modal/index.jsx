@@ -219,7 +219,7 @@ function AddPatientPage({onBack,onAdd,settings,onDirtyChange}){
 
       {/* Leave confirmation dialog */}
       {showLeaveConfirm && (
-        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.45)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center'}}>
+        <div className="tb-backdrop" style={{position:'fixed',inset:0,zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center'}}>
           <div className="modal-A" style={{background:'#fff',borderRadius:'20px',overflow:'hidden',maxWidth:'360px',width:'90%',textAlign:'center',boxShadow:'0 20px 50px rgba(0,0,0,0.2)'}}>
               <div style={{padding:'32px 32px 28px'}}>
               <p style={{fontWeight:700,fontSize:'16px',color:'#1f2937',marginBottom:'8px'}}>ยืนยันการออกจากหน้านี้</p>

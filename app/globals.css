@@ -24,6 +24,42 @@ body {
 }
 .tb-ov-thumb:hover { background: #94a3b8; }
 
+/* ── ฉากหลัง popup: overlay เทลเข้ม + เบลอหน้าเว็บจริง + โบเก้อำพันลอย/วิบวับ (component ModalBackdropFx) ──
+ * เบราว์เซอร์เก่าที่ไม่รองรับ backdrop-filter → เหลือ overlay เทลเข้มทึบ (ไม่พัง) · หน้าดูรูปไม่ใช้ class นี้ (คงพื้นดำ) */
+.tb-backdrop {
+  background: rgba(12,68,62,0.35);   /* เทล tint บางๆ — เห็นหน้าเว็บเบลอทะลุ (ไม่ทึบบัง) */
+  -webkit-backdrop-filter: blur(15px) brightness(0.95);
+  backdrop-filter: blur(15px) brightness(0.95);
+  isolation: isolate;   /* stacking context สะอาด */
+}
+/* เนื้อหา popup (การ์ด) อยู่หน้าโบเก้เสมอ (โบเก้อยู่ ::before/::after ที่ z-index 0) */
+.tb-backdrop > * { position: relative; z-index: 1; }
+/* โบเก้อำพันลอย/วิบวับ 2 ชั้น (::before/::after) — วาดด้วย CSS ล้วน · popup ไหนมี class tb-backdrop ได้เลยอัตโนมัติ */
+.tb-backdrop::before, .tb-backdrop::after { content:''; position:absolute; inset:0; z-index:0; pointer-events:none; will-change:transform,opacity; }
+.tb-backdrop::before {
+  background:
+    radial-gradient(circle at 15% 18%, rgba(253,224,71,0.55), transparent 15%),
+    radial-gradient(circle at 68% 22%, rgba(251,191,36,0.5), transparent 17%),
+    radial-gradient(circle at 30% 68%, rgba(245,158,11,0.45), transparent 13%),
+    radial-gradient(circle at 84% 60%, rgba(255,237,180,0.5), transparent 12%),
+    radial-gradient(circle at 48% 40%, rgba(253,224,71,0.4), transparent 10%);
+  filter: blur(9px);
+  animation: tbBkDrift1 17s ease-in-out infinite alternate, tbBkFade 3.2s ease-in-out infinite both;
+}
+.tb-backdrop::after {
+  background:
+    radial-gradient(circle at 8% 46%, rgba(251,191,36,0.45), transparent 12%),
+    radial-gradient(circle at 58% 82%, rgba(245,158,11,0.4), transparent 12%),
+    radial-gradient(circle at 88% 36%, rgba(253,224,71,0.42), transparent 10%),
+    radial-gradient(circle at 38% 88%, rgba(255,237,180,0.42), transparent 10%),
+    radial-gradient(circle at 78% 84%, rgba(251,191,36,0.38), transparent 9%);
+  filter: blur(7px);
+  animation: tbBkDrift2 21s ease-in-out infinite alternate, tbBkFade 4.4s ease-in-out 1s infinite both;
+}
+@keyframes tbBkDrift1 { 0%{transform:translate(0,0) scale(1)} 100%{transform:translate(14px,-16px) scale(1.06)} }
+@keyframes tbBkDrift2 { 0%{transform:translate(0,0) scale(1)} 100%{transform:translate(-16px,-10px) scale(1.05)} }
+@keyframes tbBkFade { 0%,100%{opacity:.5} 50%{opacity:1} }
+
 .tb-fade { animation: tbFadeIn 0.25s ease; }
 @keyframes tbFadeIn {
   from { opacity: 0; transform: translateY(6px); }

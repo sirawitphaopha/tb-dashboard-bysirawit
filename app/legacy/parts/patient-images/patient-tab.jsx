@@ -329,7 +329,7 @@ function PatientImagesTab({ patient, currentUser, locked }) {
       })()}
       {compare && <CXRCompareModal left={compare.left} right={compare.right} onClose={()=>setCompare(null)}/>}
       {pendingUpload && createPortal(
-        <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.65)',zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={uploading?undefined:cancelUpload}>
+        <div className={lightbox?'':'tb-backdrop'} style={{position:'fixed',inset:0,...(lightbox?{background:'rgba(15,23,42,0.65)'}:{}),zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={uploading?undefined:cancelUpload}>
           <div className="modal-A" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'440px',overflow:'hidden',boxShadow:'0 25px 60px rgba(0,0,0,0.3)',maxHeight:'90vh',display:'flex',flexDirection:'column'}}>
             <div style={{padding:'14px 20px',borderBottom:'1px solid #f3f4f6',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
               <p style={{fontSize:'15px',fontWeight:700,color:'#0f766e',margin:0}}><i className="fa-solid fa-cloud-arrow-up" style={{marginRight:'8px'}}></i>ยืนยันอัปโหลดรูป</p>
@@ -384,7 +384,7 @@ function PatientImagesTab({ patient, currentUser, locked }) {
         </div>, document.body
       )}
       {delTarget && createPortal(
-        <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={deleting?undefined:()=>{setDelTarget(null);setDelStep2(false);}}>
+        <div className={lightbox?'':'tb-backdrop'} style={{position:'fixed',inset:0,...(lightbox?{background:'rgba(15,23,42,0.6)'}:{}),zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={deleting?undefined:()=>{setDelTarget(null);setDelStep2(false);}}>
           <div className="modal-A" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'360px',padding:'22px',minHeight:'404px',display:'flex',flexDirection:'column',boxSizing:'border-box'}}>
             <div style={{width:'50px',height:'50px',borderRadius:'50%',background:'#fee2e2',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 12px'}}><i className="fa-solid fa-trash-can" style={{color:'#dc2626',fontSize:'19px'}}></i></div>
             {!delStep2 ? (<>
@@ -411,7 +411,7 @@ function PatientImagesTab({ patient, currentUser, locked }) {
         </div>, document.body
       )}
       {editTarget && createPortal(
-        <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={savingEdit?undefined:()=>setEditTarget(null)}>
+        <div className={lightbox?'':'tb-backdrop'} style={{position:'fixed',inset:0,...(lightbox?{background:'rgba(15,23,42,0.6)'}:{}),zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={savingEdit?undefined:()=>setEditTarget(null)}>
           <div className="modal-A" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'380px',padding:'22px'}}>
             <p style={{fontSize:'15px',fontWeight:700,color:'#0f766e',margin:'0 0 14px'}}><i className="fa-solid fa-pen" style={{marginRight:'8px'}}></i>แก้หมวด / หมายเหตุ</p>
             <label style={{fontSize:'12px',fontWeight:700,color:'#4b5563',display:'block',marginBottom:'5px'}}>หมวดรูป</label>
