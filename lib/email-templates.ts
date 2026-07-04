@@ -33,7 +33,7 @@ function wrap(title: string, body: string): string {
             <tr><td style="background:linear-gradient(135deg,${BRAND_TEAL_DARK},${BRAND_TEAL});padding:24px 32px;text-align:center;">
               <h1 style="margin:0;color:#fff;font-size:22px;font-weight:800;letter-spacing:-0.3px;display:inline-flex;align-items:center;gap:10px;font-family:'Manrope','Sarabun',sans-serif;">
                 <span style="display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;background:#ffffff;border-radius:12px;flex-shrink:0;">
-                  <img src="https://tbjourney.care/email-logo.png" width="32" height="26" alt="TB JOURNEY &amp; CARE" style="display:block;vertical-align:middle;border:0;outline:none;" />
+                  <img src="https://tbjourney.care/email-logo.png" width="30" height="30" alt="TB JOURNEY &amp; CARE" style="display:block;vertical-align:middle;border:0;outline:none;" />
                 </span>
                 <span>TB JOURNEY <span style="font-family:'Plus Jakarta Sans','Sarabun',sans-serif;">&amp;</span> CARE</span>
               </h1>
@@ -307,6 +307,99 @@ export function adminImageDeleteRequestEmail(
     </table>
 
     <p style="margin:16px 0 0;font-size:12px;color:#9ca3af;text-align:center;">คลิกปุ่มข้างบนเพื่อไปพิจารณาคำขอนี้ในระบบ</p>
+  `
+  return { subject, html: wrap(subject, body) }
+}
+
+// ═════════════════════════════════════════════════════════
+// 7a-2) Admin — user ยกเลิกคำขอลบรูปเอง (แจ้งแอดมินว่าไม่ต้องทำอะไรแล้ว)
+// ═════════════════════════════════════════════════════════
+export function adminImageDeleteRequestCancelledEmail(
+  patientName: string, patientHn: string, imgTypeLabel: string, requesterName: string
+) {
+  const subject = `[ยกเลิกแล้ว] คำขอลบรูปผู้ป่วย: ${patientName} (HN: ${patientHn})`
+  const body = `
+    <h2 style="margin:0 0 16px;color:#92400e;font-size:18px;">คำขอลบรูปถูกยกเลิกโดยผู้ใช้แล้ว</h2>
+    <p style="margin:0 0 20px;font-size:14px;color:#4b5563;line-height:1.7;">
+      ผู้ใช้ได้ยกเลิกคำขอลบรูปด้วยตัวเองแล้ว ไม่จำเป็นต้องดำเนินการใดๆ
+    </p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:16px;margin-bottom:20px;">
+      <tr><td style="padding:6px 0;font-size:12px;color:#6b7280;width:130px;">ผู้ป่วย</td>
+          <td style="padding:6px 0;font-size:14px;font-weight:700;color:#1f2937;">${patientName}</td></tr>
+      <tr><td style="padding:6px 0;font-size:12px;color:#6b7280;">HN</td>
+          <td style="padding:6px 0;font-size:14px;font-weight:700;color:#1f2937;font-family:monospace;">${patientHn || '—'}</td></tr>
+      <tr><td style="padding:6px 0;font-size:12px;color:#6b7280;">ประเภทรูป</td>
+          <td style="padding:6px 0;font-size:14px;font-weight:600;color:#1f2937;">${imgTypeLabel || '—'}</td></tr>
+      <tr><td style="padding:6px 0;font-size:12px;color:#6b7280;">ยกเลิกโดย</td>
+          <td style="padding:6px 0;font-size:14px;font-weight:600;color:#1f2937;">${requesterName}</td></tr>
+    </table>
+    <div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:10px;padding:14px;margin-bottom:20px;">
+      <p style="margin:0;font-size:13px;color:#134e4a;">รูปยังคงอยู่ในระบบตามปกติ ไม่มีการเปลี่ยนแปลงใดๆ</p>
+    </div>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB JOURNEY &amp; CARE</p>
+  `
+  return { subject, html: wrap(subject, body) }
+}
+
+// ═════════════════════════════════════════════════════════
+// 7a-3) User — ยืนยันว่าส่งคำขอลบรูปแล้ว (เมลกลับหาผู้ขอเอง)
+// ═════════════════════════════════════════════════════════
+export function imageDeleteRequestSubmittedEmail(firstName: string, patientName: string, imgTypeLabel: string, reason: string) {
+  const subject = `📩 ส่งคำขอลบรูปแล้ว: ${patientName}`
+  const body = `
+    <h2 style="margin:0 0 16px;color:${BRAND_TEAL_DARK};font-size:18px;">เรียน คุณ${firstName}</h2>
+    <p style="margin:0 0 16px;font-size:14px;color:#4b5563;line-height:1.7;">ระบบได้รับคำขอลบรูป <b>${imgTypeLabel} · ${patientName}</b> ของท่านแล้ว รูปจะขึ้นสถานะ "รออนุมัติลบ" จนกว่าผู้ดูแลระบบจะพิจารณา</p>
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:16px;margin:20px 0;">
+      <p style="margin:0 0 6px;font-size:12px;color:#92400e;font-weight:700;">เหตุผลที่ท่านระบุ</p>
+      <p style="margin:0;font-size:14px;color:#1f2937;line-height:1.6;">${reason || '—'}</p>
+    </div>
+    <p style="margin:0 0 8px;font-size:13px;color:#4b5563;">ท่านจะได้รับอีเมลอีกครั้งเมื่อผู้ดูแลระบบอนุมัติหรือปฏิเสธ หากเปลี่ยนใจ กดยกเลิกคำขอได้เองในระบบ</p>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB JOURNEY &amp; CARE</p>
+  `
+  return { subject, html: wrap(subject, body) }
+}
+
+// ═════════════════════════════════════════════════════════
+// 7a-4) User — แอดมินยกเลิกคำขอลบแทน (แจ้งผู้ขอ)
+// ═════════════════════════════════════════════════════════
+export function imageDeleteRequestCancelledByAdminEmail(firstName: string, patientName: string, imgTypeLabel: string) {
+  const subject = `คำขอลบรูปถูกยกเลิกโดยผู้ดูแล: ${patientName}`
+  const body = `
+    <h2 style="margin:0 0 16px;color:${BRAND_TEAL_DARK};font-size:18px;">เรียน คุณ${firstName}</h2>
+    <p style="margin:0 0 16px;font-size:14px;color:#4b5563;line-height:1.7;">ผู้ดูแลระบบได้ยกเลิกคำขอลบรูป <b>${imgTypeLabel} · ${patientName}</b> ของท่าน รูปยังคงอยู่ในระบบตามปกติ</p>
+    <div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:10px;padding:14px;margin:20px 0;">
+      <p style="margin:0;font-size:13px;color:#134e4a;">หากยังต้องการลบรูปนี้ สามารถส่งคำขอใหม่ได้ในระบบ หรือติดต่อผู้ดูแลระบบ</p>
+    </div>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB JOURNEY &amp; CARE</p>
+  `
+  return { subject, html: wrap(subject, body) }
+}
+
+// ═════════════════════════════════════════════════════════
+// 7a-5) เจ้าของรูป — รูปถูกลบถาวรจากถังขยะ
+// ═════════════════════════════════════════════════════════
+export function imageHardDeletedEmail(firstName: string, patientName: string, imgTypeLabel: string) {
+  const subject = `รูปถูกลบถาวรจากระบบ: ${patientName}`
+  const body = `
+    <h2 style="margin:0 0 16px;color:#991b1b;font-size:18px;">เรียน คุณ${firstName}</h2>
+    <p style="margin:0 0 16px;font-size:14px;color:#4b5563;line-height:1.7;">รูป <b>${imgTypeLabel} · ${patientName}</b> ที่ท่านเป็นผู้อัปโหลด ได้ถูกผู้ดูแลระบบ <b>ลบถาวร</b> ออกจากถังขยะแล้ว ไม่สามารถกู้คืนได้อีก</p>
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px;margin:20px 0;">
+      <p style="margin:0;font-size:13px;color:#7f1d1d;">หากท่านคิดว่าเป็นความผิดพลาด กรุณาติดต่อผู้ดูแลระบบโดยตรง</p>
+    </div>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB JOURNEY &amp; CARE</p>
+  `
+  return { subject, html: wrap(subject, body) }
+}
+
+// ═════════════════════════════════════════════════════════
+// 7a-6) เจ้าของรูป — รูปถูกกู้คืนจากถังขยะ
+// ═════════════════════════════════════════════════════════
+export function imageRestoredEmail(firstName: string, patientName: string, imgTypeLabel: string) {
+  const subject = `✅ รูปถูกกู้คืนกลับระบบ: ${patientName}`
+  const body = `
+    <h2 style="margin:0 0 16px;color:${BRAND_TEAL_DARK};font-size:18px;">เรียน คุณ${firstName}</h2>
+    <p style="margin:0 0 16px;font-size:14px;color:#4b5563;line-height:1.7;">รูป <b>${imgTypeLabel} · ${patientName}</b> ที่ท่านเป็นผู้อัปโหลด ได้ถูกผู้ดูแลระบบ <b>กู้คืน</b> จากถังขยะกลับมาแสดงในระบบตามปกติแล้ว</p>
+    <p style="margin:0;font-size:13px;color:#6b7280;">TB JOURNEY &amp; CARE</p>
   `
   return { subject, html: wrap(subject, body) }
 }

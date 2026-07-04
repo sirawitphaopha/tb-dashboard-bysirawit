@@ -7,13 +7,16 @@ import { loadImageEl, AvatarLightbox } from '../shared'
 import { compressToWebp, putWithProgress, decodeImageToDataURL, isAnimatedGif, JustifiedGallery,
   fmtFileSize, mimeLabel, detectDevice, IMG_SORTS, imgInRange, imgSortCmp, patientImgInfo,
   PATIENT_IMG_TYPES, CXRCompareModal, CACHE_TTL, loadCache, saveCache, invalidateImgCaches,
-  IMG_VIEW_SIZES, ImgViewToolbar, PendingDeleteOverlay, ImageRequestDeleteModal, ImageReviewDeleteModal } from './helpers'
+  IMG_VIEW_SIZES, ImgViewToolbar, PendingDeleteOverlay, ImageRequestDeleteModal, ImageReviewDeleteModal, ImageCancelRequestModal,
+  storeImgs, getStoredImgsFor, updateStoredImg, removeStoredImg } from './helpers'
 
 function PatientImagesTab({ patient, currentUser, locked }) {
   const LSKEY = 'tb_patimg_' + patient.id;
   const _c0 = loadCache(LSKEY);
-  const [images, setImages]   = React.useState(_c0 ? _c0.data : null);
-  const [loading, setLoading] = React.useState(!_c0);
+  const _seed0 = _c0 ? _c0.data : (getStoredImgsFor(patient.id).length ? getStoredImgsFor(patient.id) : null);   // v0.7.20.1 — seed จาก shared store (โหลดในคลัง/หน้าอื่นแล้ว) กันขึ้น skeleton
+  const [images, setImages]   = React.useState(_seed0);
+  const [loading, setLoading] = React.useState(!_seed0);
+  const _seededRef = React.useRef(!!_seed0);
   const [err, setErr]         = React.useState('');
   const [uploading, setUploading] = React.useState(false);
   const [upProgress, setUpProgress] = React.useState(0);
@@ -30,6 +33,7 @@ function PatientImagesTab({ patient, currentUser, locked }) {
   const [lightbox, setLightbox] = React.useState(null);
   const [reqTarget, setReqTarget] = React.useState(null);        // v0.7.20 — รูปที่กำลัง "ขอลบ"
   const [reviewTarget, setReviewTarget] = React.useState(null);  // v0.7.20 — {im, action} แอดมินอนุมัติ/ปฏิเสธ
+  const [cancelTarget, setCancelTarget] = React.useState(null);  // v0.7.20.2 — รูปที่กำลังยืนยัน "ยกเลิกคำขอลบ"
   const [delTarget, setDelTarget] = React.useState(null);
   const [delReason, setDelReason] = React.useState('');   // เหตุผลการลบ (บังคับ — ลบยากเหมือนผู้ป่วย)
   const [delHn, setDelHn] = React.useState('');           // พิมพ์ HN ยืนยันตอนย้ายเข้าถัง
@@ -58,11 +62,12 @@ function PatientImagesTab({ patient, currentUser, locked }) {
       if (!r.ok) throw new Error(d.error || 'โหลดรูปไม่สำเร็จ');
       const withHn = (d.images || []).map(im => ({ ...im, patient_hn: patient.hn }));   // แนบ HN ผู้ป่วยไว้กับรูป (ใช้ยืนยันตอนลบ)
       saveCache(LSKEY, withHn);
+      storeImgs(withHn);
       setImages(withHn);
     } catch (e) { setErr(e.message); if (!c) setImages([]); }
     setLoading(false);
   }, [patient.id]);
-  React.useEffect(() => { load(); }, [load]);
+  React.useEffect(() => { load(false, _seededRef.current); }, [load]);   // seed แล้ว = โหลดเงียบ (ไม่ skeleton ทับของที่มี)
   // Realtime: รูปผู้ป่วยรายนี้เปลี่ยน (อัป/ลบ/แก้ — ข้ามผู้ใช้) → รีเฟรช
   React.useEffect(() => {
     if (typeof window === 'undefined' || !window._sb || !patient?.id) return;
@@ -202,18 +207,23 @@ function PatientImagesTab({ patient, currentUser, locked }) {
   };
 
   // ── ขอลบรูป (v0.7.20) — คนไม่ใช่แอดมิน · แอดมินอนุมัติ/ปฏิเสธ · ผู้ขอยกเลิก ──
-  const cancelImgRequest = async (im) => {
+  const doCancelImgRequest = async (im) => {   // ทำจริงหลังยืนยันใน popup
     setImages(arr => (arr||[]).map(x => x.id===im.id ? { ...x, delete_req_by:null, delete_req_name:null, delete_req_at:null, delete_req_reason:null } : x));
+    updateStoredImg(im.id, { delete_req_by:null, delete_req_name:null, delete_req_at:null, delete_req_reason:null });
+    if (typeof window!=='undefined' && window.__imgPendingResolve) window.__imgPendingResolve(im.id);   // หัก badge/glow ทันที
     invalidateImgCaches(); setLightbox(null);
-    try { await fetch('/api/patient/images/'+im.id+'/request-delete', { method:'DELETE' }); } catch {}
+    try { await fetch('/api/patient/images/'+im.id+'/request-delete', { method:'DELETE' }); } catch {}   // ยิงเบื้องหลัง → เมลแจ้งแอดมินว่ายกเลิก
   };
+  const cancelImgRequest = (im) => setCancelTarget(im);   // เปิด popup ยืนยันก่อน (กฎ: การกระทำสำคัญต้องเตือน)
   const onReqDone = (im, reason) => {
     setImages(arr => (arr||[]).map(x => x.id===im.id ? { ...x, delete_req_by: currentUser?.id || 'me', delete_req_name:'(คุณ)', delete_req_at:new Date().toISOString(), delete_req_reason: reason } : x));
+    updateStoredImg(im.id, { delete_req_by: currentUser?.id || 'me', delete_req_reason: reason });
     invalidateImgCaches(); setLightbox(null);
   };
   const onReviewDone = (im, action) => {
-    if (action === 'approve') setImages(arr => (arr||[]).filter(x => x.id !== im.id));
-    else setImages(arr => (arr||[]).map(x => x.id===im.id ? { ...x, delete_req_by:null, delete_req_name:null, delete_req_at:null, delete_req_reason:null } : x));
+    if (action === 'approve') { setImages(arr => (arr||[]).filter(x => x.id !== im.id)); removeStoredImg(im.id); }
+    else { setImages(arr => (arr||[]).map(x => x.id===im.id ? { ...x, delete_req_by:null, delete_req_name:null, delete_req_at:null, delete_req_reason:null } : x)); updateStoredImg(im.id, { delete_req_by:null, delete_req_name:null, delete_req_at:null, delete_req_reason:null }); }
+    if (typeof window!=='undefined' && window.__imgPendingResolve) window.__imgPendingResolve(im.id);   // หัก badge/glow ทันที
     invalidateImgCaches(); setLightbox(null);
   };
 
@@ -362,6 +372,7 @@ function PatientImagesTab({ patient, currentUser, locked }) {
       {compare && <CXRCompareModal left={compare.left} right={compare.right} onClose={()=>setCompare(null)}/>}
       {reqTarget && <ImageRequestDeleteModal image={reqTarget} lightboxOpen={!!lightbox} onClose={()=>setReqTarget(null)} onDone={(reason)=>onReqDone(reqTarget, reason)}/>}
       {reviewTarget && <ImageReviewDeleteModal image={reviewTarget.im} action={reviewTarget.action} lightboxOpen={!!lightbox} onClose={()=>setReviewTarget(null)} onDone={(action)=>onReviewDone(reviewTarget.im, action)}/>}
+      {cancelTarget && <ImageCancelRequestModal image={cancelTarget} lightboxOpen={!!lightbox} onClose={()=>setCancelTarget(null)} onDone={()=>doCancelImgRequest(cancelTarget)}/>}
       {pendingUpload && createPortal(
         <div className={lightbox?'':'tb-backdrop'} style={{position:'fixed',inset:0,...(lightbox?{background:'rgba(15,23,42,0.65)'}:{}),zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={uploading?undefined:cancelUpload}>
           <div className="modal-A" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'440px',overflow:'hidden',boxShadow:'0 25px 60px rgba(0,0,0,0.3)',maxHeight:'90vh',display:'flex',flexDirection:'column'}}>

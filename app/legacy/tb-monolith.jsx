@@ -205,6 +205,7 @@ function App() {
   const [pendingImageRequests, setPendingImageRequests] = useState([]);   // v0.7.20 — คำขอลบรูปรออนุมัติ (ทุกคนเห็น)
   const [imgWantPending, setImgWantPending] = useState(false);   // v0.7.20.1 — มาจากกระดิ่ง → เปิดตัวกรอง "ขอลบ" ในคลังภาพ
   const [cancelledDeleteCount, setCancelledDeleteCount] = useState(0);
+  const [trashCounts, setTrashCounts] = useState({ patients: 0, images: 0 });   // v0.7.20.2 — จำนวนของในถังขยะ (badge เมนู/แท็บ)
   // v0.7.17.0 — userDbNotifs ย้ายขึ้นไป declared บนสุดแล้ว (ใกล้ readAlerts useEffect)
   // คำขอแก้ไขข้อมูลที่รออนุมัติ (admin) + user ที่จะ highlight เมื่อกดจากกระดิ่ง
   const [pendingEditRequests, setPendingEditRequests] = useState([]);
@@ -256,6 +257,12 @@ function App() {
       .subscribe();
     return () => { window._sb.removeChannel(channel); };
   }, [currentUser]);
+
+  // v0.7.20.1 — ให้หน้าคลังภาพ/แท็บรูป หักตัวนับคำขอลบทันที (optimistic · badge+glow เคลียร์ไม่รอ realtime)
+  useEffect(() => {
+    window.__imgPendingResolve = (id) => setPendingImageRequests(prev => (prev||[]).filter(r => r.id !== id));
+    return () => { try { delete window.__imgPendingResolve; } catch {} };
+  }, []);
 
   // Realtime: คำขอลบรูป (ทุก approved user — badge/filter) — รูปใดตั้ง/เคลียร์ delete_req → reload
   useEffect(() => {
@@ -312,6 +319,19 @@ function App() {
       })
       .subscribe();
     return () => { window._sb.removeChannel(channel); };
+  }, [currentUser]);
+
+  // Realtime: จำนวนของในถังขยะ (ผู้ป่วย+รูป) → badge เมนู/แท็บ (v0.7.20.2 · admin)
+  useEffect(() => {
+    if (currentUser?.role !== 'admin') return;
+    const loadTC = async () => {
+      try { const r = await fetch('/api/patient/trash-counts'); if (r.ok) { const d = await r.json(); setTrashCounts({ patients: d.patients || 0, images: d.images || 0 }); } } catch {}
+    };
+    loadTC();
+    if (!window._sb) return;
+    const chP = window._sb.channel('trash-count-patients').on('postgres_changes', { event: '*', schema: 'public', table: 'tb_patients' }, loadTC).subscribe();
+    const chI = window._sb.channel('trash-count-images').on('postgres_changes', { event: '*', schema: 'public', table: 'tb_patient_images' }, loadTC).subscribe();
+    return () => { try { window._sb.removeChannel(chP); window._sb.removeChannel(chI); } catch {} };
   }, [currentUser]);
 
   // Realtime: ฟัง user ใหม่สมัคร / เปลี่ยนสถานะ (สำหรับ admin)
@@ -659,7 +679,7 @@ function App() {
     { id:'image-library', icon:'fa-images',           label:'คลังรูปภาพ', badge: pendingImageRequests.length > 0 ? pendingImageRequests.length : undefined },
     { id:'settings',      icon:'fa-gear',             label:'ตั้งค่าระบบ', divider:true },
     ...(currentUser?.role === 'admin' ? [{ id:'admin-users', icon:'fa-user-shield', label:'จัดการผู้ใช้', badge: pendingUserCount > 0 ? pendingUserCount : undefined }] : []),
-    { id:'trash', icon:'fa-trash', label:'ถังขยะ', badge: currentUser?.role==='admin' && pendingDeleteRequests.length > 0 ? pendingDeleteRequests.length : undefined, greenBadge: currentUser?.role==='admin' && pendingDeleteRequests.length === 0 && cancelledDeleteCount > 0 },
+    { id:'trash', icon:'fa-trash', label:'ถังขยะ', badge: currentUser?.role==='admin' && (trashCounts.patients + trashCounts.images) > 0 ? (trashCounts.patients + trashCounts.images) : undefined, greenBadge: currentUser?.role==='admin' && (trashCounts.patients + trashCounts.images) === 0 && cancelledDeleteCount > 0 },
     ...(currentUser?.role === 'admin' ? [{ id:'activity-log', icon:'fa-wave-square', label:'บันทึกกิจกรรม' }] : []),
     ...(currentUser?.role === 'admin' ? [{ id:'audit-log', icon:'fa-clock-rotate-left', label:'ประวัติลบถาวร' }] : []),
     { id:'changelog', icon:'fa-scroll', label:'ประวัติเวอร์ชั่น', divider:true, redDot: changelogUnseen },
@@ -961,7 +981,7 @@ function App() {
           {!dbLoading && nav==='image-library' && <ImageLibraryPage currentUser={currentUser} pendingImageRequests={pendingImageRequests} wantPending={imgWantPending} onConsumeWant={()=>setImgWantPending(false)}/>}
           {!dbLoading && nav==='settings'      && <AdminSettings settings={settings} setSettings={setSettings} setNav={setNav} currentUser={currentUser}/>}
           {!dbLoading && nav==='admin-users'   && <AdminUsersTab currentUser={currentUser} onPendingChange={setPendingUserCount} highlightUserId={highlightUserId} onClearHighlight={()=>setHighlightUserId(null)}/>}
-          {!dbLoading && nav==='trash'         && <TrashHub currentUser={currentUser} onRestore={restorePatient} onHardDelete={hardDeletePatient} pendingDeleteRequests={pendingDeleteRequests} onApproveDelete={approveDeleteRequest} onRejectDelete={rejectDeleteRequest} onAcknowledgeCancelled={async () => { await window.acknowledgeCancelledRequests(); setCancelledDeleteCount(0); }}/>}
+          {!dbLoading && nav==='trash'         && <TrashHub currentUser={currentUser} trashCounts={trashCounts} onRestore={restorePatient} onHardDelete={hardDeletePatient} pendingDeleteRequests={pendingDeleteRequests} onApproveDelete={approveDeleteRequest} onRejectDelete={rejectDeleteRequest} onAcknowledgeCancelled={async () => { await window.acknowledgeCancelledRequests(); setCancelledDeleteCount(0); }}/>}
           {!dbLoading && nav==='activity-log'  && <ActivityLogTab/>}
           {!dbLoading && nav==='audit-log'     && <AuditLogTab/>}
           {!dbLoading && nav==='changelog'     && <ChangelogPage highlightCommentTarget={highlightCommentTarget} onClearHighlight={()=>setHighlightCommentTarget(null)}/>}
@@ -1055,7 +1075,7 @@ const DEMO_USER = {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.20.1';
+const APP_VERSION = '0.7.20.2';
 const BUILD_DATE = '4 ก.ค. 2569';
 // bridge: ให้ parts/* (เช่น changelog.jsx, about.jsx) อ่านเวอร์ชันผ่าน window.* ได้ (เฟส 2 + แยกรอบ 2)
 if (typeof window !== 'undefined') { window.APP_VERSION = APP_VERSION; window.BUILD_DATE = BUILD_DATE; }

@@ -3,7 +3,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRequester } from '@/lib/patient-image-helpers'
 import { getResend, EMAIL_FROM, ADMIN_EMAILS } from '@/lib/resend'
-import { adminImageDeleteRequestEmail } from '@/lib/email-templates'
+import { adminImageDeleteRequestEmail, adminImageDeleteRequestCancelledEmail,
+  imageDeleteRequestSubmittedEmail, imageDeleteRequestCancelledByAdminEmail } from '@/lib/email-templates'
 import { professionLabel } from '@/lib/professions'
 
 const TYPE_LABEL: Record<string, string> = { cxr: 'ภาพเอกซเรย์ (CXR)', lab: 'ผลแล็บ', document: 'เอกสาร', other: 'อื่นๆ' }
@@ -40,16 +41,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }).eq('id', id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-    // เมลแจ้งแอดมิน (ล้มเหลวไม่ทำให้คำขอพัง)
+    // เมลแจ้ง (ล้มเหลวไม่ทำให้คำขอพัง) — โหลดชื่อผู้ป่วยครั้งเดียว
+    const { data: pt } = await admin.from('tb_patients').select('name, hn').eq('id', im.patient_id).maybeSingle()
+    const typeLabel = TYPE_LABEL[im.type] || im.type
     if (ADMIN_EMAILS.length > 0) {
-      const { data: pt } = await admin.from('tb_patients').select('name, hn').eq('id', im.patient_id).maybeSingle()
       const mail = adminImageDeleteRequestEmail(
-        pt?.name || im.patient_id, pt?.hn || '', TYPE_LABEL[im.type] || im.type,
+        pt?.name || im.patient_id, pt?.hn || '', typeLabel,
         reason, requesterName, requesterProfession, req.nextUrl.origin
       )
       try {
         await getResend().emails.send({ from: EMAIL_FROM, to: ADMIN_EMAILS, subject: mail.subject, html: mail.html })
       } catch (e) { console.error('image delete-request email failed:', e) }
+    }
+    // เมลยืนยันกลับหาผู้ขอเอง
+    if (user.email) {
+      const mail2 = imageDeleteRequestSubmittedEmail(me?.first_name || 'ผู้ใช้', pt?.name || im.patient_id, typeLabel, reason)
+      try {
+        await getResend().emails.send({ from: EMAIL_FROM, to: user.email, subject: mail2.subject, html: mail2.html })
+      } catch (e) { console.error('image request confirm email failed:', e) }
     }
 
     return NextResponse.json({ success: true })
@@ -65,7 +74,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     if (!isApproved) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
 
-    const { data: im } = await admin.from('tb_patient_images').select('delete_req_by, deleted_at').eq('id', id).maybeSingle()
+    const { data: im } = await admin.from('tb_patient_images').select('delete_req_by, delete_req_name, deleted_at, patient_id, type').eq('id', id).maybeSingle()
     if (!im || im.deleted_at) return NextResponse.json({ error: 'not found' }, { status: 404 })
     if (!im.delete_req_by) return NextResponse.json({ success: true })   // ไม่มีคำขอค้าง = ถือว่าสำเร็จ
     if (im.delete_req_by !== user.id && !isAdmin) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
@@ -74,6 +83,31 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       delete_req_by: null, delete_req_name: null, delete_req_at: null, delete_req_reason: null,
     }).eq('id', id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    // แจ้งเตือนการยกเลิก (ล้มเหลวไม่ทำให้การยกเลิกพัง) — แยกตามคนที่กดยกเลิก
+    const { data: pt } = await admin.from('tb_patients').select('name, hn').eq('id', im.patient_id).maybeSingle()
+    const typeLabel = TYPE_LABEL[im.type] || im.type
+    if (im.delete_req_by === user.id) {
+      // ผู้ขอยกเลิกเอง → แจ้งแอดมิน (ไม่ต้องทำอะไรต่อ)
+      if (ADMIN_EMAILS.length > 0) {
+        const mail = adminImageDeleteRequestCancelledEmail(pt?.name || im.patient_id, pt?.hn || '', typeLabel, im.delete_req_name || 'ผู้ใช้')
+        try { await getResend().emails.send({ from: EMAIL_FROM, to: ADMIN_EMAILS, subject: mail.subject, html: mail.html }) }
+        catch (e) { console.error('image cancel (notify admin) email failed:', e) }
+      }
+    } else {
+      // แอดมินยกเลิกแทนผู้ขอ → แจ้งผู้ขอ
+      try {
+        const { data: authData } = await admin.auth.admin.getUserById(im.delete_req_by)
+        const email = authData?.user?.email
+        const { data: prof } = await admin.from('profiles').select('first_name').eq('id', im.delete_req_by).maybeSingle()
+        if (email) {
+          const mail = imageDeleteRequestCancelledByAdminEmail(prof?.first_name || 'ผู้ใช้', pt?.name || im.patient_id, typeLabel)
+          try { await getResend().emails.send({ from: EMAIL_FROM, to: email, subject: mail.subject, html: mail.html }) }
+          catch (e) { console.error('image cancel (notify user) email failed:', e) }
+        }
+      } catch (e) { console.error('image cancel notify failed:', e) }
+    }
+
     return NextResponse.json({ success: true })
   } catch (e: any) {
     return NextResponse.json({ error: e.message || 'error' }, { status: 500 })

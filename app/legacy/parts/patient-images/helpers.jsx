@@ -268,6 +268,13 @@ const CACHE_TTL = 300000;       // 5 นาที
 function loadCache(key){ try { const s = localStorage.getItem(key); if (s) { const o = JSON.parse(s); if (Date.now() - o.ts < 7200000) return o; } } catch {} return null; }
 function saveCache(key, data){ try { localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() })); } catch {} }
 function invalidateImgCaches(){ try { localStorage.removeItem('tb_libimg'); for (let i = localStorage.length - 1; i >= 0; i--) { const k = localStorage.key(i); if (k && k.indexOf('tb_patimg_') === 0) localStorage.removeItem(k); } } catch {} }
+// v0.7.20.1 — shared image store (in-memory) · โหลดครั้งเดียว ใช้ร่วมทุกหน้า (library/patient-tab) · กันโหลดซ้ำ/ไม่ขึ้น skeleton
+const IMG_STORE = new Map();
+function storeImgs(arr) { (arr || []).forEach(im => { if (im && im.id) IMG_STORE.set(im.id, im); }); }
+function getStoredImgs() { return Array.from(IMG_STORE.values()); }
+function getStoredImgsFor(patientId) { return Array.from(IMG_STORE.values()).filter(im => im.patient_id === patientId); }
+function updateStoredImg(id, patch) { const e = IMG_STORE.get(id); if (e) IMG_STORE.set(id, { ...e, ...patch }); }
+function removeStoredImg(id) { IMG_STORE.delete(id); }
 // ── แท็บรูปภาพในโปรไฟล์ผู้ป่วย (CXR/Lab/Document) ───────────────────────────
 // ── ระบบมุมมองรูป (การ์ด/แถว + ขนาด เล็ก/กลาง/ใหญ่) ใช้ร่วมกันทุกคลังรูป ──────
 const IMG_VIEW_SIZES = [
@@ -294,7 +301,7 @@ function ImgViewToolbar({ mode, setMode, size, setSize }) {
 function PendingDeleteOverlay({ image, isAdmin, isRequester, onCancel, onApprove, onReject }) {
   const stop = (e, fn) => { e.stopPropagation(); e.preventDefault(); if (fn) fn(); };
   return (
-    <div onClick={e=>e.stopPropagation()} style={{position:'absolute',inset:0,background:'rgba(255,251,235,0.82)',backdropFilter:'blur(2px)',WebkitBackdropFilter:'blur(2px)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'7px',padding:'8px',boxSizing:'border-box',cursor:'default',zIndex:3,overflow:'hidden'}}>
+    <div style={{position:'absolute',inset:0,background:'rgba(255,251,235,0.82)',backdropFilter:'blur(2px)',WebkitBackdropFilter:'blur(2px)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'7px',padding:'8px',boxSizing:'border-box',pointerEvents:'none',zIndex:3,overflow:'hidden'}}>
       <span style={{display:'inline-flex',alignItems:'center',gap:'5px',fontSize:'10px',fontWeight:800,padding:'3px 9px',borderRadius:'999px',background:'#fef3c7',color:'#92400e',border:'1px solid #fcd34d',whiteSpace:'nowrap'}}>
         <i className="fa-solid fa-clock"></i>รออนุมัติลบ
       </span>
@@ -315,87 +322,120 @@ function PendingDeleteOverlay({ image, isAdmin, isRequester, onCancel, onApprove
   );
 }
 
-// popup "ขอลบรูป" (คนที่ไม่ใช่แอดมินกด) — กรอกเหตุผล + พิมพ์ HN ยืนยัน (เหมือนตอนแอดมินลบ) → POST request-delete
+// popup "ขอลบรูป" (คนที่ไม่ใช่แอดมิน) — เหตุผล+HN → ยืนยัน 2 ชั้น (เหมือนแอดมินลบ) → onDone (parent optimistic + ยิง API เบื้องหลัง · หายทันที)
 function ImageRequestDeleteModal({ image, lightboxOpen, onClose, onDone }) {
   const [reason, setReason] = React.useState('');
   const [hn, setHn]         = React.useState('');
-  const [busy, setBusy]     = React.useState(false);
-  const [err, setErr]       = React.useState('');
+  const [step, setStep]     = React.useState(1);
   const reasonOk = reason.trim().length >= 3;
   const hnOk = hn.trim() === String(image.patient_hn || '');
-  const disabled = busy || !reasonOk || !hnOk;
-  const submit = async () => {
-    if (!reasonOk) { setErr('กรุณากรอกเหตุผลการขอลบ'); return; }
-    if (!hnOk) { setErr('HN ไม่ตรง — พิมพ์ให้ตรงกับผู้ป่วย'); return; }
-    setBusy(true); setErr('');
-    try {
-      const res = await fetch('/api/patient/images/' + image.id + '/request-delete', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: reason.trim() }),
-      });
-      if (!res.ok) { const d = await res.json().catch(()=>({})); throw new Error(d.error === 'already requested' ? 'รูปนี้มีคำขอลบค้างอยู่แล้ว' : (d.error || 'ส่งคำขอไม่สำเร็จ')); }
-      onDone(reason.trim()); onClose();
-    } catch (e) { setErr(e.message || 'เกิดข้อผิดพลาด'); setBusy(false); }
+  const confirm = () => {
+    onDone(reason.trim()); onClose();   // optimistic: parent ตั้งฝ้าขาวทันที
+    fetch('/api/patient/images/' + image.id + '/request-delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: reason.trim() }) }).catch(()=>{});   // ยิงเบื้องหลัง (เมลแจ้งแอดมิน)
   };
   return createPortal(
-    <div className={lightboxOpen?'':'tb-backdrop'} style={{position:'fixed',inset:0,...(lightboxOpen?{background:'rgba(15,23,42,0.6)'}:{}),zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={busy?undefined:onClose}>
-      <div className="modal-A" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'350px',padding:'22px',textAlign:'center',boxSizing:'border-box'}}>
+    <div className={lightboxOpen?'':'tb-backdrop'} style={{position:'fixed',inset:0,...(lightboxOpen?{background:'rgba(15,23,42,0.6)'}:{}),zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}}>
+      <div className="modal-A" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'360px',padding:'22px',textAlign:'center',minHeight:'404px',display:'flex',flexDirection:'column',boxSizing:'border-box'}}>
         <div style={{width:'50px',height:'50px',borderRadius:'50%',background:'#fef3c7',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 12px'}}><i className="fa-solid fa-trash-can" style={{color:'#b45309',fontSize:'20px'}}></i></div>
+        {step === 1 ? (<>
         <p style={{fontSize:'15px',fontWeight:700,color:'#111827',margin:'0 0 5px'}}>ขอลบรูปนี้</p>
         <p style={{fontSize:'12.5px',color:'#6b7280',margin:'0 0 14px',lineHeight:1.5}}>รูปจะขึ้นสถานะ "รออนุมัติลบ" จนกว่าแอดมินจะอนุมัติ</p>
         <div style={{textAlign:'left'}}>
           <label style={{fontSize:'12px',fontWeight:700,color:'#4b5563',display:'block',marginBottom:'5px'}}>เหตุผลการขอลบ <span style={{color:'#dc2626'}}>*</span></label>
-          <textarea value={reason} onChange={e=>setReason(e.target.value)} disabled={busy} rows={2} placeholder="เช่น อัปผิดคน / รูปซ้ำ / ภาพไม่ชัด" style={{width:'100%',padding:'9px 10px',borderRadius:'8px',border:'1px solid #d1d5db',fontSize:'13px',boxSizing:'border-box',resize:'vertical',fontFamily:'inherit',marginBottom:'12px'}}/>
+          <textarea value={reason} onChange={e=>setReason(e.target.value)} rows={2} placeholder="เช่น อัปผิดคน / รูปซ้ำ / ภาพไม่ชัด" style={{width:'100%',padding:'9px 10px',borderRadius:'8px',border:'1px solid #d1d5db',fontSize:'13px',boxSizing:'border-box',resize:'vertical',fontFamily:'inherit',marginBottom:'12px'}}/>
           <label style={{fontSize:'12px',fontWeight:700,color:'#4b5563',display:'block',marginBottom:'5px'}}>พิมพ์ HN <span style={{color:'#dc2626'}}>{image.patient_hn || '-'}</span> เพื่อยืนยัน</label>
-          <input value={hn} onChange={e=>setHn(e.target.value)} disabled={busy} style={{width:'100%',padding:'9px 10px',borderRadius:'8px',border:'1px solid '+(hn && !hnOk ? '#fca5a5':'#d1d5db'),fontSize:'13px',boxSizing:'border-box'}}/>
+          <input value={hn} onChange={e=>setHn(e.target.value)} style={{width:'100%',padding:'9px 10px',borderRadius:'8px',border:'1px solid '+(hn && !hnOk ? '#fca5a5':'#d1d5db'),fontSize:'13px',boxSizing:'border-box'}}/>
         </div>
-        {err && <p style={{fontSize:'12px',color:'#dc2626',margin:'8px 0 0',textAlign:'left'}}><i className="fa-solid fa-circle-exclamation" style={{marginRight:'5px'}}></i>{err}</p>}
-        <div style={{display:'flex',gap:'10px',marginTop:'14px'}}>
-          <button onClick={onClose} disabled={busy} style={{flex:1,padding:'10px',borderRadius:'10px',background:'#f3f4f6',color:'#4b5563',fontWeight:700,fontSize:'13px',border:'none',cursor:'pointer'}}>ยกเลิก</button>
-          <button onClick={submit} disabled={disabled} style={{flex:1,padding:'10px',borderRadius:'10px',background:disabled?'#a7f3d0':'#0d9488',color:'#fff',fontWeight:700,fontSize:'13px',border:'none',cursor:disabled?'not-allowed':'pointer'}}>{busy?'กำลังส่ง...':'ส่งคำขอลบ'}</button>
+        <div style={{display:'flex',gap:'10px',marginTop:'auto'}}>
+          <button onClick={onClose} style={{flex:1,padding:'10px',borderRadius:'10px',background:'#f3f4f6',color:'#4b5563',fontWeight:700,fontSize:'13px',border:'none',cursor:'pointer'}}>ยกเลิก</button>
+          <button onClick={()=>setStep(2)} disabled={!reasonOk||!hnOk} style={{flex:1,padding:'10px',borderRadius:'10px',background:(!reasonOk||!hnOk)?'#a7f3d0':'#0d9488',color:'#fff',fontWeight:700,fontSize:'13px',border:'none',cursor:(!reasonOk||!hnOk)?'not-allowed':'pointer'}}>ถัดไป</button>
         </div>
+        </>) : (<>
+        <p style={{fontSize:'15px',fontWeight:700,color:'#111827',margin:'0 0 5px'}}>ยืนยันขอลบรูปนี้</p>
+        <p style={{fontSize:'12.5px',color:'#6b7280',margin:'0 0 12px',lineHeight:1.5}}>กดยืนยันแล้วจะส่งคำขอให้แอดมินพิจารณา · รูปจะขึ้น "รออนุมัติลบ"</p>
+        <div style={{background:'#f9fafb',border:'1px solid #e5e7eb',borderRadius:'10px',padding:'10px 12px',margin:'0 0 14px',fontSize:'12px',color:'#4b5563',textAlign:'left',lineHeight:1.55,wordBreak:'break-word'}}><b style={{color:'#374151'}}>เหตุผล:</b> {reason}</div>
+        <div style={{display:'flex',gap:'10px',marginTop:'auto'}}>
+          <button onClick={confirm} style={{flex:1,padding:'10px',borderRadius:'10px',background:'#0d9488',color:'#fff',fontWeight:700,fontSize:'13px',border:'none',cursor:'pointer'}}>ยืนยันขอลบ</button>
+          <button onClick={()=>setStep(1)} style={{flex:1,padding:'10px',borderRadius:'10px',background:'#f3f4f6',color:'#4b5563',fontWeight:700,fontSize:'13px',border:'none',cursor:'pointer'}}>ย้อนกลับ</button>
+        </div>
+        </>)}
       </div>
     </div>, document.body
   );
 }
 
-// popup แอดมิน "อนุมัติ/ปฏิเสธ" คำขอลบรูป → POST review-delete
+// popup แอดมิน อนุมัติ/ปฏิเสธ คำขอลบรูป — อนุมัติ (ลบจริง→ถังขยะ) = 2 ขั้นเท่ากัน · ปฏิเสธ (รูปกลับคืน = ย้อนคืน) = 1 ขั้น → onDone (parent optimistic + ยิง API เบื้องหลัง)
 function ImageReviewDeleteModal({ image, action, lightboxOpen, onClose, onDone }) {
   const [note, setNote] = React.useState('');
-  const [busy, setBusy] = React.useState(false);
-  const [err, setErr]   = React.useState('');
+  const [step, setStep] = React.useState(1);
   const approve = action === 'approve';
-  const submit = async () => {
-    setBusy(true); setErr('');
-    try {
-      const res = await fetch('/api/patient/images/' + image.id + '/review-delete', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, note: note.trim() || null }),
-      });
-      if (!res.ok) { const d = await res.json().catch(()=>({})); throw new Error(d.error || 'ดำเนินการไม่สำเร็จ'); }
-      onDone(action); onClose();
-    } catch (e) { setErr(e.message || 'เกิดข้อผิดพลาด'); setBusy(false); }
+  const confirm = () => {
+    onDone(action); onClose();   // optimistic — parent อัปเดต UI + หัก badge ทันที
+    fetch('/api/patient/images/' + image.id + '/review-delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, note: note.trim() || null }) }).catch(()=>{});   // ยิงเบื้องหลัง (soft-delete+เมล+กระดิ่ง)
   };
+  const reqBox = (image.delete_req_name || image.delete_req_reason) ? (
+    <div style={{background:'#f9fafb',border:'1px solid #e5e7eb',borderRadius:'10px',padding:'9px 11px',margin:'0 0 12px',fontSize:'12px',color:'#4b5563',textAlign:'left',lineHeight:1.55}}>
+      {image.delete_req_name && <div><b style={{color:'#374151'}}>ผู้ขอ:</b> {image.delete_req_name}</div>}
+      {image.delete_req_reason && <div><b style={{color:'#374151'}}>เหตุผล:</b> {image.delete_req_reason}</div>}
+    </div>
+  ) : null;
   return createPortal(
-    <div className={lightboxOpen?'':'tb-backdrop'} style={{position:'fixed',inset:0,...(lightboxOpen?{background:'rgba(15,23,42,0.6)'}:{}),zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={busy?undefined:onClose}>
-      <div className="modal-A" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'350px',padding:'22px',textAlign:'center'}}>
-        <div style={{width:'50px',height:'50px',borderRadius:'50%',background:approve?'#ccfbf1':'#fee2e2',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 12px'}}><i className={approve?'fa-solid fa-check':'fa-solid fa-xmark'} style={{color:approve?'#0d9488':'#dc2626',fontSize:'20px'}}></i></div>
-        <p style={{fontSize:'15px',fontWeight:700,color:'#111827',margin:'0 0 5px'}}>{approve?'อนุมัติลบรูปนี้':'ปฏิเสธคำขอลบ'}</p>
-        <p style={{fontSize:'12.5px',color:'#6b7280',margin:'0 0 12px',lineHeight:1.5}}>{approve?'รูปจะถูกย้ายไปถังขยะ (กู้คืนได้ 60 วัน)':'รูปจะกลับมาแสดงตามปกติ'}</p>
-        {(image.delete_req_name || image.delete_req_reason) && (
-          <div style={{background:'#f9fafb',border:'1px solid #e5e7eb',borderRadius:'10px',padding:'9px 11px',margin:'0 0 12px',fontSize:'12px',color:'#4b5563',textAlign:'left',lineHeight:1.55}}>
-            {image.delete_req_name && <div><b style={{color:'#374151'}}>ผู้ขอ:</b> {image.delete_req_name}</div>}
-            {image.delete_req_reason && <div><b style={{color:'#374151'}}>เหตุผล:</b> {image.delete_req_reason}</div>}
-          </div>
-        )}
-        {!approve && (
-          <div style={{textAlign:'left'}}>
-            <label style={{fontSize:'12px',fontWeight:700,color:'#4b5563',display:'block',marginBottom:'5px'}}>หมายเหตุถึงผู้ขอ (ไม่บังคับ)</label>
-            <textarea value={note} onChange={e=>setNote(e.target.value)} disabled={busy} rows={2} placeholder="เช่น รูปยังจำเป็นต้องเก็บ" style={{width:'100%',padding:'9px 10px',borderRadius:'8px',border:'1px solid #d1d5db',fontSize:'13px',boxSizing:'border-box',resize:'vertical',fontFamily:'inherit'}}/>
-          </div>
-        )}
-        {err && <p style={{fontSize:'12px',color:'#dc2626',margin:'8px 0 0',textAlign:'left'}}><i className="fa-solid fa-circle-exclamation" style={{marginRight:'5px'}}></i>{err}</p>}
+    <div className={lightboxOpen?'':'tb-backdrop'} style={{position:'fixed',inset:0,...(lightboxOpen?{background:'rgba(15,23,42,0.6)'}:{}),zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}}>
+      {approve ? (
+      <div className="modal-A" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'360px',padding:'22px',textAlign:'center',minHeight:'404px',display:'flex',flexDirection:'column',boxSizing:'border-box'}}>
+        <div style={{width:'50px',height:'50px',borderRadius:'50%',background:'#ccfbf1',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 12px'}}><i className="fa-solid fa-check" style={{color:'#0d9488',fontSize:'20px'}}></i></div>
+        {step === 1 ? (<>
+        <p style={{fontSize:'15px',fontWeight:700,color:'#111827',margin:'0 0 5px'}}>อนุมัติลบรูปนี้</p>
+        <p style={{fontSize:'12.5px',color:'#6b7280',margin:'0 0 12px',lineHeight:1.5}}>รูปจะถูกย้ายไปถังขยะ (กู้คืนได้ 60 วัน)</p>
+        {reqBox}
+        <div style={{display:'flex',gap:'10px',marginTop:'auto'}}>
+          <button onClick={onClose} style={{flex:1,padding:'10px',borderRadius:'10px',background:'#f3f4f6',color:'#4b5563',fontWeight:700,fontSize:'13px',border:'none',cursor:'pointer'}}>ยกเลิก</button>
+          <button onClick={()=>setStep(2)} style={{flex:1,padding:'10px',borderRadius:'10px',background:'#0d9488',color:'#fff',fontWeight:700,fontSize:'13px',border:'none',cursor:'pointer'}}>ถัดไป</button>
+        </div>
+        </>) : (<>
+        <p style={{fontSize:'15px',fontWeight:700,color:'#111827',margin:'0 0 5px'}}>ยืนยันอนุมัติลบ</p>
+        <p style={{fontSize:'12.5px',color:'#6b7280',margin:'0 0 12px',lineHeight:1.5}}>กดยืนยันแล้วรูปจะย้ายไปถังขยะทันที</p>
+        <div style={{background:'#f0fdfa',border:'1px solid #99f6e4',borderRadius:'10px',padding:'10px 12px',margin:'0 0 14px',fontSize:'12px',color:'#134e4a',textAlign:'left',lineHeight:1.6,wordBreak:'break-word'}}>
+          {image.delete_req_name && <div><b>ผู้ขอ:</b> {image.delete_req_name}</div>}
+          {image.delete_req_reason ? <div><b>เหตุผล:</b> {image.delete_req_reason}</div> : null}
+        </div>
+        <div style={{display:'flex',gap:'10px',marginTop:'auto'}}>
+          <button onClick={confirm} style={{flex:1,padding:'10px',borderRadius:'10px',background:'#0d9488',color:'#fff',fontWeight:700,fontSize:'13px',border:'none',cursor:'pointer'}}>ยืนยันอนุมัติ</button>
+          <button onClick={()=>setStep(1)} style={{flex:1,padding:'10px',borderRadius:'10px',background:'#f3f4f6',color:'#4b5563',fontWeight:700,fontSize:'13px',border:'none',cursor:'pointer'}}>ย้อนกลับ</button>
+        </div>
+        </>)}
+      </div>
+      ) : (
+      <div className="modal-A" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'360px',padding:'22px',textAlign:'center',boxSizing:'border-box'}}>
+        <div style={{width:'50px',height:'50px',borderRadius:'50%',background:'#fee2e2',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 12px'}}><i className="fa-solid fa-xmark" style={{color:'#dc2626',fontSize:'20px'}}></i></div>
+        <p style={{fontSize:'15px',fontWeight:700,color:'#111827',margin:'0 0 5px'}}>ปฏิเสธคำขอลบ</p>
+        <p style={{fontSize:'12.5px',color:'#6b7280',margin:'0 0 12px',lineHeight:1.5}}>รูปจะกลับมาแสดงตามปกติ · ผู้ขอจะได้รับอีเมลแจ้งผล</p>
+        {reqBox}
+        <div style={{textAlign:'left'}}>
+          <label style={{fontSize:'12px',fontWeight:700,color:'#4b5563',display:'block',marginBottom:'5px'}}>หมายเหตุถึงผู้ขอ (ไม่บังคับ)</label>
+          <textarea value={note} onChange={e=>setNote(e.target.value)} rows={2} placeholder="เช่น รูปยังจำเป็นต้องเก็บ" style={{width:'100%',padding:'9px 10px',borderRadius:'8px',border:'1px solid #d1d5db',fontSize:'13px',boxSizing:'border-box',resize:'vertical',fontFamily:'inherit'}}/>
+        </div>
         <div style={{display:'flex',gap:'10px',marginTop:'14px'}}>
-          <button onClick={onClose} disabled={busy} style={{flex:1,padding:'10px',borderRadius:'10px',background:'#f3f4f6',color:'#4b5563',fontWeight:700,fontSize:'13px',border:'none',cursor:'pointer'}}>ยกเลิก</button>
-          <button onClick={submit} disabled={busy} style={{flex:1,padding:'10px',borderRadius:'10px',background:busy?(approve?'#5eead4':'#fca5a5'):(approve?'#0d9488':'#dc2626'),color:'#fff',fontWeight:700,fontSize:'13px',border:'none',cursor:busy?'wait':'pointer'}}>{busy?'กำลังทำ...':(approve?'ยืนยันอนุมัติ':'ยืนยันปฏิเสธ')}</button>
+          <button onClick={onClose} style={{flex:1,padding:'10px',borderRadius:'10px',background:'#f3f4f6',color:'#4b5563',fontWeight:700,fontSize:'13px',border:'none',cursor:'pointer'}}>ยกเลิก</button>
+          <button onClick={confirm} style={{flex:1,padding:'10px',borderRadius:'10px',background:'#dc2626',color:'#fff',fontWeight:700,fontSize:'13px',border:'none',cursor:'pointer'}}>ยืนยันปฏิเสธ</button>
+        </div>
+      </div>
+      )}
+    </div>, document.body
+  );
+}
+
+// popup ยืนยัน "ยกเลิกคำขอลบ" (ผู้ขอกด) — กฎ: การกระทำสำคัญต้องเตือนก่อน → onDone (parent optimistic + ยิง API เบื้องหลัง = เมลแจ้งแอดมิน)
+function ImageCancelRequestModal({ image, lightboxOpen, onClose, onDone }) {
+  return createPortal(
+    <div className={lightboxOpen?'':'tb-backdrop'} style={{position:'fixed',inset:0,...(lightboxOpen?{background:'rgba(15,23,42,0.6)'}:{}),zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}}>
+      <div className="modal-A" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'340px',padding:'22px',textAlign:'center',boxSizing:'border-box'}}>
+        <div style={{width:'50px',height:'50px',borderRadius:'50%',background:'#f1f5f9',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 12px'}}><i className="fa-solid fa-rotate-left" style={{color:'#475569',fontSize:'20px'}}></i></div>
+        <p style={{fontSize:'15px',fontWeight:700,color:'#111827',margin:'0 0 5px'}}>ยกเลิกคำขอลบรูปนี้</p>
+        <p style={{fontSize:'12.5px',color:'#6b7280',margin:'0 0 16px',lineHeight:1.5}}>รูปจะกลับมาแสดงตามปกติ · ระบบจะแจ้งแอดมินว่าคำขอถูกยกเลิก</p>
+        <div style={{display:'flex',gap:'10px'}}>
+          <button onClick={onClose} style={{flex:1,padding:'10px',borderRadius:'10px',background:'#f3f4f6',color:'#4b5563',fontWeight:700,fontSize:'13px',border:'none',cursor:'pointer'}}>ปิด</button>
+          <button onClick={()=>{ onDone(); onClose(); }} style={{flex:1,padding:'10px',borderRadius:'10px',background:'#0d9488',color:'#fff',fontWeight:700,fontSize:'13px',border:'none',cursor:'pointer'}}>ยืนยันยกเลิกคำขอ</button>
         </div>
       </div>
     </div>, document.body
@@ -408,4 +448,5 @@ export { compressToWebp, putWithProgress, blobToDataURL, decodeImageToDataURL, i
   JustifiedGallery, fmtFileSize, mimeLabel, detectDevice, IMG_SORTS, imgInRange, imgSortCmp,
   patientImgInfo, PATIENT_IMG_TYPES, CXRComparePanel, CXRCompareModal, CACHE_TTL, loadCache,
   saveCache, invalidateImgCaches, IMG_VIEW_SIZES, ImgViewToolbar,
-  PendingDeleteOverlay, ImageRequestDeleteModal, ImageReviewDeleteModal }
+  PendingDeleteOverlay, ImageRequestDeleteModal, ImageReviewDeleteModal, ImageCancelRequestModal,
+  storeImgs, getStoredImgs, getStoredImgsFor, updateStoredImg, removeStoredImg }

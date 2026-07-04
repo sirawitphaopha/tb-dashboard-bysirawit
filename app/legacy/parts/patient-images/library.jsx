@@ -6,12 +6,15 @@ const { useState, useEffect, useCallback } = React
 import { AvatarLightbox } from '../shared'
 import { compressToWebp, putWithProgress, JustifiedGallery, IMG_SORTS, imgInRange, imgSortCmp,
   patientImgInfo, PATIENT_IMG_TYPES, CACHE_TTL, loadCache, saveCache, invalidateImgCaches,
-  IMG_VIEW_SIZES, ImgViewToolbar, PendingDeleteOverlay, ImageRequestDeleteModal, ImageReviewDeleteModal } from './helpers'
+  IMG_VIEW_SIZES, ImgViewToolbar, PendingDeleteOverlay, ImageRequestDeleteModal, ImageReviewDeleteModal, ImageCancelRequestModal,
+  storeImgs, getStoredImgs, updateStoredImg, removeStoredImg } from './helpers'
 
 function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onConsumeWant }) {
   const _lc0 = loadCache('tb_libimg');
-  const [images, setImages] = React.useState(_lc0 ? _lc0.data : null);
-  const [loading, setLoading] = React.useState(!_lc0);
+  const _seed0 = _lc0 ? _lc0.data : (getStoredImgs().length ? getStoredImgs() : null);   // v0.7.20.1 — seed จาก shared store (โหลดในหน้าอื่นแล้ว) กันขึ้น skeleton
+  const [images, setImages] = React.useState(_seed0);
+  const [loading, setLoading] = React.useState(!_seed0);
+  const _seededRef = React.useRef(!!_seed0);
   const [err, setErr]       = React.useState('');
   const [filter, setFilter] = React.useState('all');
   const [sortBy, setSortBy] = React.useState('new');
@@ -22,6 +25,7 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
   const [lightbox, setLightbox] = React.useState(null);
   const [reqTarget, setReqTarget] = React.useState(null);        // v0.7.20 — รูปที่กำลัง "ขอลบ"
   const [reviewTarget, setReviewTarget] = React.useState(null);  // v0.7.20 — {im, action} แอดมินอนุมัติ/ปฏิเสธ
+  const [cancelTarget, setCancelTarget] = React.useState(null);  // v0.7.20.2 — รูปที่กำลังยืนยัน "ยกเลิกคำขอลบ"
   const [editTarget, setEditTarget] = React.useState(null);
   const [editType, setEditType]   = React.useState('cxr');
   const [editNote, setEditNote]   = React.useState('');
@@ -33,9 +37,7 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
   const [deleting, setDeleting] = React.useState(false);
   const isAdmin = currentUser?.role === 'admin';
   const pendingCount = pendingImageRequests?.length || 0;
-  const [pendingMode, setPendingMode] = React.useState(false);   // v0.7.20.1 — โหมดกรองเฉพาะรูปที่ขอลบ
-  const [pendingImgs, setPendingImgs] = React.useState(null);
-  const [pendingLoading, setPendingLoading] = React.useState(false);
+  const [pendingMode, setPendingMode] = React.useState(false);   // v0.7.20.1 — โหมดกรองเฉพาะรูปที่ขอลบ (client-side · ไม่โหลดใหม่)
 
   // โหลดทุกรูปครั้งเดียว → กรอง/ค้นหาในเครื่อง + cache (เปิดซ้ำ/รีเฟรชไม่โหลดใหม่)
   const load = React.useCallback(async (force, silent) => {
@@ -48,11 +50,12 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'โหลดไม่สำเร็จ');
       saveCache('tb_libimg', d.images || []);
+      storeImgs(d.images || []);
       setImages(d.images || []);
     } catch (e) { setErr(e.message); if (!c) setImages([]); }
     setLoading(false);
   }, []);
-  React.useEffect(() => { load(); }, [load]);
+  React.useEffect(() => { load(false, _seededRef.current); }, [load]);   // seed แล้ว = โหลดเงียบ (ไม่ skeleton ทับของที่มี)
   // Realtime: รูปผู้ป่วยคนใดเปลี่ยน (อัป/ลบ/แก้ — ข้ามผู้ใช้) → รีเฟรชคลังรูป
   React.useEffect(() => {
     if (typeof window === 'undefined' || !window._sb) return;
@@ -71,14 +74,27 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
     return () => { try { window._sb.removeChannel(ch); } catch {} };
   }, [load]);
 
-  // v0.7.20.1 — โหมด "เฉพาะรูปที่ขอลบ": server ส่งเฉพาะรูป pending (โหลดเบา ไม่ต้องดึงทั้งพัน)
-  const loadPending = React.useCallback(async () => {
-    setPendingLoading(true);
-    try { const r = await fetch('/api/patient/images/all?pending=1'); const d = await r.json(); if (r.ok) setPendingImgs(d.images || []); } catch {}
-    setPendingLoading(false);
-  }, []);
-  React.useEffect(() => { if (wantPending) { setPendingMode(true); if (onConsumeWant) onConsumeWant(); } }, [wantPending]);   // มาจากกระดิ่ง → เปิดตัวกรองอัตโนมัติ
-  React.useEffect(() => { if (pendingMode) loadPending(); }, [pendingMode, pendingCount, loadPending]);   // เปิดโหมด/จำนวนคำขอเปลี่ยน → โหลดใหม่
+  // v0.7.20.2 — sync ฝ้าขาว "รออนุมัติลบ" จากรายการกลาง pendingImageRequests (โหลดผ่าน API เชื่อถือได้ · แก้บั๊ก admin ไม่เห็นฝ้าเพราะ realtime payload ข้ามเครื่องไม่ถึง)
+  React.useEffect(() => {
+    const pendMap = new Map((pendingImageRequests || []).map(r => [r.id, r]));
+    setImages(arr => {
+      if (!Array.isArray(arr)) return arr;
+      let changed = false;
+      const next = arr.map(x => {
+        const p = pendMap.get(x.id);
+        if (p) {   // มีคำขอลบ → ต้องมีฝ้าขาว
+          if (x.delete_req_by !== p.delete_req_by || x.delete_req_reason !== p.delete_req_reason) { changed = true; return { ...x, delete_req_by: p.delete_req_by, delete_req_name: p.delete_req_name, delete_req_at: p.delete_req_at, delete_req_reason: p.delete_req_reason }; }
+        } else if (x.delete_req_by) {   // ไม่อยู่ในคำขอแล้ว (ยกเลิก/ปฏิเสธ/อนุมัติ) → เคลียร์ฝ้า
+          changed = true; return { ...x, delete_req_by:null, delete_req_name:null, delete_req_at:null, delete_req_reason:null };
+        }
+        return x;
+      });
+      return changed ? next : arr;
+    });
+  }, [pendingImageRequests]);
+
+  // v0.7.20.1 — มาจากกระดิ่ง → เปิดตัวกรอง "เฉพาะรูปที่ขอลบ" อัตโนมัติ (กรอง client-side จากรูปที่โหลดแล้ว · ไม่ยิง server)
+  React.useEffect(() => { if (wantPending) { setPendingMode(true); if (onConsumeWant) onConsumeWant(); } }, [wantPending]);
 
   const qq = q.trim().toLowerCase();
   const uploaders = [...new Set((images || []).map(im => im.uploader_name).filter(Boolean))];
@@ -88,14 +104,8 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
     imgInRange(im, dateFrom, dateTo) &&
     (!qq || (im.patient_name || '').toLowerCase().includes(qq) || (im.patient_hn || '').toLowerCase().includes(qq))
   ).sort(imgSortCmp(sortBy));
-  const pendingDisplay = (pendingImgs || []).filter(im =>
-    (filter === 'all' || im.type === filter) &&
-    (uploaderFilter === 'all' || im.uploader_name === uploaderFilter) &&
-    imgInRange(im, dateFrom, dateTo) &&
-    (!qq || (im.patient_name || '').toLowerCase().includes(qq) || (im.patient_hn || '').toLowerCase().includes(qq))
-  ).sort(imgSortCmp(sortBy));
-  const displayList = pendingMode ? pendingDisplay : flat;
-  const showLoading = pendingMode ? (pendingImgs === null || pendingLoading) : loading;
+  const displayList = pendingMode ? flat.filter(im => im.delete_req_by) : flat;   // กรอง "ขอลบ" client-side จากรูปที่โหลดแล้ว (ทันที · ไม่ skeleton/ไม่ยิง server)
+  const showLoading = loading;
   const openImage = (im, rect) => {   // เปิดด้วย index → ลูกศรเลื่อนข้ามทุกผู้ป่วยได้
     const idx = displayList.findIndex(x => x.id === im.id);
     if (idx >= 0) setLightbox({ idx, rect });
@@ -146,20 +156,23 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
   };
 
   // ── ขอลบรูป (v0.7.20) — คนไม่ใช่แอดมิน · แอดมินอนุมัติ/ปฏิเสธ · ผู้ขอยกเลิก ──
-  const cancelImgRequest = async (im) => {
+  const doCancelImgRequest = async (im) => {   // ทำจริงหลังยืนยันใน popup
     setImages(arr => (arr||[]).map(x => x.id===im.id ? { ...x, delete_req_by:null, delete_req_name:null, delete_req_at:null, delete_req_reason:null } : x));
-    setPendingImgs(arr => arr ? arr.filter(x=>x.id!==im.id) : arr);   // ออกจากมุมมอง pending ทันที
+    updateStoredImg(im.id, { delete_req_by:null, delete_req_name:null, delete_req_at:null, delete_req_reason:null });
+    if (typeof window!=='undefined' && window.__imgPendingResolve) window.__imgPendingResolve(im.id);   // หัก badge/glow ทันที ไม่รอ realtime
     invalidateImgCaches(); setLightbox(null);
-    try { await fetch('/api/patient/images/'+im.id+'/request-delete', { method:'DELETE' }); } catch {}
+    try { await fetch('/api/patient/images/'+im.id+'/request-delete', { method:'DELETE' }); } catch {}   // ยิงเบื้องหลัง → เมลแจ้งแอดมินว่ายกเลิก
   };
+  const cancelImgRequest = (im) => setCancelTarget(im);   // เปิด popup ยืนยันก่อน (กฎ: การกระทำสำคัญต้องเตือน)
   const onReqDone = (im, reason) => {   // ส่งคำขอสำเร็จ → ฝ้าขาวทันที
     setImages(arr => (arr||[]).map(x => x.id===im.id ? { ...x, delete_req_by: currentUser?.id || 'me', delete_req_name:'(คุณ)', delete_req_at:new Date().toISOString(), delete_req_reason: reason } : x));
+    updateStoredImg(im.id, { delete_req_by: currentUser?.id || 'me', delete_req_reason: reason });
     invalidateImgCaches(); setLightbox(null);
   };
   const onReviewDone = (im, action) => {   // แอดมิน approve = ไปถังขยะ · reject = กลับปกติ
-    if (action === 'approve') setImages(arr => (arr||[]).filter(x => x.id !== im.id));
-    else setImages(arr => (arr||[]).map(x => x.id===im.id ? { ...x, delete_req_by:null, delete_req_name:null, delete_req_at:null, delete_req_reason:null } : x));
-    setPendingImgs(arr => arr ? arr.filter(x=>x.id!==im.id) : arr);   // ออกจากมุมมอง pending ทันที
+    if (action === 'approve') { setImages(arr => (arr||[]).filter(x => x.id !== im.id)); removeStoredImg(im.id); }
+    else { setImages(arr => (arr||[]).map(x => x.id===im.id ? { ...x, delete_req_by:null, delete_req_name:null, delete_req_at:null, delete_req_reason:null } : x)); updateStoredImg(im.id, { delete_req_by:null, delete_req_name:null, delete_req_at:null, delete_req_reason:null }); }
+    if (typeof window!=='undefined' && window.__imgPendingResolve) window.__imgPendingResolve(im.id);   // หัก badge/glow ทันที ไม่รอ realtime
     invalidateImgCaches(); setLightbox(null);
   };
 
@@ -248,6 +261,7 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
           {(dateFrom||dateTo) && <button onClick={()=>{setDateFrom('');setDateTo('');}} title="ล้างวันที่" style={{fontSize:'13px',color:'#0d9488',background:'none',border:'none',cursor:'pointer'}}><i className="fa-solid fa-xmark"></i></button>}
           {uploaders.length>1 && <select value={uploaderFilter} onChange={e=>setUploaderFilter(e.target.value)} title="กรองตามคนอัปโหลด" style={{padding:'7px 10px',borderRadius:'10px',border:'1px solid #d1d5db',fontSize:'13px',color:'#6b7280',cursor:'pointer',maxWidth:'160px'}}><option value="all">คนอัปโหลด: ทุกคน</option>{uploaders.map(u=><option key={u} value={u}>{u}</option>)}</select>}
           <input value={q} onChange={e=>setQ(e.target.value)} placeholder="ค้นหาชื่อ / HN ผู้ป่วย" style={{padding:'8px 12px',borderRadius:'10px',border:'1px solid #d1d5db',fontSize:'13px',minWidth:'160px'}}/>
+          {(filter!=='all'||sortBy!=='new'||dateFrom||dateTo||uploaderFilter!=='all'||q||pendingMode) && <button onClick={()=>{setFilter('all');setSortBy('new');setDateFrom('');setDateTo('');setUploaderFilter('all');setQ('');setPendingMode(false);}} title="ล้างตัวกรองทั้งหมด" style={{display:'inline-flex',alignItems:'center',gap:'5px',padding:'7px 12px',borderRadius:'10px',border:'1px solid #fca5a5',background:'#fff',color:'#dc2626',fontSize:'12px',fontWeight:700,cursor:'pointer'}}><i className="fa-solid fa-filter-circle-xmark"></i>ล้างค่า</button>}
           <ImgViewToolbar mode={vMode} setMode={setVMode} size={vSize} setSize={setVSize}/>
         </div>
       </div>
@@ -306,7 +320,7 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
         </div>, document.body
       )}
       {delTarget && createPortal(
-        <div className={lightbox?'':'tb-backdrop'} style={{position:'fixed',inset:0,...(lightbox?{background:'rgba(15,23,42,0.6)'}:{}),zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={deleting?undefined:()=>{setDelTarget(null);setDelStep2(false);}}>
+        <div className={lightbox?'':'tb-backdrop'} style={{position:'fixed',inset:0,...(lightbox?{background:'rgba(15,23,42,0.6)'}:{}),zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}}>
           <div className="modal-A" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'360px',padding:'22px',minHeight:'404px',display:'flex',flexDirection:'column',boxSizing:'border-box'}}>
             <div style={{width:'50px',height:'50px',borderRadius:'50%',background:'#fee2e2',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 12px'}}><i className="fa-solid fa-trash-can" style={{color:'#dc2626',fontSize:'19px'}}></i></div>
             {!delStep2 ? (<>
@@ -334,6 +348,7 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
       )}
       {reqTarget && <ImageRequestDeleteModal image={reqTarget} lightboxOpen={!!lightbox} onClose={()=>setReqTarget(null)} onDone={(reason)=>onReqDone(reqTarget, reason)}/>}
       {reviewTarget && <ImageReviewDeleteModal image={reviewTarget.im} action={reviewTarget.action} lightboxOpen={!!lightbox} onClose={()=>setReviewTarget(null)} onDone={(action)=>onReviewDone(reviewTarget.im, action)}/>}
+      {cancelTarget && <ImageCancelRequestModal image={cancelTarget} lightboxOpen={!!lightbox} onClose={()=>setCancelTarget(null)} onDone={()=>doCancelImgRequest(cancelTarget)}/>}
       {lightbox && (()=>{
         const cur = displayList[lightbox.idx]; if (!cur) return null;
         const meta = PATIENT_IMG_TYPES[cur.type] || PATIENT_IMG_TYPES.other;

@@ -185,7 +185,7 @@ function ImageTrashPage({ currentUser, isAdmin }) {
       })()}
 
       {restoreT && createPortal(
-        <div className={lightbox?'':'tb-backdrop'} style={{position:'fixed',inset:0,...(lightbox?{background:'rgba(15,23,42,0.6)'}:{}),zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={busy?undefined:()=>setRestoreT(null)}>
+        <div className={lightbox?'':'tb-backdrop'} style={{position:'fixed',inset:0,...(lightbox?{background:'rgba(15,23,42,0.6)'}:{}),zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}}>
           <div className="modal-A" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'340px',padding:'22px',textAlign:'center'}}>
             <div style={{width:'50px',height:'50px',borderRadius:'50%',background:'#ccfbf1',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 12px'}}><i className="fa-solid fa-rotate-left" style={{color:'#0d9488',fontSize:'19px'}}></i></div>
             <p style={{fontSize:'15px',fontWeight:700,color:'#111827',margin:'0 0 6px'}}>กู้คืนรูปนี้</p>
@@ -199,7 +199,7 @@ function ImageTrashPage({ currentUser, isAdmin }) {
         </div>, document.body
       )}
       {hardT && createPortal(
-        <div className={lightbox?'':'tb-backdrop'} style={{position:'fixed',inset:0,...(lightbox?{background:'rgba(15,23,42,0.6)'}:{}),zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={busy?undefined:()=>{setHardT(null);setHardStep2(false);}}>
+        <div className={lightbox?'':'tb-backdrop'} style={{position:'fixed',inset:0,...(lightbox?{background:'rgba(15,23,42,0.6)'}:{}),zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}}>
           <div className="modal-A" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'360px',padding:'22px',minHeight:'366px',display:'flex',flexDirection:'column',boxSizing:'border-box'}}>
             <div style={{width:'50px',height:'50px',borderRadius:'50%',background:'#fee2e2',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 12px'}}><i className="fa-solid fa-fire" style={{color:'#dc2626',fontSize:'19px'}}></i></div>
             <p style={{fontSize:'15px',fontWeight:700,color:'#111827',margin:'0 0 6px',textAlign:'center'}}>ลบรูปนี้ถาวร</p>
@@ -234,13 +234,14 @@ function ImageTrashPage({ currentUser, isAdmin }) {
 function TrashHub(props) {
   const [sub, setSub] = React.useState('patients');
   const isAdmin = props.currentUser?.role === 'admin';
-  const pCount = (props.pendingDeleteRequests || []).length;
-  const seg = (on) => ({padding:'7px 16px',fontSize:'13px',fontWeight:700,border:'none',borderRadius:'8px',background:on?'#0f766e':'transparent',color:on?'#fff':'#6b7280',cursor:'pointer'});
+  const tc = props.trashCounts || { patients: 0, images: 0 };   // v0.7.20.2 — จำนวนของในถัง (deleted)
+  const seg = (on) => ({display:'inline-flex',alignItems:'center',padding:'7px 14px',fontSize:'13px',fontWeight:700,border:'none',borderRadius:'8px',background:on?'#0f766e':'transparent',color:on?'#fff':'#6b7280',cursor:'pointer'});
+  const badge = (n, on) => n > 0 ? <span style={{marginLeft:'7px',background:on?'#fff':'#ef4444',color:on?'#dc2626':'#fff',fontSize:'11px',fontWeight:800,minWidth:'18px',height:'18px',borderRadius:'999px',display:'inline-flex',alignItems:'center',justifyContent:'center',padding:'0 4px',lineHeight:1}}>{n}</span> : null;
   return (
     <div>
       <div style={{display:'inline-flex',background:'#f1f5f9',borderRadius:'10px',padding:'3px',marginBottom:'16px'}}>
-        <button onClick={()=>setSub('patients')} style={seg(sub==='patients')}><i className="fa-solid fa-users" style={{marginRight:'6px'}}></i>ผู้ป่วย{pCount>0?' '+pCount:''}</button>
-        <button onClick={()=>setSub('images')} style={seg(sub==='images')}><i className="fa-solid fa-images" style={{marginRight:'6px'}}></i>รูปภาพ</button>
+        <button onClick={()=>setSub('patients')} style={seg(sub==='patients')}><i className="fa-solid fa-users" style={{marginRight:'6px'}}></i>ผู้ป่วย{badge(tc.patients, sub==='patients')}</button>
+        <button onClick={()=>setSub('images')} style={seg(sub==='images')}><i className="fa-solid fa-images" style={{marginRight:'6px'}}></i>รูปภาพ{badge(tc.images, sub==='images')}</button>
       </div>
       {sub==='patients' && <TrashList {...props}/>}
       {sub==='images' && <ImageTrashPage currentUser={props.currentUser} isAdmin={isAdmin}/>}
