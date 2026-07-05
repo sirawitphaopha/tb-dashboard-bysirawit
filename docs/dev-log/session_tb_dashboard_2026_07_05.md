@@ -10,6 +10,13 @@ metadata:
 
 **Repo:** `D:\tb-dashboard-bysirawit` · main · push ตรง (Cloudflare Pages) · Live tbjourney.care
 
+## ✅ push v0.7.21.3 (feature eaa2910 + chore 51ed870) — พี่กันเทสแล้ว · ⚠️ ตอน push tool ขึ้น "Server error" (เน็ตหลุด) แต่ **push ลง GitHub สำเร็จแล้ว** (verify: origin/main มี eaa2910+51ed870 · local=origin)
+- **🥚 Easter egg "เฉพาะเลขวิเศษ"** — ตรวจเลขส่วนตัวสั้นๆ (ตัดเลขเต็มออก · พี่กันOKให้ขึ้น git) ที่บังเอิญโผล่ในค่าแฮช · `MAGIC_NUMBERS`/`detectMagic`/`highlightMagic` ใน shared.jsx · ไฮไลต์ popup=เทล/แถบข้าง=อำพัน · ปุ่มกรอง "เฉพาะเลขวิเศษ" ใน library → `MAGIC_IMAGE` (รูปปลอม SVG data-URI · แฮช crafted · ไม่มีในคลังปกติ · ดู/ขยาย/โหลด SVG ได้ · ลบ/แก้ไม่ได้ `isMagic` guard) · verify Chrome ผ่าน
+- **แท็บกรองหมวด = multi-select** (`typeSet` Set แทน `filter` string · กดซ้ำเลิก · เลือกหลายอัน · exclusive กับ magic)
+- **อัป SVG ได้ ไม่แปลง WebP** (patient-tab isSvg → เก็บต้นฉบับ ext svg · presign รับ svg · +ข้อความรองรับ SVG · ⚠️ security SVG ฝัง JS ได้ · แสดงผ่าน img ปลอดภัย/direct-URL รันได้ ค่อย sanitize)
+- **บทเรียน push:** tool ขึ้น "Server error" ≠ git ล้มเหลว — เน็ตหลุดตอนจบ tool แต่ push อาจลง GitHub แล้ว → **verify `git fetch` + `git log origin/main` ก่อนสรุป** · ห้ามเถียงว่าสำเร็จโดยไม่เช็คสด
+- id ในหัวการ์ดประวัติ = UUID สุ่มของ Postgres (ไม่ใช่จากเนื้อรูป · เนื้อรูป=hash)
+
 ## ✅ push v0.7.21.2 (feature 9d29fef + chore bd98723) — พี่กันเทสครบทุกจุดแล้ว
 งานเกลา UX รอบใหญ่ (feedback หลายรอบ · เทสทีละจุด)
 - **📦 โหลดครั้งเดียว (seed+revalidate · กฎใหม่)** — seed จาก cache ตอน mount (ไม่ skeleton) แล้วดึงสดเบื้องหลัง · helper กลาง `loadCache/saveCache` ที่ `parts/shared.jsx` · ทำที่ image-log/trash(+ฟัง tb-img-changed)/sessions/admin-users/changelog-comments/activity-log(seed default view+guard) · storage มี TTL เดิม · profile/change-password=ฟอร์มไม่ต้อง · `invalidateImgCaches` เคลียร์ tb_libimg/tb_imgtrash/tb_imglog/tb_patimg_*
@@ -56,7 +63,14 @@ metadata:
 - จดใน: skill (working-with-gun ทั้ง master + repo copy) · MEMORY.md · CLAUDE.md · README.md
 
 ## 🔭 งานต่อไป / ค้าง
-1. **🥚 Easter egg "เฉพาะเลขวิเศษ" (พี่กันสั่ง 5 ก.ค. · ทำต่อเลย)** — ตรวจเลขส่วนตัวในค่าแฮชรูป + ไฮไลต์ (ปุ่ม i/popup=เทล · แถบข้าง=อำพัน) + แถบกรอง "เฉพาะเลขวิเศษ" (ต่อจากขอลบ/รูปซ้ำ) · **สเปคเต็ม+เลข → [project_tb_dashboard_easteregg_magicnum.md](project_tb_dashboard_easteregg_magicnum.md) (⚠️ มีเลขส่วนตัว/บัตรปชช · local เท่านั้น ห้ามขึ้น git)** · ⚠️ ตอนสร้าง: repo public → hardcode เลขจริงจะหลุด ต้องคิด (env/hash/พี่กันตัดสิน)
+1. **🖼 ปรับหน้าประวัติรูป มุม "ตามรูป" (พี่กันสั่งต่อ · ทำเลย) — push v0.7.21.3 แล้วค่อยทำ:**
+   - **โชว์รูปย่อจริงในหัวการ์ด** (แทนไอคอนเทา + id) — รูปที่ยังอยู่ = signed URL · ลบถาวรแล้ว = ไอคอน+"ไฟล์ถูกลบถาวร" (ต้องให้ API log สร้าง signed URL)
+   - **SHA-256 ค่าเต็มในหัวการ์ด** (เดิมย่อ `e70b...`)
+   - **กดยุบ/กางกิจกรรมได้** (collapse events ต่อรูป)
+   - **"อนุมัติลบ (เข้าถัง)" → เขียนเต็ม "เข้าถังขยะ"** (แก้ label ใน EV map image-log.jsx)
+   - **tag "ภาพคล้าย #n" งง** → คิดว่ารวม/กรองได้ไหม (พี่กันสงสัย)
+   - **บอกให้ชัดว่ากดเหตุการณ์ดูรายละเอียดได้** (hover เปลี่ยนสี + คำว่า "ดูข้อมูล")
+   - แคลร์เสนอเพิ่ม: ปุ่ม "ดูรูปนี้ในคลัง" · แถบสรุป event ด้านบน (พี่กันยังไม่เลือก)
 2. **action เดิม v0.7.21 ยังไม่เทสครบ** (11 event log · อัป/แก้/ขอลบ/ยกเลิก/อนุมัติ/ปฏิเสธ/ลบตรง/กู้/ลบถาวร) — เทสได้ตอนสะดวก
 3. **0.8:** คลังความรู้ TB + PDF viewer + อัปไฟล์ไกด์ไลน์ (roadmap จริง = `docs/ideas.md`)
 4. **ค้างไกล:** bug audit · split monolith · 0.9 AI · 1.0
