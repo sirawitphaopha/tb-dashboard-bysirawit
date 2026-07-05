@@ -10,6 +10,15 @@ metadata:
 
 **Repo:** `D:\tb-dashboard-bysirawit` · main · push ตรง (Cloudflare Pages) · Live tbjourney.care
 
+## ✅ push v0.7.21.2 (feature 9d29fef + chore bd98723) — พี่กันเทสครบทุกจุดแล้ว
+งานเกลา UX รอบใหญ่ (feedback หลายรอบ · เทสทีละจุด)
+- **📦 โหลดครั้งเดียว (seed+revalidate · กฎใหม่)** — seed จาก cache ตอน mount (ไม่ skeleton) แล้วดึงสดเบื้องหลัง · helper กลาง `loadCache/saveCache` ที่ `parts/shared.jsx` · ทำที่ image-log/trash(+ฟัง tb-img-changed)/sessions/admin-users/changelog-comments/activity-log(seed default view+guard) · storage มี TTL เดิม · profile/change-password=ฟอร์มไม่ต้อง · `invalidateImgCaches` เคลียร์ tb_libimg/tb_imgtrash/tb_imglog/tb_patimg_*
+- **📌 sticky แก้ช่องว่าง (บทเรียน · verify Chrome)** — sticky ใน `p-6` (padding-top 24) ใช้ `top:0` = ติดต่ำ 24px เนื้อหาโผล่ · แก้ **`top:'-24px'` + `margin:'0 -24px'` + `padding:'12px 24px'`** (gap=0) · **margin-top ลบยิ่งทำ gap** · จำลอง layout ในหน้าเทส public/ วัด getBoundingClientRect + screenshot ก่อนใส่จริง
+- **🔍 ปุ่มดูข้อมูล 3 ที่** — `SnapModal` ใช้ซ้ำได้ (isEvent flag · rawJson ภายใน) + `imageToSnap()` export · การ์ดแกลเลอรี(มุมล่างขวา · stopPropagation กันเปิด lightbox) + แถบข้าง lightbox(`infoAction` prop · ปุ่มในแถบขวา ไม่ใช่ toolbar) + หน้า log · library/patient-tab/trash
+- **🎨 หน้าดูข้อมูล** — ทุกกรอบเต็มกว้าง(ข้อมูลรูป/เวลา 2 คอลัมน์) · รวม ต้นฉบับ↔ไฟล์ที่เก็บ เป็นตารางเทียบ · แฮชจัดกลุ่ม ต้นฉบับ(JPEG)/WebP/pHash · ปุ่ม "ดูข้อมูลดิบ (JSON)" ขนาดคงที่ + copy JSON · ปิดสีเทล
+- **🐛 แก้บั๊กขนาดรูปจอ 768** — JustifiedGallery แถวสุดท้าย(รูปน้อย)ยืดเต็มกว้างถึง targetHeight×1.25 → natural h ตกช่วง jh..jh×1.25 = กลาง/ใหญ่เท่ากัน · แก้ **cap ที่ targetHeight เป๊ะ** + jh **100/135/240** · **บทเรียน: เทส UI ในกรอบที่ถูก** (จอ 768 sidebar ยุบ56/กาง260 → กรอบ ~664/460px · แคลร์เทสผิดที่ 744 กว้างเกิน · verify Chrome cw=664: 100/135/183)
+- ทั้งหมด: 16 ไฟล์ · CLAUDE.md+skill(sync)+README กฎใหม่ (version 4 ตำแหน่ง/โหลดครั้งเดียว/sticky no-gap/เช็ค Chrome ก่อนส่ง UI)
+
 ## ✅ push v0.7.21.1 (feature 4fac47e + chore ff3c322) — ⚠️ พี่กันขอ push ก่อนเทส (ยังไม่เทส action)
 ต่อยอด v0.7.21 (ระบบประวัติรูป audit log + hash) ให้ใช้งานได้ครบจริง
 
@@ -47,14 +56,11 @@ metadata:
 - จดใน: skill (working-with-gun ทั้ง master + repo copy) · MEMORY.md · CLAUDE.md · README.md
 
 ## 🔭 งานต่อไป / ค้าง
-1. **เทส v0.7.21.1 (พี่กันยังไม่เทส — push ก่อนเทส):**
-   - อัปรูปใหม่ → hash ครบ 7 ค่า (ต้นฉบับ 3 + WebP 3 + pHash) · ทดสอบทั้ง localhost + IP LAN
-   - หน้าประวัติ: ดรอปดาวน์เลือกหลายข้อ + กรองทันที + snapshot ภาษาคน (grid) + ปุ่ม JSON + มุมตามรูป + ป้ายรูปซ้ำ
-   - คลังรูป: อัปไฟล์เดียวกัน 2 ครั้ง → ป้าย "ซ้ำ" + ปุ่ม "เฉพาะรูปซ้ำ"
-   - sticky: เลื่อน 3 หน้า ส่วนหัวตรึง · hover ปุ่ม/รายการ · ปุ่มปิด/ดูข้อมูลดิบ hover
-   - action เดิม v0.7.21 (11 event log · อัป/แก้/ขอลบ/ยกเลิก/อนุมัติ/ปฏิเสธ/ลบตรง/กู้/ลบถาวร) ยังไม่เทส
-2. **0.8:** คลังความรู้ TB + PDF viewer + อัปไฟล์ไกด์ไลน์ (roadmap จริง = `docs/ideas.md` #5)
-3. **ค้างไกล:** bug audit · split monolith · 0.9 AI · 1.0
+1. **🥚 Easter egg "เฉพาะเลขวิเศษ" (พี่กันสั่ง 5 ก.ค. · ทำต่อเลย)** — ตรวจเลขส่วนตัวในค่าแฮชรูป + ไฮไลต์ (ปุ่ม i/popup=เทล · แถบข้าง=อำพัน) + แถบกรอง "เฉพาะเลขวิเศษ" (ต่อจากขอลบ/รูปซ้ำ) · **สเปคเต็ม+เลข → [project_tb_dashboard_easteregg_magicnum.md](project_tb_dashboard_easteregg_magicnum.md) (⚠️ มีเลขส่วนตัว/บัตรปชช · local เท่านั้น ห้ามขึ้น git)** · ⚠️ ตอนสร้าง: repo public → hardcode เลขจริงจะหลุด ต้องคิด (env/hash/พี่กันตัดสิน)
+2. **action เดิม v0.7.21 ยังไม่เทสครบ** (11 event log · อัป/แก้/ขอลบ/ยกเลิก/อนุมัติ/ปฏิเสธ/ลบตรง/กู้/ลบถาวร) — เทสได้ตอนสะดวก
+3. **0.8:** คลังความรู้ TB + PDF viewer + อัปไฟล์ไกด์ไลน์ (roadmap จริง = `docs/ideas.md`)
+4. **ค้างไกล:** bug audit · split monolith · 0.9 AI · 1.0
+- ✅ v0.7.21.1 + v0.7.21.2 พี่กันเทสครบแล้ว (hash/ประวัติ/ตามรูป/รูปซ้ำ/sticky/โหลดครั้งเดียว/ปุ่มดูข้อมูล/ขนาดรูป)
 
 ## หมายเหตุ
 - dev server รันอยู่ (bg task · localhost:3000) · SQL webp columns รันบน dev=prod แล้ว (MCP)
