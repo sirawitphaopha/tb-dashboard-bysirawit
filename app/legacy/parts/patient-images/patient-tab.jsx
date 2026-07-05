@@ -68,25 +68,28 @@ function PatientImagesTab({ patient, currentUser, locked }) {
     setLoading(false);
   }, [patient.id]);
   React.useEffect(() => { load(false, _seededRef.current); }, [load]);   // seed แล้ว = โหลดเงียบ (ไม่ skeleton ทับของที่มี)
-  // Realtime: รูปผู้ป่วยรายนี้เปลี่ยน (อัป/ลบ/แก้ — ข้ามผู้ใช้) → รีเฟรช
+  // Realtime (v0.7.20.3): ฟังสัญญาณกลาง 'tb-img-changed' → **patch เฉพาะรูปผู้ป่วยรายนี้** จาก payload ทันที (เร็ว) · กรอง patient_id เอง (channel กลางไม่ filter) · INSERT/กู้คืน = โหลดใหม่
   React.useEffect(() => {
-    if (typeof window === 'undefined' || !window._sb || !patient?.id) return;
-    const ch = window._sb.channel('patimg-' + patient.id)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tb_patient_images', filter: 'patient_id=eq.' + patient.id }, (payload) => {
-        invalidateImgCaches();
-        const ev = payload.eventType, n = payload.new, o = payload.old;
-        if (ev === 'DELETE') { if (o && o.id) setImages(arr => (arr||[]).filter(x => x.id !== o.id)); }
-        else if (ev === 'UPDATE') {
-          if (n && n.deleted_at) setImages(arr => (arr||[]).filter(x => x.id !== n.id));   // soft-delete → เอาออก
-          else if (n) setImages(arr => {
-            if (!(arr||[]).some(x => x.id === n.id)) { load(true, true); return arr; }   // กู้คืนจากถังขยะ (ไม่มีในลิสต์) → โหลดใหม่
-            return (arr||[]).map(x => x.id === n.id ? { ...x, type: n.type, note: n.note, title: n.title, width: n.width, height: n.height, size_bytes: n.size_bytes, quality: n.quality, delete_req_by: n.delete_req_by, delete_req_name: n.delete_req_name, delete_req_at: n.delete_req_at, delete_req_reason: n.delete_req_reason } : x);   // แก้หมวด/คำอธิบาย/สถานะขอลบ → อัปเดต field ตรงๆ (ไม่ refetch)
-          });
-        }
-        else load(true, true);   // INSERT → ต้องดึง url ใหม่
-      })
-      .subscribe();
-    return () => { try { window._sb.removeChannel(ch); } catch {} };
+    if (typeof window === 'undefined') return;
+    const onChanged = (e) => {
+      const payload = e.detail; if (!payload) return;
+      const n = payload.new, o = payload.old;
+      const pid = (n && n.patient_id) || (o && o.patient_id);
+      if (pid !== patient.id) return;   // ไม่ใช่ผู้ป่วยรายนี้ ข้าม
+      invalidateImgCaches();
+      const ev = payload.eventType;
+      if (ev === 'DELETE') { if (o && o.id) setImages(arr => (arr||[]).filter(x => x.id !== o.id)); }
+      else if (ev === 'UPDATE') {
+        if (n && n.deleted_at) setImages(arr => (arr||[]).filter(x => x.id !== n.id));
+        else if (n) setImages(arr => {
+          if (!(arr||[]).some(x => x.id === n.id)) { load(true, true); return arr; }   // กู้คืน → โหลดใหม่
+          return (arr||[]).map(x => x.id === n.id ? { ...x, type: n.type, note: n.note, title: n.title, width: n.width, height: n.height, size_bytes: n.size_bytes, quality: n.quality, delete_req_by: n.delete_req_by, delete_req_name: n.delete_req_name, delete_req_at: n.delete_req_at, delete_req_reason: n.delete_req_reason } : x);
+        });
+      }
+      else load(true, true);   // INSERT
+    };
+    window.addEventListener('tb-img-changed', onChanged);
+    return () => { window.removeEventListener('tb-img-changed', onChanged); };
   }, [patient.id, load]);
 
   // เลือกไฟล์ → เปิดพรีวิว "ทันที" (สถานะ decoding) แล้วถอดรหัสเบื้องหลัง → ผู้ใช้เห็น popup เลย มั่นใจว่าอัปติด

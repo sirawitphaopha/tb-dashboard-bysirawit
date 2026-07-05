@@ -20,6 +20,7 @@ description: คู่มือครบสำหรับช่วยพี่�
 - อธิบายขั้นกด UI: เริ่มจาก keyboard shortcut ก่อน แล้วค่อย step-by-step (ห้าม "คลิกขวา/ไอคอน refresh")
 
 ## 3. กฎทอง — วิธีทำงาน
+> 🔄🚨 **กฎของ skill นี้เอง: มีบทเรียน/กฎใหม่/ข้อผิดพลาดเมื่อไหร่ = อัปเดตไฟล์นี้ทันที** (ไม่ใช่แค่จดใน CLAUDE.md หรือ memory) · skill = แหล่งกฎหลักที่โหลดทุก session ต้องสดเสมอ · เพิ่ม lesson ลงหมวดที่เกี่ยว (8 ข้อผิดพลาด / กฎทอง / ทักษะ) แล้ว sync copy ในแต่ละ repo ด้วยตอน push (พี่กันสั่ง 4 ก.ค. 69)
 1. **ตอบตรงก่อนเสมอ** ประโยคแรก=คำตอบ · **ก่อนลงมือสรุปให้เข้าใจก่อน** (จะทำอะไร เห็นผลอะไร)
 2. 🚨🚨 **สงสัย/ไม่แน่ใจ = ถามก่อน ห้ามเหมาเอง** — เห็นอะไร "ดูแปลก/ไม่สอดคล้อง" **ห้ามคิดว่าบั๊กแล้วแก้เลย** อาจเป็นกฎที่พี่กันตั้งใจ → ถาม "อันนี้ตั้งใจไหมคะ" (พลาดหนัก 4 ก.ค. 26 สลับปุ่มยืนยันลบ)
 3. 🖼 **UI = ทำ mockup ให้ดูก่อนเขียนโค้ด** (`mcp__visualize__show_widget`) รอ confirm · mockup ที่ approve ต้องทำตามเป๊ะ
@@ -43,6 +44,7 @@ description: คู่มือครบสำหรับช่วยพี่�
 - 🚨🚨 **ห้าม PowerShell Get-Content/Set-Content แก้ไฟล์ไทย** (CP874→mojibake) → ใช้ **Bash sed** · kill dev server ใช้ PowerShell tool
 - credential/API key → **บอก path ไฟล์+ตัวแปร+ตำแหน่ง ให้พี่กันกรอกเอง** ห้าม paste ในแชท ห้ามส่ง tool-call malformed หลุดเป็น text
 - **อ่าน memory เองทุก session** · ถามงานเหลือ/ค้าง → เชื่อ section "ต่อไป/ค้าง" ใน session ไฟล์ล่าสุด (อย่าสังเคราะห์จาก roadmap เก่า) · TB Dashboard: อ่าน `project_tb_dashboard_pending_master.md` ก่อน
+- 🚨🔑 **redact secret ก่อน commit ไฟล์ memory/dev-log ขึ้น git เสมอ** — session เก่ามักจดคีย์จริง (Supabase service key/Resend/token) · GitHub secret-scanning บล็อก push (พลาด 4 ก.ค. 69) → grep `sb_secret_/re_/eyJ/sbp_/token` เปลี่ยนเป็น `_REDACTED` ก่อน commit · คีย์จริงเกือบหลุด → เตือนพี่กัน rotate
 - Supabase MCP `execute_sql` รัน SQL ตรงได้ (แยก backend/frontend bug เร็ว) · TB Dashboard project = `cioswzdbonnbhbyynrhh`
 
 ## 6. โปรเจกต์ทั้งหมด (context)

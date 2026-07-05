@@ -264,13 +264,14 @@ function App() {
     return () => { try { delete window.__imgPendingResolve; } catch {} };
   }, []);
 
-  // Realtime: คำขอลบรูป (ทุก approved user — badge/filter) — รูปใดตั้ง/เคลียร์ delete_req → reload
+  // Realtime: ศูนย์กลางรูป (v0.7.20.3) — ช่องเดียวฟัง tb_patient_images → refetch badge คำขอลบ + ยิงสัญญาณ 'tb-img-changed' ให้ทุกหน้า (คลัง/แท็บผู้ป่วย/ถัง) รีเฟรช · แก้ปัญหา 4 channel ซ้อนตารางเดียว = Supabase ส่ง event ไม่ครบ (ติดๆดับๆ)
   useEffect(() => {
     if (!currentUser?.id) return;
     const channel = window._sb
-      .channel('img-delete-requests-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tb_patient_images' }, async () => {
-        try { const ir = await fetch('/api/patient/images/pending-requests'); if (ir.ok) { const d = await ir.json(); setPendingImageRequests(d.requests || []); } } catch {}
+      .channel('tb-images-central')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tb_patient_images' }, async (payload) => {
+        try { window.dispatchEvent(new CustomEvent('tb-img-changed', { detail: payload })); } catch {}   // ยิงสัญญาณ+payload ก่อน → library/patient-tab/trash patch/นับ ทันที (ไม่รอ fetch ข้างล่าง)
+        try { const ir = await fetch('/api/patient/images/pending-requests'); if (ir.ok) { const d = await ir.json(); setPendingImageRequests(d.requests || []); } } catch {}   // อัปเดต badge คำขอลบ (ทำทีหลัง ไม่บล็อก)
       })
       .subscribe();
     return () => { window._sb.removeChannel(channel); };
@@ -321,17 +322,17 @@ function App() {
     return () => { window._sb.removeChannel(channel); };
   }, [currentUser]);
 
-  // Realtime: จำนวนของในถังขยะ (ผู้ป่วย+รูป) → badge เมนู/แท็บ (v0.7.20.2 · admin)
+  // Realtime: จำนวนของในถังขยะ (v0.7.20.2/.3 · admin) — ผู้ป่วย = channel tb_patients · รูป = ฟังสัญญาณกลาง 'tb-img-changed' (ไม่เปิด channel tb_patient_images ซ้ำ)
   useEffect(() => {
     if (currentUser?.role !== 'admin') return;
     const loadTC = async () => {
       try { const r = await fetch('/api/patient/trash-counts'); if (r.ok) { const d = await r.json(); setTrashCounts({ patients: d.patients || 0, images: d.images || 0 }); } } catch {}
     };
     loadTC();
-    if (!window._sb) return;
-    const chP = window._sb.channel('trash-count-patients').on('postgres_changes', { event: '*', schema: 'public', table: 'tb_patients' }, loadTC).subscribe();
-    const chI = window._sb.channel('trash-count-images').on('postgres_changes', { event: '*', schema: 'public', table: 'tb_patient_images' }, loadTC).subscribe();
-    return () => { try { window._sb.removeChannel(chP); window._sb.removeChannel(chI); } catch {} };
+    window.addEventListener('tb-img-changed', loadTC);   // รูปในถังเปลี่ยน → นับใหม่ (ผ่านสัญญาณกลาง)
+    let chP;
+    if (window._sb) chP = window._sb.channel('trash-count-patients').on('postgres_changes', { event: '*', schema: 'public', table: 'tb_patients' }, loadTC).subscribe();
+    return () => { window.removeEventListener('tb-img-changed', loadTC); try { if (chP) window._sb.removeChannel(chP); } catch {} };
   }, [currentUser]);
 
   // Realtime: ฟัง user ใหม่สมัคร / เปลี่ยนสถานะ (สำหรับ admin)
@@ -1075,8 +1076,8 @@ const DEMO_USER = {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.20.2';
-const BUILD_DATE = '4 ก.ค. 2569';
+const APP_VERSION = '0.7.20.3';
+const BUILD_DATE = '5 ก.ค. 2569';
 // bridge: ให้ parts/* (เช่น changelog.jsx, about.jsx) อ่านเวอร์ชันผ่าน window.* ได้ (เฟส 2 + แยกรอบ 2)
 if (typeof window !== 'undefined') { window.APP_VERSION = APP_VERSION; window.BUILD_DATE = BUILD_DATE; }
 // AboutModal ย้ายไป parts/about.jsx (แยกรอบ 2)

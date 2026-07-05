@@ -31,12 +31,16 @@ function wrap(title: string, body: string): string {
         <tr><td align="center">
           <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.05);">
             <tr><td style="background:linear-gradient(135deg,${BRAND_TEAL_DARK},${BRAND_TEAL});padding:24px 32px;text-align:center;">
-              <h1 style="margin:0;color:#fff;font-size:22px;font-weight:800;letter-spacing:-0.3px;display:inline-flex;align-items:center;gap:10px;font-family:'Manrope','Sarabun',sans-serif;">
-                <span style="display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;background:#ffffff;border-radius:12px;flex-shrink:0;">
-                  <img src="https://tbjourney.care/email-logo.png" width="30" height="30" alt="TB JOURNEY &amp; CARE" style="display:block;vertical-align:middle;border:0;outline:none;" />
-                </span>
-                <span>TB JOURNEY <span style="font-family:'Plus Jakarta Sans','Sarabun',sans-serif;">&amp;</span> CARE</span>
-              </h1>
+              <table role="presentation" cellpadding="0" cellspacing="0" align="center" style="margin:0 auto;border-collapse:collapse;">
+                <tr>
+                  <td style="vertical-align:middle;padding-right:10px;">
+                    <span style="display:inline-block;width:44px;height:44px;background:#ffffff;border-radius:12px;text-align:center;line-height:44px;">
+                      <img src="https://tbjourney.care/email-logo.png" width="30" height="30" alt="TB JOURNEY &amp; CARE" style="vertical-align:middle;border:0;outline:none;" />
+                    </span>
+                  </td>
+                  <td style="vertical-align:middle;color:#fff;font-size:22px;font-weight:800;letter-spacing:-0.3px;font-family:'Manrope','Sarabun',sans-serif;">TB&nbsp;JOURNEY <span style="font-family:'Plus Jakarta Sans','Sarabun',sans-serif;">&amp;</span> CARE</td>
+                </tr>
+              </table>
               <p style="margin:4px 0 0;color:rgba(255,255,255,0.85);font-size:12px;">รพ.ปรางค์กู่ · ระบบจัดการข้อมูลผู้ป่วยวัณโรค</p>
             </td></tr>
             <tr><td style="padding:32px;">${body}</td></tr>

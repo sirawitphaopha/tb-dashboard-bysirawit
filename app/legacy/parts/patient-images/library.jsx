@@ -56,22 +56,25 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
     setLoading(false);
   }, []);
   React.useEffect(() => { load(false, _seededRef.current); }, [load]);   // seed แล้ว = โหลดเงียบ (ไม่ skeleton ทับของที่มี)
-  // Realtime: รูปผู้ป่วยคนใดเปลี่ยน (อัป/ลบ/แก้ — ข้ามผู้ใช้) → รีเฟรชคลังรูป
+  // Realtime (v0.7.20.3): ฟังสัญญาณกลาง 'tb-img-changed' (1 channel ใน tb-monolith · เชื่อถือได้) → **patch จาก payload ทันที** (เร็ว ไม่ refetch ทั้งคลัง) · เฉพาะ INSERT/กู้คืน (ต้องดึง url) ถึง load ใหม่
   React.useEffect(() => {
-    if (typeof window === 'undefined' || !window._sb) return;
-    const ch = window._sb.channel('patimg-all')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tb_patient_images' }, (payload) => {
-        invalidateImgCaches();
-        const ev = payload.eventType, n = payload.new, o = payload.old;
-        if (ev === 'DELETE') { if (o && o.id) setImages(arr => (arr||[]).filter(x => x.id !== o.id)); }
-        else if (ev === 'UPDATE') {
-          if (n && n.deleted_at) setImages(arr => (arr||[]).filter(x => x.id !== n.id));
-          else if (n) setImages(arr => (arr||[]).map(x => x.id === n.id ? { ...x, type: n.type, note: n.note, title: n.title, width: n.width, height: n.height, size_bytes: n.size_bytes, quality: n.quality, delete_req_by: n.delete_req_by, delete_req_name: n.delete_req_name, delete_req_at: n.delete_req_at, delete_req_reason: n.delete_req_reason } : x));  // แก้หมวด/คำอธิบาย/สถานะขอลบ → อัปเดตตรงๆ
-        }
-        else load(true, true);   // INSERT
-      })
-      .subscribe();
-    return () => { try { window._sb.removeChannel(ch); } catch {} };
+    if (typeof window === 'undefined') return;
+    const onChanged = (e) => {
+      const payload = e.detail; if (!payload) return;
+      invalidateImgCaches();
+      const ev = payload.eventType, n = payload.new, o = payload.old;
+      if (ev === 'DELETE') { if (o && o.id) setImages(arr => (arr||[]).filter(x => x.id !== o.id)); }
+      else if (ev === 'UPDATE') {
+        if (n && n.deleted_at) setImages(arr => (arr||[]).filter(x => x.id !== n.id));   // soft-delete → เอาออก
+        else if (n) setImages(arr => {
+          if (!(arr||[]).some(x => x.id === n.id)) { load(true, true); return arr; }   // กู้คืน (ไม่มีในลิสต์) → โหลดใหม่
+          return (arr||[]).map(x => x.id === n.id ? { ...x, type: n.type, note: n.note, title: n.title, width: n.width, height: n.height, size_bytes: n.size_bytes, quality: n.quality, delete_req_by: n.delete_req_by, delete_req_name: n.delete_req_name, delete_req_at: n.delete_req_at, delete_req_reason: n.delete_req_reason } : x);   // แก้หมวด/สถานะขอลบ → patch field
+        });
+      }
+      else load(true, true);   // INSERT
+    };
+    window.addEventListener('tb-img-changed', onChanged);
+    return () => { window.removeEventListener('tb-img-changed', onChanged); };
   }, [load]);
 
   // v0.7.20.2 — sync ฝ้าขาว "รออนุมัติลบ" จากรายการกลาง pendingImageRequests (โหลดผ่าน API เชื่อถือได้ · แก้บั๊ก admin ไม่เห็นฝ้าเพราะ realtime payload ข้ามเครื่องไม่ถึง)
