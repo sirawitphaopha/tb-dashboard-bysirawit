@@ -7,7 +7,7 @@ import { AvatarLightbox } from '../shared'
 import { TrashList } from '../misc'
 import { patientImgInfo, PATIENT_IMG_TYPES, invalidateImgCaches, IMG_VIEW_SIZES, ImgViewToolbar } from './helpers'
 
-function ImageTrashPage({ currentUser, isAdmin }) {
+function ImageTrashPage({ currentUser, isAdmin, headerExtra }) {
   const [imgs, setImgs] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
   const [err, setErr]   = React.useState('');
@@ -125,12 +125,11 @@ function ImageTrashPage({ currentUser, isAdmin }) {
 
   return (
     <div>
-      <div style={{background:'#fffbeb',border:'1px solid #fcd34d',borderRadius:'12px',padding:'10px 14px',marginBottom:'14px',fontSize:'12px',color:'#92400e',lineHeight:1.5}}>
-        <i className="fa-solid fa-trash" style={{marginRight:'6px'}}></i>รูปในถังขยะเก็บไว้ 60 วัน แล้วลบถาวรอัตโนมัติ · กู้คืน / ลบถาวร ทำได้เฉพาะแอดมิน
-      </div>
-
+      {/* ส่วนหัว — ตรึงไว้ด้านบน (sticky) */}
+      <div style={{position:'sticky',top:0,zIndex:20,background:'#f0fdfa',marginLeft:'-24px',marginRight:'-24px',paddingLeft:'24px',paddingRight:'24px',paddingTop:'2px',paddingBottom:'10px',marginBottom:'8px'}}>
+      {headerExtra}
       {/* แถบกรอง + มุมมอง */}
-      <div style={{display:'flex',gap:'8px',flexWrap:'wrap',alignItems:'center',marginBottom:'14px'}}>
+      <div style={{display:'flex',gap:'8px',flexWrap:'wrap',alignItems:'center',marginBottom:'0'}}>
         <div style={{display:'flex',alignItems:'center',gap:'6px',flex:'1 1 180px',minWidth:'160px',border:'1px solid #e5e7eb',borderRadius:'8px',padding:'6px 10px'}}>
           <i className="fa-solid fa-magnifying-glass" style={{fontSize:'12px',color:'#9ca3af'}}></i>
           <input value={q} onChange={e=>setQ(e.target.value)} placeholder="ค้นหาชื่อ / HN" style={{flex:1,minWidth:0,border:'none',outline:'none',fontSize:'13px',background:'none'}}/>
@@ -150,6 +149,11 @@ function ImageTrashPage({ currentUser, isAdmin }) {
           <option value="hn-desc">HN มาก → น้อย</option>
         </select>
         <div style={{marginLeft:'auto'}}><ImgViewToolbar mode={mode} setMode={setMode} size={size} setSize={setSize}/></div>
+      </div>
+      </div>{/* /sticky header */}
+
+      <div style={{background:'#fffbeb',border:'1px solid #fcd34d',borderRadius:'12px',padding:'10px 14px',marginBottom:'14px',fontSize:'12px',color:'#92400e',lineHeight:1.5}}>
+        <i className="fa-solid fa-trash" style={{marginRight:'6px'}}></i>รูปในถังขยะเก็บไว้ 60 วัน แล้วลบถาวรอัตโนมัติ · กู้คืน / ลบถาวร ทำได้เฉพาะแอดมิน
       </div>
 
       {err && <p style={{fontSize:'12px',color:'#dc2626',margin:'0 0 10px'}}><i className="fa-solid fa-circle-exclamation" style={{marginRight:'5px'}}></i>{err}</p>}
@@ -240,14 +244,20 @@ function TrashHub(props) {
   const tc = props.trashCounts || { patients: 0, images: 0 };   // v0.7.20.2 — จำนวนของในถัง (deleted)
   const seg = (on) => ({display:'inline-flex',alignItems:'center',padding:'7px 14px',fontSize:'13px',fontWeight:700,border:'none',borderRadius:'8px',background:on?'#0f766e':'transparent',color:on?'#fff':'#6b7280',cursor:'pointer'});
   const badge = (n, on) => n > 0 ? <span style={{marginLeft:'7px',background:on?'#fff':'#ef4444',color:on?'#dc2626':'#fff',fontSize:'11px',fontWeight:800,minWidth:'18px',height:'18px',borderRadius:'999px',display:'inline-flex',alignItems:'center',justifyContent:'center',padding:'0 4px',lineHeight:1}}>{n}</span> : null;
+  const tabs = (
+    <div style={{display:'inline-flex',background:'#f1f5f9',borderRadius:'10px',padding:'3px',marginBottom:'12px'}}>
+      <button onClick={()=>setSub('patients')} style={seg(sub==='patients')}><i className="fa-solid fa-users" style={{marginRight:'6px'}}></i>ผู้ป่วย{badge(tc.patients, sub==='patients')}</button>
+      <button onClick={()=>setSub('images')} style={seg(sub==='images')}><i className="fa-solid fa-images" style={{marginRight:'6px'}}></i>รูปภาพ{badge(tc.images, sub==='images')}</button>
+    </div>
+  );
   return (
     <div>
-      <div style={{display:'inline-flex',background:'#f1f5f9',borderRadius:'10px',padding:'3px',marginBottom:'16px'}}>
-        <button onClick={()=>setSub('patients')} style={seg(sub==='patients')}><i className="fa-solid fa-users" style={{marginRight:'6px'}}></i>ผู้ป่วย{badge(tc.patients, sub==='patients')}</button>
-        <button onClick={()=>setSub('images')} style={seg(sub==='images')}><i className="fa-solid fa-images" style={{marginRight:'6px'}}></i>รูปภาพ{badge(tc.images, sub==='images')}</button>
-      </div>
-      {sub==='patients' && <TrashList {...props}/>}
-      {sub==='images' && <ImageTrashPage currentUser={props.currentUser} isAdmin={isAdmin}/>}
+      {sub==='patients' && <>
+        {/* แท็บถังขยะ (ผู้ป่วย) — ตรึงไว้ด้านบน */}
+        <div style={{position:'sticky',top:0,zIndex:20,background:'#f0fdfa',marginLeft:'-24px',marginRight:'-24px',paddingLeft:'24px',paddingRight:'24px',paddingTop:'2px',paddingBottom:'6px',marginBottom:'8px'}}>{tabs}</div>
+        <TrashList {...props}/>
+      </>}
+      {sub==='images' && <ImageTrashPage currentUser={props.currentUser} isAdmin={isAdmin} headerExtra={tabs}/>}
     </div>
   );
 }

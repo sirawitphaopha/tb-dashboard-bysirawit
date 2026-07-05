@@ -9,7 +9,7 @@ import { compressToWebp, putWithProgress, decodeImageToDataURL, isAnimatedGif, J
   PATIENT_IMG_TYPES, CXRCompareModal, CACHE_TTL, loadCache, saveCache, invalidateImgCaches,
   IMG_VIEW_SIZES, ImgViewToolbar, PendingDeleteOverlay, ImageRequestDeleteModal, ImageReviewDeleteModal, ImageCancelRequestModal,
   storeImgs, getStoredImgsFor, updateStoredImg, removeStoredImg } from './helpers'
-import { computeImageHashes } from './image-hash'
+import { computeByteHashes, computePerceptualHash } from './image-hash'
 
 function PatientImagesTab({ patient, currentUser, locked }) {
   const LSKEY = 'tb_patimg_' + patient.id;
@@ -139,9 +139,11 @@ function PatientImagesTab({ patient, currentUser, locked }) {
       await putWithProgress(pd.uploadUrl, mainBlob, setUpProgress, mime);   // รูปเต็ม (รายงาน %)
       if (pd.uploadUrlThumb) { try { await fetch(pd.uploadUrlThumb, { method: 'PUT', body: thumb.blob, headers: { 'content-type': 'image/webp' } }); } catch {} }
       setUpPhase('save');
-      const hashes = await computeImageHashes(pu.file, pu.previewUrl);   // v0.7.21 — hash ต้นฉบับ + dHash ภาพ (ตรวจรูปซ้ำ)
+      const origH = await computeByteHashes(pu.file);      // v0.7.21 — hash ไฟล์ต้นฉบับ (นิ่ง)
+      const webpH = await computeByteHashes(mainBlob);      // hash ไฟล์ WebP ที่เก็บจริง (GIF = ไฟล์เดียวกับต้นฉบับ)
+      const phash = await computePerceptualHash(pu.previewUrl);   // dHash ภาพ (จับภาพเดียวกันแม้คนละไฟล์)
       const conf = await fetch('/api/patient/images/confirm', { method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ patientId: patient.id, key: pd.key, thumbKey: pd.thumbKey, type: upType, note: upNote || null, size: mainBlob.size, width, height, mime, origSize: pu.file.size, origMime: pu.origMime, origWidth: pu.dims.width, origHeight: pu.dims.height, quality: pu.isAnimated ? null : (isCxr ? 92 : 87), device: detectDevice(), sha256: hashes.sha256, md5: hashes.md5, crc32: hashes.crc32, phash: hashes.phash }) });
+        body: JSON.stringify({ patientId: patient.id, key: pd.key, thumbKey: pd.thumbKey, type: upType, note: upNote || null, size: mainBlob.size, width, height, mime, origSize: pu.file.size, origMime: pu.origMime, origWidth: pu.dims.width, origHeight: pu.dims.height, quality: pu.isAnimated ? null : (isCxr ? 92 : 87), device: detectDevice(), origSha256: origH.sha256, origMd5: origH.md5, origCrc32: origH.crc32, webpSha256: webpH.sha256, webpMd5: webpH.md5, webpCrc32: webpH.crc32, phash }) });
       const cd = await conf.json();
       if (!conf.ok) throw new Error(cd.error || 'บันทึกไม่สำเร็จ');
       if (pu.isAnimated) { try { URL.revokeObjectURL(pu.previewUrl); } catch {} }

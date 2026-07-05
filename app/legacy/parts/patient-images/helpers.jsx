@@ -196,6 +196,11 @@ function patientImgInfo(im, meta, name){
     uploader: im.uploader_name || null,
     note: im.note || null,
     storage: 'Cloudflare R2 · ส่วนตัว (signed URL)',
+    hashes: (im.orig_sha256 || im.webp_sha256 || im.phash) ? {
+      origSha256: im.orig_sha256, origMd5: im.orig_md5, origCrc32: im.orig_crc32,
+      webpSha256: im.webp_sha256, webpMd5: im.webp_md5, webpCrc32: im.webp_crc32,
+      phash: im.phash,
+    } : null,
   };
 }
 

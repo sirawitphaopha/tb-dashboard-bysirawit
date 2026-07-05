@@ -9,6 +9,9 @@ import { compressToWebp, putWithProgress, JustifiedGallery, IMG_SORTS, imgInRang
   IMG_VIEW_SIZES, ImgViewToolbar, PendingDeleteOverlay, ImageRequestDeleteModal, ImageReviewDeleteModal, ImageCancelRequestModal,
   storeImgs, getStoredImgs, updateStoredImg, removeStoredImg } from './helpers'
 import { ImageLogPage } from './image-log'
+import { phashDistance } from './image-hash'
+
+const DUP_COLORS = ['#7c3aed', '#db2777', '#2563eb', '#ea580c', '#0891b2', '#65a30d', '#c026d3'];   // สีป้ายรูปซ้ำ (วนตาม cluster)
 
 function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onConsumeWant, onGoTrash }) {
   const _lc0 = loadCache('tb_libimg');
@@ -40,6 +43,7 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
   const isAdmin = currentUser?.role === 'admin';
   const pendingCount = pendingImageRequests?.length || 0;
   const [pendingMode, setPendingMode] = React.useState(false);   // v0.7.20.1 — โหมดกรองเฉพาะรูปที่ขอลบ (client-side · ไม่โหลดใหม่)
+  const [dupMode, setDupMode] = React.useState(false);           // กรองเฉพาะรูปซ้ำ (client-side · ยึดแฮช)
 
   // โหลดทุกรูปครั้งเดียว → กรอง/ค้นหาในเครื่อง + cache (เปิดซ้ำ/รีเฟรชไม่โหลดใหม่)
   const load = React.useCallback(async (force, silent) => {
@@ -103,13 +107,37 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
 
   const qq = q.trim().toLowerCase();
   const uploaders = [...new Set((images || []).map(im => im.uploader_name).filter(Boolean))];
+
+  // ── ตรวจรูปซ้ำทั้งคลัง (ยึดแฮช) — exact = orig_sha256 ตรง · near = pHash ภาพคล้าย (Hamming ≤ 8) ──
+  // คำนวณจากรูปทั้งหมดที่โหลดมา (ไม่ผูกตัวกรอง) → ป้าย "ซ้ำ" ติดรูปเสมอไม่ว่ากรองอะไรอยู่
+  const dupMap = React.useMemo(() => {
+    const imgs = (images || []).filter(im => im.orig_sha256 || im.phash);
+    const n = imgs.length;
+    const parent = Array.from({ length: n }, (_, i) => i);
+    const find = (i) => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i] } return i };
+    const union = (i, j) => { const a = find(i), b = find(j); if (a !== b) parent[a] = b };
+    const exactFlag = new Array(n).fill(false);
+    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+      const a = imgs[i], b = imgs[j];
+      const exact = !!(a.orig_sha256 && b.orig_sha256 && a.orig_sha256 === b.orig_sha256);
+      const near = phashDistance(a.phash, b.phash) <= 8;
+      if (exact || near) { union(i, j); if (exact) { exactFlag[i] = true; exactFlag[j] = true } }
+    }
+    const size = new Map(); for (let i = 0; i < n; i++) { const r = find(i); size.set(r, (size.get(r) || 0) + 1) }
+    const idx = new Map(); let dc = 0; const m = {};
+    for (let i = 0; i < n; i++) { const r = find(i); if ((size.get(r) || 0) > 1) { if (!idx.has(r)) idx.set(r, ++dc); m[imgs[i].id] = { id: idx.get(r), exact: exactFlag[i] } } }
+    return m;
+  }, [images]);
+  const dupCount = Object.keys(dupMap).length;
   const flat = (images || []).filter(im =>
     (filter === 'all' || im.type === filter) &&
     (uploaderFilter === 'all' || im.uploader_name === uploaderFilter) &&
     imgInRange(im, dateFrom, dateTo) &&
     (!qq || (im.patient_name || '').toLowerCase().includes(qq) || (im.patient_hn || '').toLowerCase().includes(qq))
   ).sort(imgSortCmp(sortBy));
-  const displayList = pendingMode ? flat.filter(im => im.delete_req_by) : flat;   // กรอง "ขอลบ" client-side จากรูปที่โหลดแล้ว (ทันที · ไม่ skeleton/ไม่ยิง server)
+  const displayList = pendingMode ? flat.filter(im => im.delete_req_by)
+    : dupMode ? flat.filter(im => dupMap[im.id])
+    : flat;   // กรอง "ขอลบ"/"รูปซ้ำ" client-side จากรูปที่โหลดแล้ว (ทันที · ไม่ skeleton/ไม่ยิง server)
   const showLoading = loading;
   const openImage = (im, rect) => {   // เปิดด้วย index → ลูกศรเลื่อนข้ามทุกผู้ป่วยได้
     const idx = displayList.findIndex(x => x.id === im.id);
@@ -208,6 +236,7 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
         {im.delete_req_by && <PendingDeleteOverlay image={im} isAdmin={isAdmin} isRequester={im.delete_req_by===currentUser?.id} onCancel={()=>cancelImgRequest(im)} onApprove={()=>setReviewTarget({im, action:'approve'})} onReject={()=>setReviewTarget({im, action:'reject'})}/>}
         <div className="tb-img-zoomicon" style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.22)',pointerEvents:'none'}}><i className="fa-solid fa-magnifying-glass-plus" style={{color:'#fff',fontSize:'18px',textShadow:'0 1px 5px rgba(0,0,0,0.6)'}}></i></div>
         <span style={{position:'absolute',top:'5px',right:'5px',fontSize:'9px',fontWeight:800,padding:'2px 6px',borderRadius:'999px',background:meta.bg,color:meta.fg}}>{meta.label}</span>
+        {dupMap[im.id] && (()=>{ const d=dupMap[im.id]; const col=DUP_COLORS[(d.id-1)%DUP_COLORS.length]; return <span title={d.exact?'ไฟล์เดียวกันเป๊ะ':'ภาพเดียวกัน (คนละไฟล์)'} style={{position:'absolute',top:'5px',left:'5px',fontSize:'9px',fontWeight:800,padding:'2px 6px',borderRadius:'999px',background:col,color:'#fff',display:'inline-flex',alignItems:'center',gap:'3px'}}><i className={'fa-solid '+(d.exact?'fa-clone':'fa-images')} style={{fontSize:'8px'}}></i>{d.exact?'ซ้ำ':'คล้าย'} #{d.id}</span>; })()}
         <span style={{position:'absolute',bottom:0,left:0,right:0,padding:'10px 6px 4px',background:'linear-gradient(transparent,rgba(0,0,0,0.6))',color:'#fff',fontSize:'9px'}}>{new Date(im.uploaded_at).toLocaleDateString('th-TH',{day:'numeric',month:'short'})}</span>
       </div>
     );
@@ -224,6 +253,7 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
       <div key={im.id} onClick={(e)=>openImage(im, e.currentTarget.getBoundingClientRect())} style={{display:'flex',alignItems:'center',gap:'10px',border:'1px solid '+(im.delete_req_by?'#fcd34d':'#e5e7eb'),borderRadius:'10px',padding:'7px 10px',background:im.delete_req_by?'#fffbeb':'#fff',cursor:'zoom-in',marginBottom:'8px'}}>
         <div style={{width:th+'px',height:th+'px',flexShrink:0,borderRadius:'8px',overflow:'hidden',background:'#0b0f19'}}><img src={im.thumbUrl||im.url} alt="" loading="lazy" draggable={false} onContextMenu={e=>e.preventDefault()} style={{width:'100%',height:'100%',objectFit:'cover'}}/></div>
         <span style={{flexShrink:0,width:'52px',fontSize:'10px',fontWeight:800,padding:'2px 0',textAlign:'center',borderRadius:'999px',background:meta.bg,color:meta.fg}}>{meta.label}</span>
+        {dupMap[im.id] && (()=>{ const d=dupMap[im.id]; const col=DUP_COLORS[(d.id-1)%DUP_COLORS.length]; return <span title={d.exact?'ไฟล์เดียวกันเป๊ะ':'ภาพเดียวกัน (คนละไฟล์)'} style={{flexShrink:0,fontSize:'9px',fontWeight:800,padding:'2px 7px',borderRadius:'999px',background:col,color:'#fff',whiteSpace:'nowrap'}}><i className={'fa-solid '+(d.exact?'fa-clone':'fa-images')} style={{marginRight:'3px'}}></i>{d.exact?'รูปซ้ำ':'ภาพคล้าย'} #{d.id}</span>; })()}
         {im.delete_req_by && <span style={{flexShrink:0,fontSize:'9px',fontWeight:800,padding:'2px 7px',borderRadius:'999px',background:'#fef3c7',color:'#92400e',border:'1px solid #fcd34d',whiteSpace:'nowrap'}}><i className="fa-solid fa-clock" style={{marginRight:'3px'}}></i>รออนุมัติลบ</span>}
         <div style={{flexShrink:0,width:'146px'}}><p style={{fontSize:'10px',color:'#9ca3af',margin:0}}>อัปโหลด</p><p style={{fontSize:'12px',color:'#374151',margin:0}}>{up}</p></div>
         <div style={{flexShrink:0,width:'112px'}}><p style={{fontSize:'10px',color:'#9ca3af',margin:0}}>ขนาดภาพ</p><p style={{fontSize:'12px',color:'#374151',margin:0}}>{dimF}</p></div>
@@ -245,23 +275,32 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
   ) : null;
 
   if (isAdmin && libView === 'log') {
-    return (<div>{viewToggle}<ImageLogPage/></div>);
+    return (<ImageLogPage headerExtra={viewToggle}/>);   // ส่ง viewToggle เข้าไปใน sticky header ของหน้าประวัติ (ตรึงรวมกัน)
   }
 
   return (
     <div>
+      {/* ส่วนหัว — ตรึงไว้ด้านบน (sticky) */}
+      <div style={{position:'sticky',top:0,zIndex:20,background:'#f0fdfa',marginLeft:'-24px',marginRight:'-24px',paddingLeft:'24px',paddingRight:'24px',paddingTop:'2px',paddingBottom:'10px',marginBottom:'8px'}}>
       {viewToggle}
       {/* ตัวกรอง + ค้นหา (ชื่อหน้าอยู่บนแถบหัวเรื่องด้านบนแล้ว) */}
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'10px',marginBottom:'16px',flexWrap:'wrap'}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'10px',marginBottom:'0',flexWrap:'wrap'}}>
         <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
           {['all',...Object.keys(PATIENT_IMG_TYPES)].map(k=>{const active=filter===k;const v=PATIENT_IMG_TYPES[k];return <button key={k} onClick={()=>setFilter(k)} style={{padding:'5px 14px',borderRadius:'999px',fontSize:'12px',fontWeight:700,border:'1px solid '+(active?'#0d9488':'#e5e7eb'),background:active?'#0d9488':'#fff',color:active?'#fff':'#6b7280',cursor:'pointer'}}>{k==='all'?'ทั้งหมด':v.label}</button>;})}
           {/* v0.7.20.1 — ปุ่มกรองเฉพาะรูปที่ขอลบ · เรืองแสงเมื่อมีคำขอ · จางกดไม่ได้เมื่อไม่มี */}
-          <button onClick={()=>{ if(pendingCount>0) setPendingMode(m=>!m); }} disabled={pendingCount===0}
+          <button onClick={()=>{ if(pendingCount>0) setPendingMode(m=>{ const nv=!m; if(nv) setDupMode(false); return nv; }); }} disabled={pendingCount===0}
             title={pendingCount===0?'ไม่มีรูปที่ขอลบ':'ดูเฉพาะรูปที่ขอลบ'}
             className={pendingCount>0 && !pendingMode ? 'tb-pend-glow' : ''}
             style={{display:'inline-flex',alignItems:'center',gap:'6px',fontSize:'12px',fontWeight:800,padding:'5px 14px',borderRadius:'999px',cursor:pendingCount===0?'not-allowed':'pointer',...(pendingMode?{background:'#f59e0b',color:'#fff',border:'1.5px solid #f59e0b'}:pendingCount>0?{background:'#fef3c7',color:'#92400e',border:'1.5px solid #f59e0b'}:{background:'#fff',color:'#cbd5e1',border:'1px solid #e5e7eb'})}}>
             <i className="fa-solid fa-clock"></i>เฉพาะรูปที่ขอลบ
             {pendingCount>0 && <span style={{background:pendingMode?'#fff':'#dc2626',color:pendingMode?'#b45309':'#fff',fontSize:'10px',fontWeight:800,minWidth:'17px',height:'17px',borderRadius:'999px',display:'inline-flex',alignItems:'center',justifyContent:'center',padding:'0 4px'}}>{pendingCount}</span>}
+          </button>
+          {/* กรองเฉพาะรูปซ้ำ (ยึดแฮช) · จางกดไม่ได้เมื่อไม่มีรูปซ้ำ */}
+          <button onClick={()=>{ if(dupCount>0) setDupMode(m=>{ const nv=!m; if(nv) setPendingMode(false); return nv; }); }} disabled={dupCount===0}
+            title={dupCount===0?'ไม่มีรูปซ้ำในคลัง':'ดูเฉพาะรูปที่ซ้ำกัน'}
+            style={{display:'inline-flex',alignItems:'center',gap:'6px',fontSize:'12px',fontWeight:800,padding:'5px 14px',borderRadius:'999px',cursor:dupCount===0?'not-allowed':'pointer',...(dupMode?{background:'#7c3aed',color:'#fff',border:'1.5px solid #7c3aed'}:dupCount>0?{background:'#f3e8ff',color:'#6b21a8',border:'1.5px solid #a78bfa'}:{background:'#fff',color:'#cbd5e1',border:'1px solid #e5e7eb'})}}>
+            <i className="fa-solid fa-clone"></i>เฉพาะรูปซ้ำ
+            {dupCount>0 && <span style={{background:dupMode?'#fff':'#7c3aed',color:dupMode?'#6b21a8':'#fff',fontSize:'10px',fontWeight:800,minWidth:'17px',height:'17px',borderRadius:'999px',display:'inline-flex',alignItems:'center',justifyContent:'center',padding:'0 4px'}}>{dupCount}</span>}
           </button>
         </div>
         <div style={{display:'flex',gap:'8px',alignItems:'center',flexWrap:'wrap'}}>
@@ -280,10 +319,11 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
           {(dateFrom||dateTo) && <button onClick={()=>{setDateFrom('');setDateTo('');}} title="ล้างวันที่" style={{fontSize:'13px',color:'#0d9488',background:'none',border:'none',cursor:'pointer'}}><i className="fa-solid fa-xmark"></i></button>}
           {uploaders.length>1 && <select value={uploaderFilter} onChange={e=>setUploaderFilter(e.target.value)} title="กรองตามคนอัปโหลด" style={{padding:'7px 10px',borderRadius:'10px',border:'1px solid #d1d5db',fontSize:'13px',color:'#6b7280',cursor:'pointer',maxWidth:'160px'}}><option value="all">คนอัปโหลด: ทุกคน</option>{uploaders.map(u=><option key={u} value={u}>{u}</option>)}</select>}
           <input value={q} onChange={e=>setQ(e.target.value)} placeholder="ค้นหาชื่อ / HN ผู้ป่วย" style={{padding:'8px 12px',borderRadius:'10px',border:'1px solid #d1d5db',fontSize:'13px',minWidth:'160px'}}/>
-          {(filter!=='all'||sortBy!=='new'||dateFrom||dateTo||uploaderFilter!=='all'||q||pendingMode) && <button onClick={()=>{setFilter('all');setSortBy('new');setDateFrom('');setDateTo('');setUploaderFilter('all');setQ('');setPendingMode(false);}} title="ล้างตัวกรองทั้งหมด" style={{display:'inline-flex',alignItems:'center',gap:'5px',padding:'7px 12px',borderRadius:'10px',border:'1px solid #fca5a5',background:'#fff',color:'#dc2626',fontSize:'12px',fontWeight:700,cursor:'pointer'}}><i className="fa-solid fa-filter-circle-xmark"></i>ล้างค่า</button>}
+          {(filter!=='all'||sortBy!=='new'||dateFrom||dateTo||uploaderFilter!=='all'||q||pendingMode||dupMode) && <button onClick={()=>{setFilter('all');setSortBy('new');setDateFrom('');setDateTo('');setUploaderFilter('all');setQ('');setPendingMode(false);setDupMode(false);}} title="ล้างตัวกรองทั้งหมด" style={{display:'inline-flex',alignItems:'center',gap:'5px',padding:'7px 12px',borderRadius:'10px',border:'1px solid #fca5a5',background:'#fff',color:'#dc2626',fontSize:'12px',fontWeight:700,cursor:'pointer'}}><i className="fa-solid fa-filter-circle-xmark"></i>ล้างค่า</button>}
           <ImgViewToolbar mode={vMode} setMode={setVMode} size={vSize} setSize={setVSize}/>
         </div>
       </div>
+      </div>{/* /sticky header */}
       {err && <p style={{color:'#dc2626',fontSize:'13px'}}><i className="fa-solid fa-circle-exclamation" style={{marginRight:'5px'}}></i>{err}</p>}
 
       {/* กำลังโหลด → โครงร่างเบลอ (สื่อว่ามีรูปกำลังมา ไม่ใช่รูปหาย) */}
@@ -298,12 +338,12 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
 
       {!showLoading && displayList.length===0 && (
         <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'60px 20px'}}>
-          <div style={{width:'80px',height:'80px',borderRadius:'50%',background:pendingMode?'#fffbeb':'#f3f4f6',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'16px'}}>
-            <i className={pendingMode?'fa-solid fa-clock':'fa-solid fa-images'} style={{fontSize:'32px',color:pendingMode?'#fcd34d':'#cbd5e1'}}></i>
+          <div style={{width:'80px',height:'80px',borderRadius:'50%',background:pendingMode?'#fffbeb':dupMode?'#f3e8ff':'#f3f4f6',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'16px'}}>
+            <i className={pendingMode?'fa-solid fa-clock':dupMode?'fa-solid fa-clone':'fa-solid fa-images'} style={{fontSize:'32px',color:pendingMode?'#fcd34d':dupMode?'#c4b5fd':'#cbd5e1'}}></i>
           </div>
-          <p style={{fontSize:'15px',fontWeight:700,color:'#6b7280',margin:'0 0 4px'}}>{pendingMode?'ไม่มีรูปที่ขอลบ':((q||filter!=='all'||dateFrom||dateTo||uploaderFilter!=='all')?'ไม่พบรูปที่ตรงกับตัวกรอง':'ยังไม่มีรูปในระบบ')}</p>
-          <p style={{fontSize:'12px',color:'#9ca3af',margin:0,textAlign:'center'}}>{pendingMode?'ไม่มีคำขอลบรูปรออนุมัติในตอนนี้':((q||filter!=='all'||dateFrom||dateTo||uploaderFilter!=='all')?'ลองล้างตัวกรองหรือเปลี่ยนคำค้นหา':'อัปโหลดรูปได้จากแท็บ "รูปภาพ" ในหน้าผู้ป่วย')}</p>
-          {pendingMode && <button onClick={()=>setPendingMode(false)} style={{marginTop:'14px',fontSize:'13px',fontWeight:700,color:'#0f766e',background:'#fff',border:'1px solid #99e1cb',borderRadius:'8px',padding:'8px 16px',cursor:'pointer'}}><i className="fa-solid fa-arrow-left" style={{marginRight:'6px'}}></i>ดูรูปทั้งหมด</button>}
+          <p style={{fontSize:'15px',fontWeight:700,color:'#6b7280',margin:'0 0 4px'}}>{pendingMode?'ไม่มีรูปที่ขอลบ':dupMode?'ไม่พบรูปซ้ำที่ตรงกับตัวกรอง':((q||filter!=='all'||dateFrom||dateTo||uploaderFilter!=='all')?'ไม่พบรูปที่ตรงกับตัวกรอง':'ยังไม่มีรูปในระบบ')}</p>
+          <p style={{fontSize:'12px',color:'#9ca3af',margin:0,textAlign:'center'}}>{pendingMode?'ไม่มีคำขอลบรูปรออนุมัติในตอนนี้':dupMode?'ลองล้างตัวกรองอื่น หรือเปลี่ยนคำค้นหา':((q||filter!=='all'||dateFrom||dateTo||uploaderFilter!=='all')?'ลองล้างตัวกรองหรือเปลี่ยนคำค้นหา':'อัปโหลดรูปได้จากแท็บ "รูปภาพ" ในหน้าผู้ป่วย')}</p>
+          {(pendingMode||dupMode) && <button onClick={()=>{setPendingMode(false);setDupMode(false);}} style={{marginTop:'14px',fontSize:'13px',fontWeight:700,color:'#0f766e',background:'#fff',border:'1px solid #99e1cb',borderRadius:'8px',padding:'8px 16px',cursor:'pointer'}}><i className="fa-solid fa-arrow-left" style={{marginRight:'6px'}}></i>ดูรูปทั้งหมด</button>}
         </div>
       )}
       {!showLoading && groupEntries.map(([pid,g])=>(

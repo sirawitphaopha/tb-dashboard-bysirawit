@@ -56,7 +56,8 @@ export async function logImageEvent(admin: SupabaseClient, opts: {
       storage_key: r.storage_key ?? null, thumb_key: r.thumb_key ?? null,
       uploaded_by: ownerId, uploaded_at: r.uploaded_at ?? null,
       deleted_at: r.deleted_at ?? null, deleter_name: r.deleter_name ?? null,
-      orig_sha256: r.orig_sha256 ?? null, orig_md5: r.orig_md5 ?? null, orig_crc32: r.orig_crc32 ?? null, phash: r.phash ?? null,
+      orig_sha256: r.orig_sha256 ?? null, orig_md5: r.orig_md5 ?? null, orig_crc32: r.orig_crc32 ?? null,
+      webp_sha256: r.webp_sha256 ?? null, webp_md5: r.webp_md5 ?? null, webp_crc32: r.webp_crc32 ?? null, phash: r.phash ?? null,
     } : null
 
     await admin.from('tb_image_event_log').insert({

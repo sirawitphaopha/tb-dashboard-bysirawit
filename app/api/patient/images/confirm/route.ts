@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     if (!isApproved) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
     const b = await req.json().catch(() => ({} as any))
-    const { patientId, key, thumbKey, type, title, note, size, width, height, mime, origSize, origMime, origWidth, origHeight, quality, device, sha256, md5, crc32, phash } = b
+    const { patientId, key, thumbKey, type, title, note, size, width, height, mime, origSize, origMime, origWidth, origHeight, quality, device, origSha256, origMd5, origCrc32, webpSha256, webpMd5, webpCrc32, phash } = b
     if (!patientId || !key) return NextResponse.json({ error: 'patientId + key required' }, { status: 400 })
     const { data, error } = await admin
       .from('tb_patient_images')
@@ -33,9 +33,12 @@ export async function POST(req: NextRequest) {
         title: title || null,
         note: note || null,
         uploaded_by: user.id,
-        orig_sha256: sha256 || null,
-        orig_md5: md5 || null,
-        orig_crc32: crc32 || null,
+        orig_sha256: origSha256 || null,
+        orig_md5: origMd5 || null,
+        orig_crc32: origCrc32 || null,
+        webp_sha256: webpSha256 || null,
+        webp_md5: webpMd5 || null,
+        webp_crc32: webpCrc32 || null,
         phash: phash || null,
       })
       .select()

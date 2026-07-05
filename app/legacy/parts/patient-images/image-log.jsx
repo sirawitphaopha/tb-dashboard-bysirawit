@@ -1,6 +1,8 @@
 'use client'
 /** patient-images/image-log.jsx — ประวัติทุก event ของรูปผู้ป่วย (ImageLogPage · แอดมินเท่านั้น)
- *  วางในหน้าคลังรูปภาพ (สลับมุมมอง คลังรูป/ประวัติ) · ดึงจาก /api/patient/images/log */
+ *  โหลด event ทั้งหมดรอบเดียว → กรอง/จัดกลุ่ม/ตรวจรูปซ้ำใน client (กดกรองแล้วทันที)
+ *  2 มุมมอง: "ตามเวลา" (list) · "ตามรูป" (จับกลุ่มตามรูป + ยึดแฮช + ป้ายรูปซ้ำ)
+ *  ดรอปดาวน์กรองเหตุการณ์แบบเลือกหลายข้อ · กดดูรายละเอียดเป็นภาษาคน (มีปุ่มดูข้อมูลดิบ JSON) */
 import * as React from 'react'
 import { createPortal } from 'react-dom'
 
@@ -17,20 +19,26 @@ const EV = {
   hard_deleted:             { ic:'fa-fire',         c:'#991b1b', bg:'#fee2e2', label:'ลบถาวร' },
   purged:                   { ic:'fa-fire',         c:'#991b1b', bg:'#fee2e2', label:'ลบอัตโนมัติ (60 วัน)' },
 }
-const EV_OPTS = [
-  ['', 'ทุกเหตุการณ์'], ['uploaded','อัปโหลด'], ['metadata_updated','แก้ข้อมูล'],
-  ['delete_requested','ขอลบ'], ['delete_request_cancelled','ยกเลิกคำขอ'], ['delete_direct','แอดมินลบตรง'],
-  ['delete_approved','อนุมัติลบ'], ['delete_rejected','ปฏิเสธ'], ['restored','กู้คืน'],
-  ['hard_deleted','ลบถาวร'], ['purged','ลบอัตโนมัติ'],
+// ตัวเลือกในดรอปดาวน์เลือกหลายข้อ (set ว่าง = ทุกเหตุการณ์)
+const EV_LIST = [
+  ['uploaded','อัปโหลด'], ['metadata_updated','แก้ข้อมูล'], ['delete_requested','ขอลบ'],
+  ['delete_request_cancelled','ยกเลิกคำขอ'], ['delete_direct','แอดมินลบตรง'], ['delete_approved','อนุมัติลบ'],
+  ['delete_rejected','ปฏิเสธ'], ['restored','กู้คืน'], ['hard_deleted','ลบถาวร'], ['purged','ลบอัตโนมัติ'],
 ]
 const DATE_OPTS = [['7d','7 วัน'], ['30d','30 วัน'], ['all','ทั้งหมด']]
 const TYPE_LABEL = { cxr:'CXR', lab:'ผลแล็บ', document:'เอกสาร', other:'อื่นๆ' }
+const STATUS = {
+  hard_deleted:   { label:'ลบถาวรแล้ว', c:'#991b1b', bg:'#fee2e2' },
+  in_trash:       { label:'อยู่ในถังขยะ', c:'#d97706', bg:'#fef3c7' },
+  pending_delete: { label:'รอลบ',       c:'#d97706', bg:'#fef3c7' },
+}
+const DUP_COLORS = ['#7c3aed', '#db2777', '#2563eb', '#ea580c', '#0891b2', '#65a30d', '#c026d3']
 
-function computeSince(key) {
+function computeSinceMs(key) {
   const d = Date.now()
-  if (key === '7d')  return new Date(d - 7 * 86400000).toISOString()
-  if (key === '30d') return new Date(d - 30 * 86400000).toISOString()
-  return ''
+  if (key === '7d')  return d - 7 * 86400000
+  if (key === '30d') return d - 30 * 86400000
+  return 0
 }
 function fmtWhen(iso) {
   if (!iso) return '-'
@@ -42,69 +50,225 @@ function fmtWhen(iso) {
   if (yst) return 'เมื่อวาน ' + t
   return dt.toLocaleDateString('th-TH', { day:'numeric', month:'short', year:'numeric' }) + ' ' + t
 }
+function fmtDateTime(iso) {
+  if (!iso) return '-'
+  const dt = new Date(iso)
+  if (isNaN(dt.getTime())) return '-'
+  return dt.toLocaleDateString('th-TH', { day:'numeric', month:'short', year:'numeric' }) + ' ' +
+         dt.toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit' })
+}
+function shortId(id) { return '#' + String(id || '').replace(/-/g, '').slice(0, 8) }
+function fmtBytes(n) {
+  if (n === null || n === undefined || isNaN(n)) return '-'
+  if (n >= 1048576) return (n / 1048576).toFixed(1) + ' MB'
+  if (n >= 1024) return Math.round(n / 1024).toLocaleString() + ' KB'
+  return n + ' B'
+}
+function mimeLabel(m) { return m ? String(m).replace('image/', '').toUpperCase() : '-' }
+function phashDist(a, b) {
+  if (!a || !b) return 64
+  try { let x = BigInt('0x' + a) ^ BigInt('0x' + b), c = 0; while (x) { c += Number(x & 1n); x >>= 1n } return c } catch { return 64 }
+}
+function hashShort(h) {
+  if (!h) return null
+  if (h.sha256) return { k:'SHA-256', v: h.sha256.slice(0, 16) + '…' }
+  if (h.phash)  return { k:'pHash', v: h.phash }
+  return null
+}
 
-function ImageLogPage() {
-  const [logs, setLogs] = React.useState(null)
-  const [total, setTotal] = React.useState(0)
+function ImageLogPage({ headerExtra } = {}) {
+  const [allEvents, setAllEvents] = React.useState(null)
+  const [capped, setCapped] = React.useState(false)
   const [loading, setLoading] = React.useState(false)
-  const [page, setPage] = React.useState(0)
-  const [event, setEvent] = React.useState('')
+  const [view, setView] = React.useState('time')        // 'time' | 'image'
+  const [eventSet, setEventSet] = React.useState(() => new Set())
+  const [ddOpen, setDdOpen] = React.useState(false)
   const [dateKey, setDateKey] = React.useState('7d')
   const [q, setQ] = React.useState('')
-  const [snap, setSnap] = React.useState(null)   // {log} ที่กดดูข้อมูล
+  const [snap, setSnap] = React.useState(null)          // event ที่กดดูรายละเอียด
+  const [rawJson, setRawJson] = React.useState(false)   // สลับดูข้อมูลดิบใน modal
+  const [visTime, setVisTime] = React.useState(60)
+  const [visImg, setVisImg] = React.useState(24)
+  const ddRef = React.useRef(null)
 
-  const load = React.useCallback(async (pg, append) => {
+  const reload = React.useCallback(async () => {
     setLoading(true)
     try {
-      const p = new URLSearchParams()
-      p.set('page', String(pg)); p.set('pageSize', '50')
-      if (event) p.set('event', event)
-      if (q.trim()) p.set('q', q.trim())
-      const since = computeSince(dateKey); if (since) p.set('since', since)
-      const r = await fetch('/api/patient/images/log?' + p.toString())
+      const r = await fetch('/api/patient/images/log')
       const d = await r.json()
-      if (r.ok) { setTotal(d.total || 0); setLogs(prev => append ? [...(prev||[]), ...(d.logs||[])] : (d.logs||[])) }
-      else setLogs([])
-    } catch { setLogs([]) }
+      if (r.ok) { setAllEvents(d.events || []); setCapped(!!d.capped) }
+      else setAllEvents([])
+    } catch { setAllEvents([]) }
     setLoading(false)
-  }, [event, q, dateKey])
+  }, [])
 
-  // โหลดใหม่เมื่อเปลี่ยนตัวกรอง (debounce ค้นหา)
+  React.useEffect(() => { reload() }, [reload])
+
+  // รีเฟรชเมื่อมี action กับรูป (เหตุการณ์ tb-img-changed จาก channel กลาง · หน่วงให้ log insert ลงก่อน)
   React.useEffect(() => {
-    const t = setTimeout(() => { setPage(0); load(0, false) }, 300)
-    return () => clearTimeout(t)
-  }, [event, dateKey, q, load])
+    let t = null
+    const h = () => { if (t) clearTimeout(t); t = setTimeout(() => reload(), 900) }
+    window.addEventListener('tb-img-changed', h)
+    return () => { window.removeEventListener('tb-img-changed', h); if (t) clearTimeout(t) }
+  }, [reload])
 
-  const loadMore = () => { const np = page + 1; setPage(np); load(np, true) }
-  const hasMore = (logs || []).length < total
+  // ปิดดรอปดาวน์เมื่อคลิกนอก
+  React.useEffect(() => {
+    if (!ddOpen) return
+    const h = (e) => { if (ddRef.current && !ddRef.current.contains(e.target)) setDdOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [ddOpen])
+
+  // รีเซ็ตจำนวนที่โชว์เมื่อเปลี่ยนตัวกรอง/มุมมอง
+  React.useEffect(() => { setVisTime(60); setVisImg(24) }, [eventSet, dateKey, q, view])
+
+  const sinceMs = React.useMemo(() => computeSinceMs(dateKey), [dateKey])
+
+  // กรอง event ฝั่ง client (ทันที)
+  const filtered = React.useMemo(() => {
+    const list = allEvents || []
+    const qq = q.trim().toLowerCase()
+    return list.filter(e => {
+      if (eventSet.size && !eventSet.has(e.event_type)) return false
+      if (sinceMs && new Date(e.created_at).getTime() < sinceMs) return false
+      if (qq) { const hay = ((e.patient_name||'') + ' ' + (e.patient_hn||'') + ' ' + (e.actor_name||'')).toLowerCase(); if (!hay.includes(qq)) return false }
+      return true
+    })
+  }, [allEvents, eventSet, sinceMs, q])
+
+  // จัดกลุ่มตามรูป + ตรวจรูปซ้ำ (ฝั่ง client)
+  const grouped = React.useMemo(() => {
+    const map = new Map()
+    for (const e of filtered) {
+      let g = map.get(e.image_id)
+      if (!g) { g = { image_id:e.image_id, events:[], patient_name:null, patient_hn:null, owner_name:null, image_type:null, snapshot:null }; map.set(e.image_id, g) }
+      g.events.push(e)
+      if (e.patient_name) g.patient_name = e.patient_name
+      if (e.patient_hn) g.patient_hn = e.patient_hn
+      if (e.owner_name) g.owner_name = e.owner_name
+      if (e.image_type) g.image_type = e.image_type
+      const s = e.snapshot
+      if (s && (s.orig_sha256 || s.phash || s.webp_sha256)) g.snapshot = s
+      else if (s && !g.snapshot) g.snapshot = s
+    }
+    const groups = Array.from(map.values()).map(g => {
+      g.events.sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''))   // ในกลุ่ม เก่า→ใหม่
+      const evs = g.events
+      const last = evs[evs.length - 1]
+      const types = new Set(evs.map(x => x.event_type))
+      let status = 'active'
+      if (types.has('hard_deleted') || types.has('purged')) status = 'hard_deleted'
+      else if (last && last.event_type === 'delete_approved') status = 'in_trash'
+      else if (last && last.event_type === 'delete_direct') status = 'in_trash'
+      else if (last && last.event_type === 'delete_requested') status = 'pending_delete'
+      const snap = g.snapshot || {}
+      return { ...g, count:evs.length, latest:last ? last.created_at : null, status,
+        hash:{ sha256:snap.orig_sha256 || null, phash:snap.phash || null }, dup:null }
+    })
+    // union-find: exact = sha256 ตรง · near = pHash Hamming ≤ 8
+    const n = groups.length
+    const parent = Array.from({ length:n }, (_, i) => i)
+    const find = (i) => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i] } return i }
+    const union = (i, j) => { const a = find(i), b = find(j); if (a !== b) parent[a] = b }
+    const exactFlag = new Array(n).fill(false)
+    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+      const gi = groups[i].hash, gj = groups[j].hash
+      const exact = !!(gi.sha256 && gj.sha256 && gi.sha256 === gj.sha256)
+      const near = phashDist(gi.phash, gj.phash) <= 8
+      if (exact || near) { union(i, j); if (exact) { exactFlag[i] = true; exactFlag[j] = true } }
+    }
+    const size = new Map(); for (let i = 0; i < n; i++) { const r = find(i); size.set(r, (size.get(r) || 0) + 1) }
+    const idx = new Map(); let dc = 0
+    for (let i = 0; i < n; i++) { const r = find(i); if ((size.get(r) || 0) > 1) { if (!idx.has(r)) idx.set(r, ++dc); groups[i].dup = { id:idx.get(r), exact:exactFlag[i] } } }
+    groups.sort((a, b) => (b.latest || '').localeCompare(a.latest || ''))
+    return groups
+  }, [filtered])
+
+  const toggleEvent = (v) => setEventSet(prev => { const n = new Set(prev); if (n.has(v)) n.delete(v); else n.add(v); return n })
+  const openSnap = (ev) => { setSnap(ev); setRawJson(false) }
 
   const chip = (on) => ({ border:'0.5px solid '+(on?'#0d9488':'#e5e7eb'), background:on?'#0d9488':'#fff', color:on?'#fff':'#6b7280', borderRadius:'999px', padding:'5px 12px', fontSize:'12px', cursor:'pointer' })
+  const segBtn = (on) => ({ display:'flex', alignItems:'center', gap:'6px', border:'none', background:on?'#0d9488':'transparent', color:on?'#fff':'#6b7280', borderRadius:'8px', padding:'7px 14px', fontSize:'13px', fontWeight:700, cursor:'pointer' })
+
+  const isInitLoading = allEvents === null
+  const isEmpty = allEvents !== null && filtered.length === 0
+  const totalImages = grouped.length
+  const totalEvents = filtered.length
+  const timeShown = filtered.slice(0, visTime)
+  const imgShown = grouped.slice(0, visImg)
+  const hasMore = view === 'image' ? visImg < grouped.length : visTime < filtered.length
 
   return (
     <div>
-      {/* แถบกรอง */}
-      <div style={{ display:'flex', gap:'8px', flexWrap:'wrap', alignItems:'center', marginBottom:'14px' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:'6px', border:'1px solid #e5e7eb', borderRadius:'8px', padding:'6px 10px', flex:'1 1 180px', minWidth:'160px' }}>
-          <i className="fa-solid fa-magnifying-glass" style={{ fontSize:'12px', color:'#9ca3af' }}></i>
-          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="ค้นหาผู้ป่วย / HN / ผู้ทำ" style={{ flex:1, minWidth:0, border:'none', outline:'none', fontSize:'13px', background:'none' }}/>
+      {/* ส่วนหัว — ตรึงไว้ด้านบน (sticky) */}
+      <div style={{ position:'sticky', top:0, zIndex:20, background:'#f0fdfa', marginLeft:'-24px', marginRight:'-24px', paddingLeft:'24px', paddingRight:'24px', paddingTop:'2px', paddingBottom:'10px', marginBottom:'6px' }}>
+      {headerExtra}
+      {/* ปุ่มสลับมุมมอง */}
+      <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'12px', flexWrap:'wrap' }}>
+        <div style={{ display:'inline-flex', background:'#f3f4f6', borderRadius:'10px', padding:'3px' }}>
+          <button onClick={()=>setView('time')} style={segBtn(view==='time')}><i className="fa-solid fa-list-ul"></i> ตามเวลา</button>
+          <button onClick={()=>setView('image')} style={segBtn(view==='image')}><i className="fa-solid fa-images"></i> ตามรูป</button>
         </div>
-        <select value={event} onChange={e=>setEvent(e.target.value)} style={{ padding:'6px 10px', borderRadius:'8px', border:'1px solid #e5e7eb', fontSize:'12px', color:'#6b7280', cursor:'pointer' }}>
-          {EV_OPTS.map(([v,l]) => <option key={v} value={v}>{l}</option>)}
-        </select>
-        {DATE_OPTS.map(([v,l]) => <button key={v} onClick={()=>setDateKey(v)} style={chip(dateKey===v)}>{l}</button>)}
-        <span style={{ marginLeft:'auto', fontSize:'12px', color:'#9ca3af' }}>{total} เหตุการณ์</span>
+        {loading && <i className="fa-solid fa-circle-notch fa-spin" style={{ fontSize:'13px', color:'#9ca3af' }}></i>}
       </div>
 
-      {/* รายการ */}
-      {logs === null && <div style={{ display:'flex', flexDirection:'column', gap:'9px' }}>{[0,1,2,3].map(i=><div key={i} className="tb-skel" style={{ height:'66px', borderRadius:'11px' }}/>)}</div>}
-      {logs !== null && logs.length === 0 && (
+      {/* แถบกรอง */}
+      <div style={{ display:'flex', gap:'8px', flexWrap:'wrap', alignItems:'center', marginBottom:'14px' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:'6px', border:'1px solid #e5e7eb', borderRadius:'8px', padding:'6px 10px', flex:'0 1 200px', minWidth:'140px' }}>
+          <i className="fa-solid fa-magnifying-glass" style={{ fontSize:'12px', color:'#9ca3af' }}></i>
+          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="ค้นหาผู้ป่วย / HN" style={{ flex:1, minWidth:0, border:'none', outline:'none', fontSize:'13px', background:'none' }}/>
+        </div>
+
+        {/* ดรอปดาวน์เลือกหลายข้อ */}
+        <div ref={ddRef} style={{ position:'relative' }}>
+          <button onClick={()=>setDdOpen(o=>!o)} className="tb-hovbg" style={{ display:'flex', alignItems:'center', gap:'7px', width:'178px', boxSizing:'border-box', padding:'7px 11px', borderRadius:'8px', border:'1px solid '+(eventSet.size?'#0d9488':'#e5e7eb'), background:'#fff', fontSize:'12px', color:eventSet.size?'#0d9488':'#6b7280', cursor:'pointer' }}>
+            <i className="fa-solid fa-filter" style={{ fontSize:'11px', flexShrink:0 }}></i>
+            <span style={{ flex:1, textAlign:'left', whiteSpace:'nowrap' }}>{eventSet.size ? 'เลือก ' + eventSet.size + ' เหตุการณ์' : 'ทุกเหตุการณ์'}</span>
+            <i className={'fa-solid ' + (ddOpen ? 'fa-chevron-up' : 'fa-chevron-down')} style={{ fontSize:'10px', color:'#9ca3af', flexShrink:0 }}></i>
+          </button>
+          {ddOpen && (
+            <div style={{ position:'absolute', top:'calc(100% + 6px)', left:0, zIndex:60, background:'#fff', border:'1px solid #e5e7eb', borderRadius:'10px', boxShadow:'0 8px 24px rgba(0,0,0,0.12)', padding:'5px', minWidth:'210px' }}>
+              {EV_LIST.map(([v, l]) => {
+                const on = eventSet.has(v)
+                return (
+                  <div key={v} onClick={()=>toggleEvent(v)} className="tb-hovteal" style={{ display:'flex', alignItems:'center', gap:'9px', padding:'7px 9px', borderRadius:'7px', cursor:'pointer', background:on?'#f0fdfa':'transparent' }}>
+                    <div style={{ width:'17px', height:'17px', borderRadius:'4px', background:on?'#0d9488':'#fff', border:on?'none':'1.5px solid #d1d5db', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>{on && <i className="fa-solid fa-check" style={{ fontSize:'10px', color:'#fff' }}></i>}</div>
+                    <span style={{ fontSize:'13px', color:on?'#111827':'#374151' }}>{l}</span>
+                  </div>
+                )
+              })}
+              <div style={{ display:'flex', gap:'8px', padding:'6px 4px 2px', borderTop:'1px solid #f3f4f6', marginTop:'4px' }}>
+                <span onClick={()=>setEventSet(new Set())} className="tb-hovbg" style={{ fontSize:'12px', color:'#6b7280', cursor:'pointer', padding:'5px 9px', borderRadius:'6px' }}>ล้างทั้งหมด</span>
+                <span onClick={()=>setEventSet(new Set(EV_LIST.map(x=>x[0])))} className="tb-hovbg" style={{ fontSize:'12px', color:'#0d9488', marginLeft:'auto', cursor:'pointer', padding:'5px 9px', borderRadius:'6px' }}>เลือกทั้งหมด</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {DATE_OPTS.map(([v, l]) => <button key={v} onClick={()=>setDateKey(v)} style={chip(dateKey===v)}>{l}</button>)}
+        <span style={{ marginLeft:'auto', fontSize:'12px', color:'#9ca3af' }}>
+          {view === 'image' ? `${totalImages} รูป · ${totalEvents} เหตุการณ์` : `${totalEvents} เหตุการณ์`}
+        </span>
+      </div>
+      </div>{/* /sticky header */}
+
+      {capped &&<div style={{ fontSize:'11.5px', color:'#b45309', background:'#fffbeb', border:'1px solid #fde68a', borderRadius:'8px', padding:'7px 11px', marginBottom:'12px' }}>แสดงเหตุการณ์ล่าสุด 5,000 รายการ (มีมากกว่านี้ในระบบ)</div>}
+
+      {/* โหลดครั้งแรก */}
+      {isInitLoading && <div style={{ display:'flex', flexDirection:'column', gap:'9px' }}>{[0,1,2,3].map(i=><div key={i} className="tb-skel" style={{ height:view==='image'?'120px':'66px', borderRadius:'11px' }}/>)}</div>}
+
+      {/* ว่าง */}
+      {isEmpty && (
         <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'56px 20px' }}>
           <div style={{ width:'70px', height:'70px', borderRadius:'50%', background:'#f3f4f6', display:'flex', alignItems:'center', justifyContent:'center', marginBottom:'12px' }}><i className="fa-solid fa-clock-rotate-left" style={{ fontSize:'26px', color:'#cbd5e1' }}></i></div>
           <p style={{ fontSize:'14px', fontWeight:700, color:'#6b7280', margin:'0 0 4px' }}>ยังไม่มีประวัติที่ตรงกับตัวกรอง</p>
           <p style={{ fontSize:'12px', color:'#9ca3af', margin:0 }}>ลองเปลี่ยนช่วงเวลา หรือชนิดเหตุการณ์</p>
         </div>
       )}
-      {(logs || []).map(lg => {
+
+      {/* ══════ มุม "ตามเวลา" ══════ */}
+      {!isInitLoading && view === 'time' && timeShown.map(lg => {
         const e = EV[lg.event_type] || { ic:'fa-circle', c:'#6b7280', bg:'#f3f4f6', label:lg.event_type }
         return (
           <div key={lg.id} style={{ display:'flex', gap:'12px', alignItems:'flex-start', background:'#fff', border:'1px solid #e5e7eb', borderRadius:'11px', padding:'11px 13px', marginBottom:'9px' }}>
@@ -123,37 +287,156 @@ function ImageLogPage() {
             </div>
             <div style={{ textAlign:'right', flexShrink:0 }}>
               <div style={{ fontSize:'11px', color:'#9ca3af', whiteSpace:'nowrap' }}>{fmtWhen(lg.created_at)}</div>
-              {lg.snapshot && <button onClick={()=>setSnap(lg)} style={{ marginTop:'6px', border:'0.5px solid #d1d5db', borderRadius:'7px', padding:'3px 9px', fontSize:'11px', color:'#4b5563', background:'#fff', cursor:'pointer' }}>ดูข้อมูล</button>}
+              {lg.snapshot && <button onClick={()=>openSnap(lg)} style={{ marginTop:'6px', border:'0.5px solid #d1d5db', borderRadius:'7px', padding:'3px 9px', fontSize:'11px', color:'#4b5563', background:'#fff', cursor:'pointer' }}>ดูข้อมูล</button>}
             </div>
           </div>
         )
       })}
 
-      {hasMore && <div style={{ textAlign:'center', marginTop:'12px' }}><button onClick={loadMore} disabled={loading} style={{ border:'0.5px solid #d1d5db', borderRadius:'9px', padding:'8px 20px', fontSize:'13px', color:'#4b5563', background:'#fff', cursor:loading?'wait':'pointer' }}>{loading ? 'กำลังโหลด...' : 'โหลดเพิ่ม'}</button></div>}
-
-      {/* popup ดูข้อมูล snapshot */}
-      {snap && createPortal(
-        <div className="tb-backdrop" style={{ position:'fixed', inset:0, zIndex:10002, display:'flex', alignItems:'center', justifyContent:'center', padding:'20px' }} onClick={()=>setSnap(null)}>
-          <div className="modal-A" onClick={e=>e.stopPropagation()} style={{ background:'#fff', borderRadius:'16px', width:'100%', maxWidth:'420px', maxHeight:'80vh', overflowY:'auto', padding:'20px', boxSizing:'border-box' }}>
-            <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'12px' }}>
-              <div style={{ width:'40px', height:'40px', borderRadius:'50%', background:(EV[snap.event_type]||{}).bg||'#f3f4f6', display:'flex', alignItems:'center', justifyContent:'center' }}><i className={'fa-solid '+((EV[snap.event_type]||{}).ic||'fa-circle')} style={{ color:(EV[snap.event_type]||{}).c||'#6b7280', fontSize:'17px' }}></i></div>
-              <div><p style={{ fontSize:'14px', fontWeight:700, color:'#111827', margin:0 }}>{(EV[snap.event_type]||{}).label || snap.event_type}</p><p style={{ fontSize:'11px', color:'#9ca3af', margin:0 }}>{fmtWhen(snap.created_at)}</p></div>
+      {/* ══════ มุม "ตามรูป" ══════ */}
+      {!isInitLoading && view === 'image' && imgShown.map(g => {
+        const st = STATUS[g.status]
+        const hs = hashShort(g.hash)
+        const dupColor = g.dup ? DUP_COLORS[(g.dup.id - 1) % DUP_COLORS.length] : null
+        return (
+          <div key={g.image_id} style={{ background:'#fff', border:'1px solid #e5e7eb', borderRadius:'13px', padding:'13px 15px', marginBottom:'11px' }}>
+            <div style={{ display:'flex', gap:'12px', alignItems:'flex-start' }}>
+              <div style={{ width:'42px', height:'42px', flexShrink:0, borderRadius:'10px', background:'#f3f4f6', display:'flex', alignItems:'center', justifyContent:'center' }}><i className="fa-solid fa-image" style={{ fontSize:'18px', color:'#9ca3af' }}></i></div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:'7px', flexWrap:'wrap' }}>
+                  <span style={{ fontSize:'13px', fontWeight:800, color:'#374151', fontFamily:'ui-monospace, monospace' }}>{shortId(g.image_id)}</span>
+                  <span style={{ fontSize:'11px', color:'#6b7280', background:'#f3f4f6', borderRadius:'5px', padding:'1px 7px' }}>{TYPE_LABEL[g.image_type] || g.image_type || '-'}</span>
+                  {st && <span style={{ fontSize:'11px', fontWeight:700, color:st.c, background:st.bg, borderRadius:'5px', padding:'1px 8px' }}>{st.label}</span>}
+                  {g.dup && <span style={{ fontSize:'11px', fontWeight:700, color:'#fff', background:dupColor, borderRadius:'5px', padding:'1px 8px', display:'inline-flex', alignItems:'center', gap:'4px' }}><i className={'fa-solid '+(g.dup.exact?'fa-clone':'fa-images')} style={{ fontSize:'9px' }}></i>{g.dup.exact ? 'รูปซ้ำ' : 'ภาพคล้าย'} #{g.dup.id}</span>}
+                </div>
+                <div style={{ fontSize:'12px', color:'#374151', marginTop:'4px' }}>
+                  {g.patient_name || '-'}{g.patient_hn ? <span style={{ color:'#9ca3af' }}> · HN {g.patient_hn}</span> : null}
+                  {g.owner_name ? <span style={{ color:'#9ca3af' }}> · เจ้าของ {g.owner_name}</span> : null}
+                </div>
+                {hs && <div style={{ fontSize:'10.5px', color:'#9ca3af', marginTop:'3px', fontFamily:'ui-monospace, monospace', wordBreak:'break-all' }}>{hs.k} {hs.v}</div>}
+              </div>
+              <div style={{ fontSize:'11px', color:'#9ca3af', whiteSpace:'nowrap', flexShrink:0 }}>{g.count} เหตุการณ์</div>
             </div>
-            <div style={{ background:'#f9fafb', border:'1px solid #e5e7eb', borderRadius:'10px', padding:'11px 13px', fontSize:'12px', color:'#374151', lineHeight:1.9 }}>
-              {[
-                ['ผู้ป่วย', (snap.patient_name||'-') + (snap.patient_hn ? ' · HN '+snap.patient_hn : '')],
-                ['ผู้ทำ', (snap.actor_name||'-') + (snap.actor_role ? ' ('+(snap.actor_role==='admin'?'แอดมิน':'ผู้ใช้')+')' : '')],
-                ['เจ้าของรูป', snap.owner_name || '-'],
-                ['เหตุผล', snap.reason || '-'],
-                ['image_id', snap.image_id || '-'],
-              ].map(([k,v]) => <div key={k}><span style={{ color:'#9ca3af', display:'inline-block', minWidth:'82px' }}>{k}</span><span style={{ wordBreak:'break-all' }}>{v}</span></div>)}
+            <div style={{ borderTop:'1px dashed #e5e7eb', marginTop:'11px', paddingTop:'11px', display:'flex', flexDirection:'column', gap:'10px' }}>
+              {g.events.map(ev => {
+                const e = EV[ev.event_type] || { ic:'fa-circle', c:'#6b7280', bg:'#f3f4f6', label:ev.event_type }
+                return (
+                  <div key={ev.id} onClick={()=> ev.snapshot && openSnap(ev)} style={{ display:'flex', gap:'10px', alignItems:'flex-start', cursor: ev.snapshot ? 'pointer' : 'default' }}>
+                    <div style={{ width:'26px', height:'26px', flexShrink:0, borderRadius:'50%', background:e.bg, display:'flex', alignItems:'center', justifyContent:'center' }}><i className={'fa-solid '+e.ic} style={{ fontSize:'11px', color:e.c }}></i></div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <span style={{ fontSize:'12.5px', fontWeight:700, color:e.c }}>{e.label}</span>
+                      <div style={{ fontSize:'11.5px', color:'#6b7280', marginTop:'1px', wordBreak:'break-word' }}>
+                        โดย {ev.actor_name || '-'}{ev.actor_role ? ' (' + (ev.actor_role === 'admin' ? 'แอดมิน' : 'ผู้ใช้') + ')' : ''}
+                        {ev.reason ? ' · ' + ev.reason : ''}
+                      </div>
+                    </div>
+                    <div style={{ fontSize:'11px', color:'#9ca3af', whiteSpace:'nowrap', flexShrink:0 }}>{fmtWhen(ev.created_at)}</div>
+                  </div>
+                )
+              })}
             </div>
-            <p style={{ fontSize:'11px', fontWeight:700, color:'#6b7280', margin:'14px 0 6px' }}>ข้อมูลรูป ณ ตอนนั้น (snapshot)</p>
-            <pre style={{ background:'#0b0f19', color:'#a5f3ea', borderRadius:'10px', padding:'12px', fontSize:'11px', overflowX:'auto', margin:0, whiteSpace:'pre-wrap', wordBreak:'break-all' }}>{JSON.stringify(snap.snapshot, null, 2)}</pre>
-            <div style={{ display:'flex', marginTop:'14px' }}><button onClick={()=>setSnap(null)} style={{ flex:1, padding:'10px', borderRadius:'10px', background:'#f3f4f6', color:'#4b5563', fontWeight:700, fontSize:'13px', border:'none', cursor:'pointer' }}>ปิด</button></div>
           </div>
-        </div>, document.body
-      )}
+        )
+      })}
+
+      {/* โหลดเพิ่ม (ฝั่ง client · ทันที) */}
+      {!isInitLoading && hasMore && <div style={{ textAlign:'center', marginTop:'12px' }}><button onClick={()=> view==='image' ? setVisImg(v=>v+24) : setVisTime(v=>v+60)} style={{ border:'0.5px solid #d1d5db', borderRadius:'9px', padding:'8px 20px', fontSize:'13px', color:'#4b5563', background:'#fff', cursor:'pointer' }}>โหลดเพิ่ม</button></div>}
+
+      {/* popup รายละเอียด (ภาษาคน + สลับ JSON ดิบ) */}
+      {snap && createPortal(<SnapModal snap={snap} rawJson={rawJson} setRawJson={setRawJson} onClose={()=>setSnap(null)} />, document.body)}
+    </div>
+  )
+}
+
+// ── modal รายละเอียด event/รูป ── ภาษาคน (จัดแนวนอน grid) + แฮชเต็ม + ปุ่มดูข้อมูลดิบ (JSON)
+function SnapModal({ snap, rawJson, setRawJson, onClose }) {
+  const e = EV[snap.event_type] || { ic:'fa-circle', c:'#6b7280', bg:'#f3f4f6', label:snap.event_type }
+  const s = snap.snapshot || null
+  const row = (k, v, mono) => (
+    <div key={k}><span style={{ color:'#9ca3af', display:'inline-block', minWidth:'104px' }}>{k}</span><span style={{ wordBreak:'break-all', fontFamily: mono ? 'ui-monospace, monospace' : 'inherit' }}>{v}</span></div>
+  )
+  const sect = (icon, color, title, children, span) => (
+    <div style={{ border:'1px solid #eef0f2', borderRadius:'11px', overflow:'hidden', ...(span ? { gridColumn:'1 / -1' } : {}) }}>
+      <div style={{ display:'flex', alignItems:'center', gap:'7px', background:'#f9fafb', padding:'7px 12px', borderBottom:'1px solid #eef0f2' }}><i className={'fa-solid '+icon} style={{ fontSize:'13px', color }}></i><span style={{ fontSize:'12px', fontWeight:700, color:'#374151' }}>{title}</span></div>
+      <div style={{ padding:'8px 13px', fontSize:'12.5px', lineHeight:1.95, color:'#374151' }}>{children}</div>
+    </div>
+  )
+  const compress = (s && s.orig_size_bytes && s.size_bytes) ? Math.round((1 - s.size_bytes / s.orig_size_bytes) * 100) : null
+
+  return (
+    <div className="tb-backdrop" style={{ position:'fixed', inset:0, zIndex:10002, display:'flex', alignItems:'center', justifyContent:'center', padding:'20px' }} onClick={onClose}>
+      <div className="modal-A" onClick={ev=>ev.stopPropagation()} style={{ background:'#fff', borderRadius:'16px', width:'100%', maxWidth:'720px', maxHeight:'86vh', overflowY:'auto', padding:'18px', boxSizing:'border-box' }}>
+        {/* หัว */}
+        <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'12px' }}>
+          <div style={{ width:'40px', height:'40px', borderRadius:'50%', background:e.bg, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}><i className={'fa-solid '+e.ic} style={{ color:e.c, fontSize:'18px' }}></i></div>
+          <div><p style={{ fontSize:'15px', fontWeight:700, color:'#111827', margin:0 }}>{e.label}</p><p style={{ fontSize:'11px', color:'#9ca3af', margin:0 }}>{fmtWhen(snap.created_at)}</p></div>
+        </div>
+
+        {/* ผู้เกี่ยวข้อง */}
+        <div style={{ background:'#f9fafb', border:'1px solid #eef0f2', borderRadius:'11px', padding:'11px 13px', marginBottom:'12px', fontSize:'12.5px', lineHeight:1.9, color:'#374151' }}>
+          {row('ผู้ป่วย', (snap.patient_name||'-') + (snap.patient_hn ? ' · HN '+snap.patient_hn : ''))}
+          {row('ผู้ทำ', (snap.actor_name||'-') + (snap.actor_role ? ' ('+(snap.actor_role==='admin'?'แอดมิน':'ผู้ใช้')+')' : ''))}
+          {row('เจ้าของรูป', snap.owner_name || '-')}
+          {snap.reason ? row('เหตุผล', snap.reason) : null}
+        </div>
+
+        {!s && <p style={{ fontSize:'12px', color:'#9ca3af', textAlign:'center', padding:'8px 0' }}>ไม่มีข้อมูลรูปในเหตุการณ์นี้</p>}
+
+        {/* จัดแนวนอน: หน้าจอกว้าง = หลายคอลัมน์ (ไม่ต้องเลื่อน) · มือถือ = เรียงลง */}
+        {s && !rawJson && (
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(215px, 1fr))', gap:'10px' }}>
+            {sect('fa-image', '#0d9488', 'ข้อมูลรูป', <>
+              {row('ชนิด', TYPE_LABEL[s.type] || s.type || '-')}
+              {s.note ? row('หมายเหตุ', s.note) : null}
+              {row('ขนาดภาพ', (s.width && s.height) ? `${s.width} × ${s.height} พิกเซล` : '-')}
+              {row('อุปกรณ์', s.device || '-')}
+            </>)}
+
+            <div style={{ border:'1px solid #eef0f2', borderRadius:'11px', overflow:'hidden' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:'6px', background:'#f9fafb', padding:'7px 11px', borderBottom:'1px solid #eef0f2' }}><i className="fa-solid fa-file" style={{ fontSize:'12px', color:'#6b7280' }}></i><span style={{ fontSize:'11.5px', fontWeight:700, color:'#374151' }}>ต้นฉบับ</span></div>
+              <div style={{ padding:'8px 11px', fontSize:'12px', lineHeight:1.85, color:'#374151' }}>
+                <div style={{ color:'#111827', fontWeight:700 }}>{mimeLabel(s.orig_mime)}</div>
+                <div>{fmtBytes(s.orig_size_bytes)}</div>
+                <div style={{ color:'#9ca3af' }}>{(s.orig_width && s.orig_height) ? `${s.orig_width} × ${s.orig_height}` : '-'}</div>
+              </div>
+            </div>
+
+            <div style={{ border:'1px solid #eef0f2', borderRadius:'11px', overflow:'hidden' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:'6px', background:'#f9fafb', padding:'7px 11px', borderBottom:'1px solid #eef0f2' }}><i className="fa-solid fa-hard-drive" style={{ fontSize:'12px', color:'#0d9488' }}></i><span style={{ fontSize:'11.5px', fontWeight:700, color:'#374151' }}>ไฟล์ที่เก็บ</span></div>
+              <div style={{ padding:'8px 11px', fontSize:'12px', lineHeight:1.85, color:'#374151' }}>
+                <div style={{ color:'#111827', fontWeight:700 }}>{mimeLabel(s.mime)}{s.quality ? ' · '+s.quality+'%' : ''}</div>
+                <div>{fmtBytes(s.size_bytes)}</div>
+                {compress !== null && compress > 0 ? <div style={{ color:'#059669' }}>เล็กลง {compress}%</div> : <div style={{ color:'#9ca3af' }}>-</div>}
+              </div>
+            </div>
+
+            {sect('fa-clock', '#6b7280', 'เวลา', <>
+              {row('อัปโหลด', fmtDateTime(s.uploaded_at))}
+              {s.deleted_at ? row('ลบ', fmtDateTime(s.deleted_at) + (s.deleter_name ? ' โดย '+s.deleter_name : '')) : null}
+            </>)}
+
+            {(s.orig_sha256 || s.orig_md5 || s.orig_crc32 || s.webp_sha256 || s.webp_md5 || s.webp_crc32 || s.phash) && sect('fa-fingerprint', '#7c3aed', 'ลายนิ้วมือดิจิทัล (แฮช) — ค่าเต็ม', <>
+              {s.orig_sha256 ? row('SHA-256 ต้นฉบับ', s.orig_sha256, true) : null}
+              {s.orig_md5 ? row('MD5 ต้นฉบับ', s.orig_md5, true) : null}
+              {s.orig_crc32 ? row('CRC32 ต้นฉบับ', s.orig_crc32, true) : null}
+              {s.webp_sha256 ? row('SHA-256 WebP', s.webp_sha256, true) : null}
+              {s.webp_md5 ? row('MD5 WebP', s.webp_md5, true) : null}
+              {s.webp_crc32 ? row('CRC32 WebP', s.webp_crc32, true) : null}
+              {s.phash ? row('pHash (ภาพ)', s.phash, true) : null}
+            </>, true)}
+          </div>
+        )}
+
+        {s && rawJson && (
+          <pre style={{ background:'#0b0f19', color:'#a5f3ea', borderRadius:'10px', padding:'12px', fontSize:'11px', overflowX:'auto', margin:0, whiteSpace:'pre-wrap', wordBreak:'break-all' }}>{JSON.stringify(snap.snapshot, null, 2)}</pre>
+        )}
+
+        {/* ปุ่ม */}
+        <div style={{ display:'flex', gap:'8px', marginTop:'14px' }}>
+          {s && <button onClick={()=>setRawJson(r=>!r)} className="tb-hovbg" style={{ border:'0.5px solid #d1d5db', borderRadius:'10px', padding:'10px 12px', background:'#fff', color:'#6b7280', fontWeight:700, fontSize:'12.5px', cursor:'pointer', whiteSpace:'nowrap' }}><i className={'fa-solid '+(rawJson?'fa-eye':'fa-code')} style={{ marginRight:'5px', fontSize:'11px' }}></i>{rawJson ? 'ดูแบบอ่านง่าย' : 'ดูข้อมูลดิบ'}</button>}
+          <button onClick={onClose} className="tb-hovgray" style={{ flex:1, padding:'10px', borderRadius:'10px', background:'#f3f4f6', color:'#4b5563', fontWeight:700, fontSize:'13px', border:'none', cursor:'pointer' }}>ปิด</button>
+        </div>
+      </div>
     </div>
   )
 }

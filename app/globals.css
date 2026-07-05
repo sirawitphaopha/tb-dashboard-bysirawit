@@ -156,6 +156,14 @@ body {
 .tb-mention-filter-row:hover { background-color: #ccfbf1 !important; }
 .tb-mention-filter-row.is-admin:hover { background-color: #fcd34d !important; }
 
+/* ── hover เปลี่ยนฉากหลัง (ใช้กับ element ที่ style เป็น inline · บอกว่ากดได้) ── */
+.tb-hovbg   { transition: background-color 0.15s ease; }
+.tb-hovbg:hover   { background-color: #f3f4f6 !important; }
+.tb-hovgray { transition: background-color 0.15s ease; }
+.tb-hovgray:hover { background-color: #e5e7eb !important; }
+.tb-hovteal { transition: background-color 0.15s ease; }
+.tb-hovteal:hover { background-color: #f0fdfa !important; }
+
 /* Comment card classes (v0.7.15.5) */
 .cm-card {
   border-radius: 8px;

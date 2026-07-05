@@ -620,6 +620,15 @@ export function AvatarLightbox({ src, thumb, originRect, info, onExpire, onClose
             ...(info && info.device ? [['อัปโหลดจากอุปกรณ์', info.device]] : []),
             ['อัปเดตล่าสุด', info && info.updatedAt ? new Date(info.updatedAt).toLocaleString('th-TH') : '—'],
             ['แหล่งเก็บ', (info && info.storage) ? info.storage : 'Cloudflare R2 · img.tbjourney.care'],
+            ...(info && info.hashes ? [
+              ['SHA-256 (ต้นฉบับ)', info.hashes.origSha256 || '—'],
+              ['MD5 (ต้นฉบับ)', info.hashes.origMd5 || '—'],
+              ['CRC32 (ต้นฉบับ)', info.hashes.origCrc32 || '—'],
+              ['SHA-256 (WebP)', info.hashes.webpSha256 || '—'],
+              ['MD5 (WebP)', info.hashes.webpMd5 || '—'],
+              ['CRC32 (WebP)', info.hashes.webpCrc32 || '—'],
+              ['pHash (ภาพ · เทียบรูปซ้ำ)', info.hashes.phash || '—'],
+            ] : []),
           ].map(([k,v]) => (
             <div key={k} style={{padding:'11px 0',borderBottom:'1px solid #f1f5f9'}}>
               <p style={{fontSize:'10px',color:'#9ca3af',margin:'0 0 3px',textTransform:'uppercase',letterSpacing:'0.5px'}}>{k}</p>
