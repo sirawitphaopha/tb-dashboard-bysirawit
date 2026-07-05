@@ -23,6 +23,27 @@ window.TB_CHANGELOG = [
     description: "ระบบ login จริง + Audit Log ครบวงจร + Admin Approval + ดีไซน์ใหม่ทั้งหมด",
     versions: [
       {
+        version: "0.7.21",
+        date: "5 ก.ค. 2569",
+        commit: "2f2ea16",
+        commitFull: "2f2ea1626c552b679b3a83a88e2f43b48c1bc85e",
+        title: "ระบบประวัติรูปภาพ (audit log ทุก event) + คำนวณ hash รูป (SHA-256/MD5/CRC32/pHash) เตรียมตรวจรูปซ้ำ",
+        changes: [
+          { tag: "feature", text: "บันทึกทุกการกระทำต่อรูปผู้ป่วย (ใครทำอะไร เมื่อไหร่ ทำไม) เก็บถาวรแม้รูปถูกลบถาวร (snapshot metadata ยังอยู่ แค่ไม่มีไฟล์)" },
+          { tag: "feature", text: "คำนวณ hash รูปตอนอัป (เตรียมตรวจรูปซ้ำ SHA เป๊ะ + pHash ภาพเดียวกันแม้คนละไฟล์)" },
+          { tag: "security", text: "ตาราง tb_image_event_log (SQL scripts/add-image-event-log.sql | jsonb snapshot ยึดโครง tb_patients_deleted_log | RLS no-client-access เข้าผ่าน API service-role)" },
+          { tag: "ui", text: "helper logImageEvent() (lib/image-event-log.ts | fire-and-forget try/catch ไม่ทำงานหลักพัง | resolve ชื่อ actor/owner/patient + build snapshot metadata+hash)" },
+          { tag: "feature", text: "ปุ่ม \"ถังขยะ\" ในคลังรูป = ทางลัด → เด้งหน้าถังขยะ + เปิดแท็บรูปภาพอัตโนมัติ (trashWantImages prop -> TrashHub useEffect setSub images)" },
+          { tag: "backend", text: "คำนวณตอนอัป (patient-tab doUpload) -> ส่ง confirm -> เก็บคอลัมน์ orig_sha256/md5/crc32/phash (SQL scripts/add-image-hashes.sql) | log snapshot เก็บ hash ด้วย" },
+          { tag: "backend", text: "ใหม่: lib/image-event-log.ts | app/api/patient/images/log/route.ts | parts/patient-images/{image-log.jsx,image-hash.js} | scripts/{add-image-event-log,add-image-hashes}.sql" },
+          { tag: "backend", text: "แก้: 8 image route (ต่อ log) | confirm(เก็บ hash) | library/patient-tab/trash/tb-monolith (viewer+toggle+ปุ่มถังขยะ+hash upload) | CLAUDE.md/README.md | login/page.tsx(version)" },
+          { tag: "backend", text: "log view \"ตามรูป\" (group by image_id = ไทม์ไลน์ชีวิตของรูปเดียว)" },
+          { tag: "feature", text: "ป้าย/กรอง \"รูปซ้ำ\" ในคลังรูป+log (SHA เป๊ะ / pHash ภาพเดียวกัน)" },
+          { tag: "feature", text: "พี่กันยังไม่เทส action ต่างๆ (push ก่อน เทสหลัง)" },
+        ],
+        body: "== เป้าหมาย ==\n- บันทึกทุกการกระทำต่อรูปผู้ป่วย (ใครทำอะไร เมื่อไหร่ ทำไม) เก็บถาวรแม้รูปถูกลบถาวร (snapshot metadata ยังอยู่ แค่ไม่มีไฟล์)\n- คำนวณ hash รูปตอนอัป (เตรียมตรวจรูปซ้ำ SHA เป๊ะ + pHash ภาพเดียวกันแม้คนละไฟล์)\n\n== ระบบ log (audit trail) ==\n- ตาราง tb_image_event_log (SQL scripts/add-image-event-log.sql | jsonb snapshot ยึดโครง tb_patients_deleted_log | RLS no-client-access เข้าผ่าน API service-role)\n- helper logImageEvent() (lib/image-event-log.ts | fire-and-forget try/catch ไม่ทำงานหลักพัง | resolve ชื่อ actor/owner/patient + build snapshot metadata+hash)\n- ต่อสาย 11 จุด: confirm(uploaded) | [id] PATCH(metadata_updated)+DELETE(delete_direct) | request-delete POST(delete_requested)+DELETE(cancel) | review-delete(approved/rejected) | restore | hard | purge | cron/purge-images(auto 60วัน actor=ระบบอัตโนมัติ)\n- viewer ImageLogPage (parts/patient-images/image-log.jsx) อยู่หน้า \"คลังรูป\" | toggle [คลังรูป][ประวัติ][ถังขยะลัด] (admin) | timeline card สีตาม event + filter event/วันที่/ค้นหา + ดู snapshot jsonb | API GET /api/patient/images/log (admin service-role + filter/pagination)\n- ปุ่ม \"ถังขยะ\" ในคลังรูป = ทางลัด → เด้งหน้าถังขยะ + เปิดแท็บรูปภาพอัตโนมัติ (trashWantImages prop -> TrashHub useEffect setSub images)\n\n== ระบบ hash ตรวจซ้ำ ==\n- image-hash.js (client self-contained ไม่พึ่ง lib นอก): SHA-256(native crypto.subtle) + MD5 + CRC32 จากไฟล์ต้นฉบับ(นิ่ง ไม่เปลี่ยนตามการบีบอัด) + dHash/pHash จากภาพ(จับ \"ภาพเดียวกันแม้คนละไฟล์/บีบอัดต่าง\") + phashDistance(Hamming) | MD5/CRC32 ผ่าน vector-test มาตรฐาน (md5 abc=900150.., crc32 123456789=cbf43926)\n- คำนวณตอนอัป (patient-tab doUpload) -> ส่ง confirm -> เก็บคอลัมน์ orig_sha256/md5/crc32/phash (SQL scripts/add-image-hashes.sql) | log snapshot เก็บ hash ด้วย\n\n== ไฟล์ ==\n- ใหม่: lib/image-event-log.ts | app/api/patient/images/log/route.ts | parts/patient-images/{image-log.jsx,image-hash.js} | scripts/{add-image-event-log,add-image-hashes}.sql\n- แก้: 8 image route (ต่อ log) | confirm(เก็บ hash) | library/patient-tab/trash/tb-monolith (viewer+toggle+ปุ่มถังขยะ+hash upload) | CLAUDE.md/README.md | login/page.tsx(version)\n\n== version ==\n0.7.20.3 -> 0.7.21 | BUILD_DATE 5 ก.ค. 2569\n\n== ต่อไป (Step 2-3 ยังไม่ทำ) ==\n- log view \"ตามรูป\" (group by image_id = ไทม์ไลน์ชีวิตของรูปเดียว)\n- ป้าย/กรอง \"รูปซ้ำ\" ในคลังรูป+log (SHA เป๊ะ / pHash ภาพเดียวกัน)\n- พี่กันยังไม่เทส action ต่างๆ (push ก่อน เทสหลัง)",
+      },
+      {
         version: "0.7.20.3",
         date: "5 ก.ค. 2569",
         commit: "6161974",
