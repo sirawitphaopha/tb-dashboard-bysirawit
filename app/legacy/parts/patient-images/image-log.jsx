@@ -5,6 +5,9 @@
  *  ดรอปดาวน์กรองเหตุการณ์แบบเลือกหลายข้อ · กดดูรายละเอียดเป็นภาษาคน (มีปุ่มดูข้อมูลดิบ JSON) */
 import * as React from 'react'
 import { createPortal } from 'react-dom'
+import { loadCache, saveCache, CACHE_TTL } from './helpers'
+
+const LOG_CACHE_KEY = 'tb_imglog'   // โหลด event ครั้งเดียว (cache) — เปิดหน้าซ้ำไม่โหลดใหม่
 
 // meta ต่อชนิด event (ไอคอน/สี/ป้าย)
 const EV = {
@@ -77,7 +80,8 @@ function hashShort(h) {
 }
 
 function ImageLogPage({ headerExtra } = {}) {
-  const [allEvents, setAllEvents] = React.useState(null)
+  const _seed = loadCache(LOG_CACHE_KEY)
+  const [allEvents, setAllEvents] = React.useState(_seed ? _seed.data : null)   // seed จาก cache = ไม่ขึ้น skeleton ซ้ำ
   const [capped, setCapped] = React.useState(false)
   const [loading, setLoading] = React.useState(false)
   const [view, setView] = React.useState('time')        // 'time' | 'image'
@@ -86,28 +90,29 @@ function ImageLogPage({ headerExtra } = {}) {
   const [dateKey, setDateKey] = React.useState('7d')
   const [q, setQ] = React.useState('')
   const [snap, setSnap] = React.useState(null)          // event ที่กดดูรายละเอียด
-  const [rawJson, setRawJson] = React.useState(false)   // สลับดูข้อมูลดิบใน modal
   const [visTime, setVisTime] = React.useState(60)
   const [visImg, setVisImg] = React.useState(24)
   const ddRef = React.useRef(null)
 
-  const reload = React.useCallback(async () => {
+  const reload = React.useCallback(async (force) => {
+    const c = loadCache(LOG_CACHE_KEY)
+    if (c && !force) { setAllEvents(c.data); if (Date.now() - c.ts < CACHE_TTL) return }   // มี cache สด (<5นาที) = ไม่ยิง server ซ้ำ
     setLoading(true)
     try {
       const r = await fetch('/api/patient/images/log')
       const d = await r.json()
-      if (r.ok) { setAllEvents(d.events || []); setCapped(!!d.capped) }
-      else setAllEvents([])
-    } catch { setAllEvents([]) }
+      if (r.ok) { setAllEvents(d.events || []); setCapped(!!d.capped); saveCache(LOG_CACHE_KEY, d.events || []) }
+      else if (!c) setAllEvents([])
+    } catch { if (!c) setAllEvents([]) }
     setLoading(false)
   }, [])
 
-  React.useEffect(() => { reload() }, [reload])
+  React.useEffect(() => { reload(false) }, [reload])
 
   // รีเฟรชเมื่อมี action กับรูป (เหตุการณ์ tb-img-changed จาก channel กลาง · หน่วงให้ log insert ลงก่อน)
   React.useEffect(() => {
     let t = null
-    const h = () => { if (t) clearTimeout(t); t = setTimeout(() => reload(), 900) }
+    const h = () => { if (t) clearTimeout(t); t = setTimeout(() => reload(true), 900) }   // มี action = ดึงใหม่ (bypass cache)
     window.addEventListener('tb-img-changed', h)
     return () => { window.removeEventListener('tb-img-changed', h); if (t) clearTimeout(t) }
   }, [reload])
@@ -186,7 +191,7 @@ function ImageLogPage({ headerExtra } = {}) {
   }, [filtered])
 
   const toggleEvent = (v) => setEventSet(prev => { const n = new Set(prev); if (n.has(v)) n.delete(v); else n.add(v); return n })
-  const openSnap = (ev) => { setSnap(ev); setRawJson(false) }
+  const openSnap = (ev) => { setSnap(ev) }
 
   const chip = (on) => ({ border:'0.5px solid '+(on?'#0d9488':'#e5e7eb'), background:on?'#0d9488':'#fff', color:on?'#fff':'#6b7280', borderRadius:'999px', padding:'5px 12px', fontSize:'12px', cursor:'pointer' })
   const segBtn = (on) => ({ display:'flex', alignItems:'center', gap:'6px', border:'none', background:on?'#0d9488':'transparent', color:on?'#fff':'#6b7280', borderRadius:'8px', padding:'7px 14px', fontSize:'13px', fontWeight:700, cursor:'pointer' })
@@ -201,21 +206,16 @@ function ImageLogPage({ headerExtra } = {}) {
 
   return (
     <div>
-      {/* ส่วนหัว — ตรึงไว้ด้านบน (sticky) */}
-      <div style={{ position:'sticky', top:0, zIndex:20, background:'#f0fdfa', marginLeft:'-24px', marginRight:'-24px', paddingLeft:'24px', paddingRight:'24px', paddingTop:'2px', paddingBottom:'10px', marginBottom:'6px' }}>
+      {/* ส่วนหัว — ตรึงไว้ด้านบน (sticky · full-bleed ปิดช่องโหว่บน+ข้าง) */}
+      <div style={{ position:'sticky', top:'-24px', zIndex:20, background:'#f0fdfa', margin:'0 -24px 6px', padding:'12px 24px 10px' }}>
       {headerExtra}
-      {/* ปุ่มสลับมุมมอง */}
-      <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'12px', flexWrap:'wrap' }}>
-        <div style={{ display:'inline-flex', background:'#f3f4f6', borderRadius:'10px', padding:'3px' }}>
+      {/* แถบกรอง (ปุ่มสลับมุมมอง + ช่องค้นหา แถวเดียวกัน) */}
+      <div style={{ display:'flex', gap:'8px', flexWrap:'wrap', alignItems:'center', marginBottom:'0' }}>
+        <div style={{ display:'inline-flex', background:'#f3f4f6', borderRadius:'10px', padding:'3px', flexShrink:0 }}>
           <button onClick={()=>setView('time')} style={segBtn(view==='time')}><i className="fa-solid fa-list-ul"></i> ตามเวลา</button>
           <button onClick={()=>setView('image')} style={segBtn(view==='image')}><i className="fa-solid fa-images"></i> ตามรูป</button>
         </div>
-        {loading && <i className="fa-solid fa-circle-notch fa-spin" style={{ fontSize:'13px', color:'#9ca3af' }}></i>}
-      </div>
-
-      {/* แถบกรอง */}
-      <div style={{ display:'flex', gap:'8px', flexWrap:'wrap', alignItems:'center', marginBottom:'14px' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:'6px', border:'1px solid #e5e7eb', borderRadius:'8px', padding:'6px 10px', flex:'0 1 200px', minWidth:'140px' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:'6px', border:'1px solid #e5e7eb', borderRadius:'8px', padding:'6px 10px', flex:'0 1 190px', minWidth:'130px' }}>
           <i className="fa-solid fa-magnifying-glass" style={{ fontSize:'12px', color:'#9ca3af' }}></i>
           <input value={q} onChange={e=>setQ(e.target.value)} placeholder="ค้นหาผู้ป่วย / HN" style={{ flex:1, minWidth:0, border:'none', outline:'none', fontSize:'13px', background:'none' }}/>
         </div>
@@ -247,7 +247,8 @@ function ImageLogPage({ headerExtra } = {}) {
         </div>
 
         {DATE_OPTS.map(([v, l]) => <button key={v} onClick={()=>setDateKey(v)} style={chip(dateKey===v)}>{l}</button>)}
-        <span style={{ marginLeft:'auto', fontSize:'12px', color:'#9ca3af' }}>
+        <span style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:'6px', fontSize:'12px', color:'#9ca3af' }}>
+          {loading && <i className="fa-solid fa-circle-notch fa-spin" style={{ fontSize:'12px' }}></i>}
           {view === 'image' ? `${totalImages} รูป · ${totalEvents} เหตุการณ์` : `${totalEvents} เหตุการณ์`}
         </span>
       </div>
@@ -343,22 +344,29 @@ function ImageLogPage({ headerExtra } = {}) {
       {!isInitLoading && hasMore && <div style={{ textAlign:'center', marginTop:'12px' }}><button onClick={()=> view==='image' ? setVisImg(v=>v+24) : setVisTime(v=>v+60)} style={{ border:'0.5px solid #d1d5db', borderRadius:'9px', padding:'8px 20px', fontSize:'13px', color:'#4b5563', background:'#fff', cursor:'pointer' }}>โหลดเพิ่ม</button></div>}
 
       {/* popup รายละเอียด (ภาษาคน + สลับ JSON ดิบ) */}
-      {snap && createPortal(<SnapModal snap={snap} rawJson={rawJson} setRawJson={setRawJson} onClose={()=>setSnap(null)} />, document.body)}
+      {snap && createPortal(<SnapModal snap={snap} onClose={()=>setSnap(null)} />, document.body)}
     </div>
   )
 }
 
 // ── modal รายละเอียด event/รูป ── ภาษาคน (จัดแนวนอน grid) + แฮชเต็ม + ปุ่มดูข้อมูลดิบ (JSON)
-function SnapModal({ snap, rawJson, setRawJson, onClose }) {
+function SnapModal({ snap, onClose }) {
+  const isEvent = !!snap.event_type   // true = เปิดจาก log (มี event) · false = เปิดจากรูปปกติ (ดูข้อมูลอย่างเดียว)
   const e = EV[snap.event_type] || { ic:'fa-circle', c:'#6b7280', bg:'#f3f4f6', label:snap.event_type }
   const s = snap.snapshot || null
+  const [rawJson, setRawJson] = React.useState(false)
+  const [copied, setCopied] = React.useState(false)
+  const copyJson = () => { try { navigator.clipboard.writeText(JSON.stringify(snap.snapshot, null, 2)); setCopied(true); setTimeout(() => setCopied(false), 1500) } catch {} }
   const row = (k, v, mono) => (
-    <div key={k}><span style={{ color:'#9ca3af', display:'inline-block', minWidth:'104px' }}>{k}</span><span style={{ wordBreak:'break-all', fontFamily: mono ? 'ui-monospace, monospace' : 'inherit' }}>{v}</span></div>
+    <div key={k} style={{ display:'flex', gap:'8px' }}>
+      <span style={{ color:'#9ca3af', flexShrink:0, minWidth:'88px' }}>{k}</span>
+      <span style={{ flex:1, minWidth:0, wordBreak: mono ? 'break-all' : 'normal', overflowWrap: mono ? 'anywhere' : 'break-word', fontFamily: mono ? 'ui-monospace, monospace' : 'inherit' }}>{v}</span>
+    </div>
   )
-  const sect = (icon, color, title, children, span) => (
-    <div style={{ border:'1px solid #eef0f2', borderRadius:'11px', overflow:'hidden', ...(span ? { gridColumn:'1 / -1' } : {}) }}>
+  const sect = (icon, color, title, children, grid2) => (
+    <div style={{ border:'1px solid #eef0f2', borderRadius:'11px', overflow:'hidden' }}>
       <div style={{ display:'flex', alignItems:'center', gap:'7px', background:'#f9fafb', padding:'7px 12px', borderBottom:'1px solid #eef0f2' }}><i className={'fa-solid '+icon} style={{ fontSize:'13px', color }}></i><span style={{ fontSize:'12px', fontWeight:700, color:'#374151' }}>{title}</span></div>
-      <div style={{ padding:'8px 13px', fontSize:'12.5px', lineHeight:1.95, color:'#374151' }}>{children}</div>
+      <div style={{ padding:'8px 13px', fontSize:'12.5px', lineHeight:1.95, color:'#374151', ...(grid2 ? { display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(210px, 1fr))', columnGap:'20px', rowGap:'0' } : {}) }}>{children}</div>
     </div>
   )
   const compress = (s && s.orig_size_bytes && s.size_bytes) ? Math.round((1 - s.size_bytes / s.orig_size_bytes) * 100) : null
@@ -368,77 +376,120 @@ function SnapModal({ snap, rawJson, setRawJson, onClose }) {
       <div className="modal-A" onClick={ev=>ev.stopPropagation()} style={{ background:'#fff', borderRadius:'16px', width:'100%', maxWidth:'720px', maxHeight:'86vh', overflowY:'auto', padding:'18px', boxSizing:'border-box' }}>
         {/* หัว */}
         <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'12px' }}>
-          <div style={{ width:'40px', height:'40px', borderRadius:'50%', background:e.bg, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}><i className={'fa-solid '+e.ic} style={{ color:e.c, fontSize:'18px' }}></i></div>
-          <div><p style={{ fontSize:'15px', fontWeight:700, color:'#111827', margin:0 }}>{e.label}</p><p style={{ fontSize:'11px', color:'#9ca3af', margin:0 }}>{fmtWhen(snap.created_at)}</p></div>
+          <div style={{ width:'40px', height:'40px', borderRadius:'50%', background:isEvent?e.bg:'#e0f2fe', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}><i className={'fa-solid '+(isEvent?e.ic:'fa-image')} style={{ color:isEvent?e.c:'#0284c7', fontSize:'18px' }}></i></div>
+          <div><p style={{ fontSize:'15px', fontWeight:700, color:'#111827', margin:0 }}>{isEvent ? e.label : 'รายละเอียดรูป'}</p><p style={{ fontSize:'11px', color:'#9ca3af', margin:0 }}>{isEvent ? fmtWhen(snap.created_at) : ((TYPE_LABEL[s&&s.type]||(s&&s.type)||'รูป') + (snap.patient_name ? ' · '+snap.patient_name : ''))}</p></div>
         </div>
 
         {/* ผู้เกี่ยวข้อง */}
         <div style={{ background:'#f9fafb', border:'1px solid #eef0f2', borderRadius:'11px', padding:'11px 13px', marginBottom:'12px', fontSize:'12.5px', lineHeight:1.9, color:'#374151' }}>
           {row('ผู้ป่วย', (snap.patient_name||'-') + (snap.patient_hn ? ' · HN '+snap.patient_hn : ''))}
-          {row('ผู้ทำ', (snap.actor_name||'-') + (snap.actor_role ? ' ('+(snap.actor_role==='admin'?'แอดมิน':'ผู้ใช้')+')' : ''))}
+          {isEvent ? row('ผู้ทำ', (snap.actor_name||'-') + (snap.actor_role ? ' ('+(snap.actor_role==='admin'?'แอดมิน':'ผู้ใช้')+')' : '')) : null}
           {row('เจ้าของรูป', snap.owner_name || '-')}
           {snap.reason ? row('เหตุผล', snap.reason) : null}
         </div>
 
         {!s && <p style={{ fontSize:'12px', color:'#9ca3af', textAlign:'center', padding:'8px 0' }}>ไม่มีข้อมูลรูปในเหตุการณ์นี้</p>}
 
-        {/* จัดแนวนอน: หน้าจอกว้าง = หลายคอลัมน์ (ไม่ต้องเลื่อน) · มือถือ = เรียงลง */}
+        {/* ทุกกรอบเต็มความกว้าง · ข้อมูลรูป/เวลา จัด row เป็น 2 คอลัมน์ให้เต็มกรอบ */}
         {s && !rawJson && (
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(215px, 1fr))', gap:'10px' }}>
+          <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
             {sect('fa-image', '#0d9488', 'ข้อมูลรูป', <>
               {row('ชนิด', TYPE_LABEL[s.type] || s.type || '-')}
-              {s.note ? row('หมายเหตุ', s.note) : null}
-              {row('ขนาดภาพ', (s.width && s.height) ? `${s.width} × ${s.height} พิกเซล` : '-')}
               {row('อุปกรณ์', s.device || '-')}
-            </>)}
-
-            <div style={{ border:'1px solid #eef0f2', borderRadius:'11px', overflow:'hidden' }}>
-              <div style={{ display:'flex', alignItems:'center', gap:'6px', background:'#f9fafb', padding:'7px 11px', borderBottom:'1px solid #eef0f2' }}><i className="fa-solid fa-file" style={{ fontSize:'12px', color:'#6b7280' }}></i><span style={{ fontSize:'11.5px', fontWeight:700, color:'#374151' }}>ต้นฉบับ</span></div>
-              <div style={{ padding:'8px 11px', fontSize:'12px', lineHeight:1.85, color:'#374151' }}>
-                <div style={{ color:'#111827', fontWeight:700 }}>{mimeLabel(s.orig_mime)}</div>
-                <div>{fmtBytes(s.orig_size_bytes)}</div>
-                <div style={{ color:'#9ca3af' }}>{(s.orig_width && s.orig_height) ? `${s.orig_width} × ${s.orig_height}` : '-'}</div>
-              </div>
-            </div>
-
-            <div style={{ border:'1px solid #eef0f2', borderRadius:'11px', overflow:'hidden' }}>
-              <div style={{ display:'flex', alignItems:'center', gap:'6px', background:'#f9fafb', padding:'7px 11px', borderBottom:'1px solid #eef0f2' }}><i className="fa-solid fa-hard-drive" style={{ fontSize:'12px', color:'#0d9488' }}></i><span style={{ fontSize:'11.5px', fontWeight:700, color:'#374151' }}>ไฟล์ที่เก็บ</span></div>
-              <div style={{ padding:'8px 11px', fontSize:'12px', lineHeight:1.85, color:'#374151' }}>
-                <div style={{ color:'#111827', fontWeight:700 }}>{mimeLabel(s.mime)}{s.quality ? ' · '+s.quality+'%' : ''}</div>
-                <div>{fmtBytes(s.size_bytes)}</div>
-                {compress !== null && compress > 0 ? <div style={{ color:'#059669' }}>เล็กลง {compress}%</div> : <div style={{ color:'#9ca3af' }}>-</div>}
-              </div>
-            </div>
+              {row('ขนาดภาพ', (s.width && s.height) ? `${s.width} × ${s.height} px` : '-')}
+              {s.note ? row('หมายเหตุ', s.note) : null}
+            </>, true)}
 
             {sect('fa-clock', '#6b7280', 'เวลา', <>
               {row('อัปโหลด', fmtDateTime(s.uploaded_at))}
               {s.deleted_at ? row('ลบ', fmtDateTime(s.deleted_at) + (s.deleter_name ? ' โดย '+s.deleter_name : '')) : null}
-            </>)}
-
-            {(s.orig_sha256 || s.orig_md5 || s.orig_crc32 || s.webp_sha256 || s.webp_md5 || s.webp_crc32 || s.phash) && sect('fa-fingerprint', '#7c3aed', 'ลายนิ้วมือดิจิทัล (แฮช) — ค่าเต็ม', <>
-              {s.orig_sha256 ? row('SHA-256 ต้นฉบับ', s.orig_sha256, true) : null}
-              {s.orig_md5 ? row('MD5 ต้นฉบับ', s.orig_md5, true) : null}
-              {s.orig_crc32 ? row('CRC32 ต้นฉบับ', s.orig_crc32, true) : null}
-              {s.webp_sha256 ? row('SHA-256 WebP', s.webp_sha256, true) : null}
-              {s.webp_md5 ? row('MD5 WebP', s.webp_md5, true) : null}
-              {s.webp_crc32 ? row('CRC32 WebP', s.webp_crc32, true) : null}
-              {s.phash ? row('pHash (ภาพ)', s.phash, true) : null}
             </>, true)}
+
+            {/* ต้นฉบับ vs ไฟล์ที่เก็บ — รวมกรอบเดียว เทียบกันได้ (เต็มความกว้าง) */}
+            <div style={{ border:'1px solid #eef0f2', borderRadius:'11px', overflow:'hidden' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:'7px', background:'#f9fafb', padding:'7px 12px', borderBottom:'1px solid #eef0f2' }}><i className="fa-solid fa-right-left" style={{ fontSize:'12px', color:'#0d9488' }}></i><span style={{ fontSize:'12px', fontWeight:700, color:'#374151' }}>ต้นฉบับ เทียบ ไฟล์ที่เก็บ</span></div>
+              <div style={{ padding:'9px 13px', fontSize:'12.5px', color:'#374151' }}>
+                <div style={{ display:'grid', gridTemplateColumns:'auto 1fr 1fr', gap:'6px 12px', alignItems:'baseline' }}>
+                  <div></div>
+                  <div style={{ fontWeight:700, color:'#6b7280' }}><i className="fa-solid fa-file" style={{ fontSize:'10px', marginRight:'4px' }}></i>ต้นฉบับ</div>
+                  <div style={{ fontWeight:700, color:'#0d9488' }}><i className="fa-solid fa-hard-drive" style={{ fontSize:'10px', marginRight:'4px' }}></i>ไฟล์ที่เก็บ</div>
+                  <div style={{ color:'#9ca3af' }}>นามสกุล</div>
+                  <div style={{ fontWeight:700, color:'#111827' }}>{mimeLabel(s.orig_mime)}</div>
+                  <div style={{ fontWeight:700, color:'#111827' }}>{mimeLabel(s.mime)}{s.quality ? ' · '+s.quality+'%' : ''}</div>
+                  <div style={{ color:'#9ca3af' }}>ขนาดไฟล์</div>
+                  <div>{fmtBytes(s.orig_size_bytes)}</div>
+                  <div>{fmtBytes(s.size_bytes)}{compress !== null && compress > 0 ? <span style={{ color:'#059669' }}> · เล็กลง {compress}%</span> : null}</div>
+                  <div style={{ color:'#9ca3af' }}>ขนาดภาพ</div>
+                  <div>{(s.orig_width && s.orig_height) ? `${s.orig_width} × ${s.orig_height}` : '-'}</div>
+                  <div>{(s.width && s.height) ? `${s.width} × ${s.height}` : '-'}</div>
+                </div>
+              </div>
+            </div>
+
+            {(s.orig_sha256 || s.orig_md5 || s.orig_crc32 || s.webp_sha256 || s.webp_md5 || s.webp_crc32 || s.phash) && (
+              <div style={{ border:'1px solid #eef0f2', borderRadius:'11px', overflow:'hidden' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:'7px', background:'#f9fafb', padding:'7px 12px', borderBottom:'1px solid #eef0f2' }}><i className="fa-solid fa-fingerprint" style={{ fontSize:'13px', color:'#7c3aed' }}></i><span style={{ fontSize:'12px', fontWeight:700, color:'#374151' }}>ลายนิ้วมือดิจิทัล (Hash)</span></div>
+                <div style={{ padding:'8px 13px', fontSize:'12.5px', lineHeight:1.95, color:'#374151' }}>
+                  {(s.orig_sha256 || s.orig_md5 || s.orig_crc32) && <>
+                    <div style={{ fontSize:'11px', fontWeight:700, color:'#7c3aed', margin:'0 0 2px' }}>ต้นฉบับ ({mimeLabel(s.orig_mime)})</div>
+                    {s.orig_sha256 ? row('SHA-256', s.orig_sha256, true) : null}
+                    {s.orig_md5 ? row('MD5', s.orig_md5, true) : null}
+                    {s.orig_crc32 ? row('CRC32', s.orig_crc32, true) : null}
+                  </>}
+                  {(s.webp_sha256 || s.webp_md5 || s.webp_crc32) && <>
+                    <div style={{ fontSize:'11px', fontWeight:700, color:'#7c3aed', margin:'9px 0 2px' }}>ไฟล์ที่เก็บ ({mimeLabel(s.mime)})</div>
+                    {s.webp_sha256 ? row('SHA-256', s.webp_sha256, true) : null}
+                    {s.webp_md5 ? row('MD5', s.webp_md5, true) : null}
+                    {s.webp_crc32 ? row('CRC32', s.webp_crc32, true) : null}
+                  </>}
+                  {s.phash ? <>
+                    <div style={{ fontSize:'11px', fontWeight:700, color:'#7c3aed', margin:'9px 0 2px' }}>pHash (ภาพ · เทียบรูปซ้ำ)</div>
+                    <div style={{ fontFamily:'ui-monospace, monospace', wordBreak:'break-all' }}>{s.phash}</div>
+                  </> : null}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
         {s && rawJson && (
-          <pre style={{ background:'#0b0f19', color:'#a5f3ea', borderRadius:'10px', padding:'12px', fontSize:'11px', overflowX:'auto', margin:0, whiteSpace:'pre-wrap', wordBreak:'break-all' }}>{JSON.stringify(snap.snapshot, null, 2)}</pre>
+          <div style={{ position:'relative' }}>
+            <p style={{ fontSize:'11.5px', color:'#6b7280', margin:'0 0 6px' }}>ข้อมูลดิบทั้งหมดของรูปในรูปแบบ JSON (สำหรับสายเทคนิค/ตรวจสอบ)</p>
+            <button onClick={copyJson} style={{ position:'absolute', top:'28px', right:'8px', zIndex:1, border:'0.5px solid #334155', borderRadius:'7px', padding:'4px 10px', background:'#1e293b', color:copied?'#5eead4':'#cbd5e1', fontSize:'11px', fontWeight:700, cursor:'pointer' }}><i className={'fa-solid '+(copied?'fa-check':'fa-copy')} style={{ marginRight:'4px' }}></i>{copied ? 'คัดลอกแล้ว' : 'คัดลอก'}</button>
+            <pre style={{ background:'#0b0f19', color:'#a5f3ea', borderRadius:'10px', padding:'12px', fontSize:'11px', overflowX:'auto', margin:0, whiteSpace:'pre-wrap', wordBreak:'break-all' }}>{JSON.stringify(snap.snapshot, null, 2)}</pre>
+          </div>
         )}
 
-        {/* ปุ่ม */}
+        {/* ปุ่ม — ขนาดคงที่ (กดสลับไม่ยืดหด) · ปิด = เทล */}
         <div style={{ display:'flex', gap:'8px', marginTop:'14px' }}>
-          {s && <button onClick={()=>setRawJson(r=>!r)} className="tb-hovbg" style={{ border:'0.5px solid #d1d5db', borderRadius:'10px', padding:'10px 12px', background:'#fff', color:'#6b7280', fontWeight:700, fontSize:'12.5px', cursor:'pointer', whiteSpace:'nowrap' }}><i className={'fa-solid '+(rawJson?'fa-eye':'fa-code')} style={{ marginRight:'5px', fontSize:'11px' }}></i>{rawJson ? 'ดูแบบอ่านง่าย' : 'ดูข้อมูลดิบ'}</button>}
-          <button onClick={onClose} className="tb-hovgray" style={{ flex:1, padding:'10px', borderRadius:'10px', background:'#f3f4f6', color:'#4b5563', fontWeight:700, fontSize:'13px', border:'none', cursor:'pointer' }}>ปิด</button>
+          {s && <button onClick={()=>setRawJson(r=>!r)} className="tb-hovbg" style={{ width:'172px', flexShrink:0, textAlign:'center', border:'0.5px solid #d1d5db', borderRadius:'10px', padding:'10px 12px', background:'#fff', color:'#6b7280', fontWeight:700, fontSize:'12.5px', cursor:'pointer', whiteSpace:'nowrap' }}><i className={'fa-solid '+(rawJson?'fa-eye':'fa-code')} style={{ marginRight:'5px', fontSize:'11px' }}></i>{rawJson ? 'ดูแบบอ่านง่าย' : 'ดูข้อมูลดิบ (JSON)'}</button>}
+          <button onClick={onClose} className="tb-hovtealbtn" style={{ flex:1, padding:'10px', borderRadius:'10px', background:'#0d9488', color:'#fff', fontWeight:700, fontSize:'13px', border:'none', cursor:'pointer' }}>ปิด</button>
         </div>
       </div>
     </div>
   )
 }
 
-export { ImageLogPage }
+// แปลง record รูปปกติ (จาก /api/patient/images/all) → รูปแบบ snap ให้ SnapModal เปิดดูข้อมูลได้ (ไม่มี event)
+function imageToSnap(im) {
+  if (!im) return null
+  return {
+    event_type: null,
+    created_at: im.uploaded_at || null,
+    patient_name: im.patient_name || null, patient_hn: im.patient_hn || null,
+    owner_name: im.uploader_name || null,
+    reason: null,
+    snapshot: {
+      type: im.type, note: im.note, mime: im.mime, size_bytes: im.size_bytes,
+      width: im.width, height: im.height,
+      orig_size_bytes: im.orig_size_bytes, orig_mime: im.orig_mime, orig_width: im.orig_width, orig_height: im.orig_height,
+      quality: im.quality, device: im.device, uploaded_at: im.uploaded_at,
+      deleted_at: im.deleted_at || null, deleter_name: im.deleter_name || null,
+      orig_sha256: im.orig_sha256, orig_md5: im.orig_md5, orig_crc32: im.orig_crc32,
+      webp_sha256: im.webp_sha256, webp_md5: im.webp_md5, webp_crc32: im.webp_crc32, phash: im.phash,
+    },
+  }
+}
+
+export { ImageLogPage, SnapModal, imageToSnap }
+

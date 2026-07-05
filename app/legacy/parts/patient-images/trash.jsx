@@ -5,10 +5,12 @@ import { createPortal } from 'react-dom'
 const { useState, useEffect, useCallback } = React
 import { AvatarLightbox } from '../shared'
 import { TrashList } from '../misc'
-import { patientImgInfo, PATIENT_IMG_TYPES, invalidateImgCaches, IMG_VIEW_SIZES, ImgViewToolbar } from './helpers'
+import { patientImgInfo, PATIENT_IMG_TYPES, invalidateImgCaches, IMG_VIEW_SIZES, ImgViewToolbar, loadCache, saveCache, CACHE_TTL } from './helpers'
+import { SnapModal, imageToSnap } from './image-log'
 
 function ImageTrashPage({ currentUser, isAdmin, headerExtra }) {
-  const [imgs, setImgs] = React.useState(null);
+  const _seedTrash = loadCache('tb_imgtrash');
+  const [imgs, setImgs] = React.useState(_seedTrash ? _seedTrash.data : null);   // โหลดครั้งเดียว (seed จาก cache)
   const [busy, setBusy] = React.useState(false);
   const [err, setErr]   = React.useState('');
   const [q, setQ]       = React.useState('');
@@ -18,22 +20,32 @@ function ImageTrashPage({ currentUser, isAdmin, headerExtra }) {
   const [mode, setMode] = React.useState('card');
   const [size, setSize] = React.useState(1);
   const [lightbox, setLightbox] = React.useState(null);
+  const [detailImg, setDetailImg] = React.useState(null);   // รูปที่กดดูข้อมูล (popup ทับ)
   const [restoreT, setRestoreT] = React.useState(null);
   const [hardT, setHardT]       = React.useState(null);
   const [hnInput, setHnInput]   = React.useState('');
   const [hardCheck, setHardCheck] = React.useState(false);
   const [hardStep2, setHardStep2] = React.useState(false);   // ยืนยันซ้ำก่อนลบถาวรจริง
 
-  const load = React.useCallback(async () => {
+  const load = React.useCallback(async (force) => {
+    const c = loadCache('tb_imgtrash');
+    if (c && !force) { setImgs(c.data); if (Date.now() - c.ts < CACHE_TTL) return; }   // โหลดครั้งเดียว (cache สด <5นาที ไม่ยิงซ้ำ)
     setErr('');
     try {
       const r = await fetch('/api/patient/images/all?trash=1');
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'โหลดถังขยะไม่สำเร็จ');
-      setImgs(d.images || []);
-    } catch (e) { setErr(e.message); setImgs([]); }
+      setImgs(d.images || []); saveCache('tb_imgtrash', d.images || []);
+    } catch (e) { setErr(e.message); if (!c) setImgs([]); }
   }, []);
-  React.useEffect(() => { load(); }, [load]);
+  React.useEffect(() => { load(false); }, [load]);
+  // รีเฟรชเมื่อมี action กับรูปที่อื่น (ลบเข้าถัง/กู้/ลบถาวร) — channel กลาง dispatch tb-img-changed
+  React.useEffect(() => {
+    let t = null;
+    const h = () => { if (t) clearTimeout(t); t = setTimeout(() => load(true), 700); };
+    window.addEventListener('tb-img-changed', h);
+    return () => { window.removeEventListener('tb-img-changed', h); if (t) clearTimeout(t); };
+  }, [load]);
 
   const daysLeft = (delAt) => { if (!delAt) return 60; const el = Math.floor((Date.now() - new Date(delAt).getTime()) / 86400000); return Math.max(0, 60 - el); };
 
@@ -41,17 +53,17 @@ function ImageTrashPage({ currentUser, isAdmin, headerExtra }) {
     if (!restoreT) return; const id = restoreT.id;
     setImgs(a => (a||[]).filter(x => x.id !== id)); invalidateImgCaches(); setRestoreT(null); setLightbox(null); setErr('');
     fetch('/api/patient/images/' + id + '/restore', { method: 'POST' })
-      .then(r => { if (!r.ok) { setErr('กู้คืนไม่สำเร็จ'); load(); } })
-      .catch(() => { setErr('กู้คืนไม่สำเร็จ'); load(); });
+      .then(r => { if (!r.ok) { setErr('กู้คืนไม่สำเร็จ'); load(true); } })
+      .catch(() => { setErr('กู้คืนไม่สำเร็จ'); load(true); });
   };
   const doHard = () => {   // optimistic: หายทันที + ลบจริงเบื้องหลัง
     if (!hardT) return;
     if (hnInput.trim() !== String(hardT.patient_hn || '') || !hardCheck) return;   // ต้องพิมพ์ HN ตรง + ติ๊ก
     const id = hardT.id;
-    setImgs(a => (a||[]).filter(x => x.id !== id)); setHardT(null); setHardStep2(false); setLightbox(null); setErr('');
+    setImgs(a => (a||[]).filter(x => x.id !== id)); invalidateImgCaches(); setHardT(null); setHardStep2(false); setLightbox(null); setErr('');
     fetch('/api/patient/images/' + id + '/hard', { method: 'POST' })
-      .then(r => { if (!r.ok) { setErr('ลบถาวรไม่สำเร็จ'); load(); } })
-      .catch(() => { setErr('ลบถาวรไม่สำเร็จ'); load(); });
+      .then(r => { if (!r.ok) { setErr('ลบถาวรไม่สำเร็จ'); load(true); } })
+      .catch(() => { setErr('ลบถาวรไม่สำเร็จ'); load(true); });
   };
 
   const ql = q.trim().toLowerCase();
@@ -109,6 +121,7 @@ function ImageTrashPage({ currentUser, isAdmin, headerExtra }) {
         <div onClick={()=>setLightbox(im)} style={{position:'relative',height:th+'px',flexShrink:0,background:'#0b0f19',cursor:'zoom-in'}}>
           <img src={im.thumbUrl||im.url} alt="" loading="lazy" draggable={false} onContextMenu={e=>e.preventDefault()} style={{width:'100%',height:'100%',objectFit:'cover',filter:'grayscale(0.35)',opacity:0.9}}/>
           <span style={{position:'absolute',top:'6px',right:'6px',fontSize:'10px',fontWeight:800,padding:'2px 7px',borderRadius:'999px',background:meta.bg,color:meta.fg}}>{meta.label}</span>
+          <button onClick={(e)=>{ e.stopPropagation(); setDetailImg(im); }} title="ดูข้อมูล" style={{position:'absolute',bottom:'6px',right:'6px',zIndex:3,width:'27px',height:'27px',borderRadius:'50%',background:'rgba(0,0,0,0.6)',color:'#fff',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'12px'}}><i className="fa-solid fa-circle-info"></i></button>
         </div>
         <div style={{padding:'8px 10px',flex:1,display:'flex',flexDirection:'column'}}>
           <p style={{fontSize:'11px',color:'#6b7280',margin:'0 0 2px'}}>ลบ {delWhen}</p>
@@ -126,7 +139,7 @@ function ImageTrashPage({ currentUser, isAdmin, headerExtra }) {
   return (
     <div>
       {/* ส่วนหัว — ตรึงไว้ด้านบน (sticky) */}
-      <div style={{position:'sticky',top:0,zIndex:20,background:'#f0fdfa',marginLeft:'-24px',marginRight:'-24px',paddingLeft:'24px',paddingRight:'24px',paddingTop:'2px',paddingBottom:'10px',marginBottom:'8px'}}>
+      <div style={{position:'sticky',top:'-24px',zIndex:20,background:'#f0fdfa',margin:'0 -24px 8px',padding:'12px 24px 10px'}}>
       {headerExtra}
       {/* แถบกรอง + มุมมอง */}
       <div style={{display:'flex',gap:'8px',flexWrap:'wrap',alignItems:'center',marginBottom:'0'}}>
@@ -182,12 +195,13 @@ function ImageTrashPage({ currentUser, isAdmin, headerExtra }) {
           { icon:'fa-rotate-left', label:'กู้คืนรูป', onClick:()=>{ setRestoreT(lightbox); } },   // ไม่ปิดตัวดูรูป → popup มาทับ
           { icon:'fa-fire', label:'ลบถาวร', danger:true, onClick:()=>{ setHnInput(''); setHardCheck(false); setHardStep2(false); setHardT(lightbox); } },
         ] : [];
-        return <AvatarLightbox src={lightbox.url} thumb={lightbox.thumbUrl} info={info} menuActions={acts}
+        return <AvatarLightbox src={lightbox.url} thumb={lightbox.thumbUrl} info={info} menuActions={acts} infoAction={()=>setDetailImg(lightbox)}
           hasPrev={false} hasNext={false} onPrev={()=>{}} onNext={()=>{}}
           onExpire={async()=>{ try{ const r=await fetch('/api/patient/images/'+lightbox.id+'/url'); if(r.ok){ const d=await r.json(); return d.url; } }catch{} return null; }}
           onClose={()=>setLightbox(null)}/>;
       })()}
 
+      {detailImg && createPortal(<SnapModal snap={imageToSnap(detailImg)} onClose={()=>setDetailImg(null)}/>, document.body)}
       {restoreT && createPortal(
         <div className={lightbox?'':'tb-backdrop'} style={{position:'fixed',inset:0,...(lightbox?{background:'rgba(15,23,42,0.6)'}:{}),zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}}>
           <div className="modal-A" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'340px',padding:'22px',textAlign:'center'}}>
@@ -254,7 +268,7 @@ function TrashHub(props) {
     <div>
       {sub==='patients' && <>
         {/* แท็บถังขยะ (ผู้ป่วย) — ตรึงไว้ด้านบน */}
-        <div style={{position:'sticky',top:0,zIndex:20,background:'#f0fdfa',marginLeft:'-24px',marginRight:'-24px',paddingLeft:'24px',paddingRight:'24px',paddingTop:'2px',paddingBottom:'6px',marginBottom:'8px'}}>{tabs}</div>
+        <div style={{position:'sticky',top:'-24px',zIndex:20,background:'#f0fdfa',margin:'0 -24px 8px',padding:'12px 24px 6px'}}>{tabs}</div>
         <TrashList {...props}/>
       </>}
       {sub==='images' && <ImageTrashPage currentUser={props.currentUser} isAdmin={isAdmin} headerExtra={tabs}/>}

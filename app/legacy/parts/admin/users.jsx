@@ -7,7 +7,7 @@
  */
 import * as React from 'react'
 const { useState, useEffect, useRef, useMemo } = React
-import { ToastModal, Field, AvatarCircle } from '../shared'
+import { ToastModal, Field, AvatarCircle, loadCache, saveCache } from '../shared'
 import { PROFESSION_LABELS_TH } from '../globals'
 
 function EditRow({ label, original, changed, children }) {
@@ -351,9 +351,11 @@ function RejectHistoryTable({ logs, loading, expandedId, onToggle }) {
 }
 
 function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearHighlight }) {
-  const [profiles, setProfiles] = useState([]);
+  const _seedU = loadCache('tb_admin_users');
+  const _seededU = useRef(!!_seedU);
+  const [profiles, setProfiles] = useState(_seedU ? _seedU.data : []);
   const [filter, setFilter] = useState('pending');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!_seedU);   // มี cache = ไม่ขึ้น skeleton (revalidate เบื้องหลัง)
   const [busy, setBusy] = useState(false);
   const [rejectingId, setRejectingId] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
@@ -390,9 +392,9 @@ function AdminUsersTab({ currentUser, onPendingChange, highlightUserId, onClearH
   const userRefs = React.useRef({});
 
   const load = async () => {
-    setLoading(true);
+    if (!_seededU.current) setLoading(true);   // มี cache = โชว์ของเก่า ไม่ skeleton
     const { data } = await window._sb.from('profiles').select('*').order('created_at', { ascending: false });
-    setProfiles(data || []);
+    if (data) { setProfiles(data); saveCache('tb_admin_users', data); }
     setLoading(false);
     // อัปเดต badge ใน sidebar
     if (onPendingChange) onPendingChange((data||[]).filter(p => p.status === 'pending').length);

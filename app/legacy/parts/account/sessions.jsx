@@ -6,7 +6,7 @@
 import * as React from 'react'
 const { useState, useEffect, useRef, useCallback } = React
 import { FilterSelect, ScrollNav, relTime, r2AvatarUrl, normName, nameInitials,
-         AVATAR_PALETTE, colorFromName, AvatarCircle, loadImageEl } from '../shared'
+         AVATAR_PALETTE, colorFromName, AvatarCircle, loadImageEl, loadCache, saveCache } from '../shared'
 
 function deviceIcon(type) {
   if (type === 'mobile') return 'fa-mobile';   // มือถือ
@@ -104,9 +104,11 @@ function SessionPagination({ page, totalPages, total, pageSize, onChange }) {
 }
 
 function SessionsPanel({ onBack }) {
-  const [sessions, setSessions]   = React.useState([]);
-  const [currentId, setCurrentId] = React.useState(null);
-  const [loading, setLoading]     = React.useState(true);
+  const _seedS = loadCache('tb_sessions');
+  const [sessions, setSessions]   = React.useState(_seedS ? _seedS.data.sessions : []);
+  const [currentId, setCurrentId] = React.useState(_seedS ? _seedS.data.current : null);
+  const [loading, setLoading]     = React.useState(!_seedS);   // มี cache = ไม่ขึ้น skeleton
+  const _seededS = React.useRef(!!_seedS);
   const [error, setError]         = React.useState('');
   const [showHistory, setShowHistory] = React.useState(false);
   const [history, setHistory]     = React.useState([]);
@@ -143,14 +145,16 @@ function SessionsPanel({ onBack }) {
   }, []);
 
   const loadActive = async () => {
-    setLoading(true); setError('');
+    if (!_seededS.current) setLoading(true);   // มี cache แล้ว = โชว์ของเก่า ไม่ skeleton (revalidate เบื้องหลัง)
+    setError('');
     try {
       const res  = await fetch('/api/auth/sessions');
       const data = await res.json();
-      if (!res.ok) { setError(data.error || 'โหลดข้อมูลล้มเหลว'); setLoading(false); return; }
+      if (!res.ok) { if (!_seededS.current) setError(data.error || 'โหลดข้อมูลล้มเหลว'); setLoading(false); return; }
       setSessions(data.sessions || []);
       setCurrentId(data.current_session_id || null);
-    } catch { setError('เกิดข้อผิดพลาด กรุณาลองใหม่'); }
+      saveCache('tb_sessions', { sessions: data.sessions || [], current: data.current_session_id || null });
+    } catch { if (!_seededS.current) setError('เกิดข้อผิดพลาด กรุณาลองใหม่'); }
     setLoading(false);
   };
   // v0.7.17.3 Phase 4B — สร้าง params จาก filter state

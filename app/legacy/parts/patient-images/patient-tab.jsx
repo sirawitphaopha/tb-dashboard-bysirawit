@@ -10,6 +10,7 @@ import { compressToWebp, putWithProgress, decodeImageToDataURL, isAnimatedGif, J
   IMG_VIEW_SIZES, ImgViewToolbar, PendingDeleteOverlay, ImageRequestDeleteModal, ImageReviewDeleteModal, ImageCancelRequestModal,
   storeImgs, getStoredImgsFor, updateStoredImg, removeStoredImg } from './helpers'
 import { computeByteHashes, computePerceptualHash } from './image-hash'
+import { SnapModal, imageToSnap } from './image-log'
 
 function PatientImagesTab({ patient, currentUser, locked }) {
   const LSKEY = 'tb_patimg_' + patient.id;
@@ -32,6 +33,7 @@ function PatientImagesTab({ patient, currentUser, locked }) {
   const [dateTo, setDateTo]     = React.useState('');
   const [uploaderFilter, setUploaderFilter] = React.useState('all');
   const [lightbox, setLightbox] = React.useState(null);
+  const [detailImg, setDetailImg] = React.useState(null);   // รูปที่กดดูข้อมูล (popup ทับ)
   const [reqTarget, setReqTarget] = React.useState(null);        // v0.7.20 — รูปที่กำลัง "ขอลบ"
   const [reviewTarget, setReviewTarget] = React.useState(null);  // v0.7.20 — {im, action} แอดมินอนุมัติ/ปฏิเสธ
   const [cancelTarget, setCancelTarget] = React.useState(null);  // v0.7.20.2 — รูปที่กำลังยืนยัน "ยกเลิกคำขอลบ"
@@ -315,6 +317,7 @@ function PatientImagesTab({ patient, currentUser, locked }) {
               <div style={{position:'absolute',left:0,right:0,bottom:0,padding:'12px 8px 5px',background:'linear-gradient(transparent,rgba(0,0,0,0.65))'}}>
                 <span style={{fontSize:'10px',color:'#fff',textShadow:'0 1px 3px rgba(0,0,0,0.7)'}}>{new Date(im.uploaded_at).toLocaleDateString('th-TH',{day:'numeric',month:'short'})} · {fmtSize(im.size_bytes)}</span>
               </div>
+              <button onClick={(e)=>{ e.stopPropagation(); setDetailImg(im); }} title="ดูข้อมูล" style={{position:'absolute',bottom:'6px',right:'6px',zIndex:3,width:'28px',height:'28px',borderRadius:'50%',background:'rgba(0,0,0,0.62)',color:'#fff',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'12px'}}><i className="fa-solid fa-circle-info"></i></button>
             </div>
           );
         }}/>
@@ -369,7 +372,7 @@ function PatientImagesTab({ patient, currentUser, locked }) {
         const info = patientImgInfo(cur, meta, name);
         info.noteEditable = canEdit;
         info.onSaveNote = async (text) => { await fetch('/api/patient/images/'+cur.id,{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({note:text||null})}); setImages(arr=>(arr||[]).map(x=>x.id===cur.id?{...x,note:text||null}:x)); invalidateImgCaches(); };
-        return <AvatarLightbox src={cur.url} thumb={cur.thumbUrl} originRect={lightbox.rect} info={info} menuActions={acts}
+        return <AvatarLightbox src={cur.url} thumb={cur.thumbUrl} originRect={lightbox.rect} info={info} menuActions={acts} infoAction={()=>setDetailImg(cur)}
           hasPrev={lightbox.idx>0} hasNext={lightbox.idx<shown.length-1}
           onPrev={()=>setLightbox(l=>({ idx: Math.max(0, l.idx-1) }))}
           onNext={()=>setLightbox(l=>({ idx: Math.min(shown.length-1, l.idx+1) }))}
@@ -380,6 +383,7 @@ function PatientImagesTab({ patient, currentUser, locked }) {
       {reqTarget && <ImageRequestDeleteModal image={reqTarget} lightboxOpen={!!lightbox} onClose={()=>setReqTarget(null)} onDone={(reason)=>onReqDone(reqTarget, reason)}/>}
       {reviewTarget && <ImageReviewDeleteModal image={reviewTarget.im} action={reviewTarget.action} lightboxOpen={!!lightbox} onClose={()=>setReviewTarget(null)} onDone={(action)=>onReviewDone(reviewTarget.im, action)}/>}
       {cancelTarget && <ImageCancelRequestModal image={cancelTarget} lightboxOpen={!!lightbox} onClose={()=>setCancelTarget(null)} onDone={()=>doCancelImgRequest(cancelTarget)}/>}
+      {detailImg && createPortal(<SnapModal snap={imageToSnap(detailImg)} onClose={()=>setDetailImg(null)}/>, document.body)}
       {pendingUpload && createPortal(
         <div className={lightbox?'':'tb-backdrop'} style={{position:'fixed',inset:0,...(lightbox?{background:'rgba(15,23,42,0.65)'}:{}),zIndex:10002,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={uploading?undefined:cancelUpload}>
           <div className="modal-A" onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:'18px',width:'100%',maxWidth:'440px',overflow:'hidden',boxShadow:'0 25px 60px rgba(0,0,0,0.3)',maxHeight:'90vh',display:'flex',flexDirection:'column'}}>

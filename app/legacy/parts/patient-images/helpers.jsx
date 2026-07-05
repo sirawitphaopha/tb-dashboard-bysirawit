@@ -131,7 +131,7 @@ function JustifiedGallery({ items, targetHeight = 190, gap = 8, renderItem }) {
         const totalR = row.reduce((s, x) => s + x.r, 0);
         const avail = cw - gap * (row.length - 1);
         let h = avail / totalR;
-        if (last && h > targetHeight * 1.25) h = targetHeight;   // แถวสุดท้ายไม่ยืดเกิน
+        if (last && h > targetHeight) h = targetHeight;   // แถวสุดท้าย/รูปน้อย = จำกัดที่ targetHeight (ไม่ยืดเต็มกว้าง) → ปุ่มเปลี่ยนขนาด กลาง/ใหญ่ ต่างกันจริงทุกความกว้างจอ (แก้บั๊กจอ 768)
         return (
           <div key={ri} style={{ display: 'flex', gap: gap + 'px', marginBottom: gap + 'px' }}>
             {row.map(({ it, r }) => (
@@ -272,7 +272,7 @@ function CXRCompareModal({ left, right, onClose }) {
 const CACHE_TTL = 300000;       // 5 นาที
 function loadCache(key){ try { const s = localStorage.getItem(key); if (s) { const o = JSON.parse(s); if (Date.now() - o.ts < 7200000) return o; } } catch {} return null; }
 function saveCache(key, data){ try { localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() })); } catch {} }
-function invalidateImgCaches(){ try { localStorage.removeItem('tb_libimg'); for (let i = localStorage.length - 1; i >= 0; i--) { const k = localStorage.key(i); if (k && k.indexOf('tb_patimg_') === 0) localStorage.removeItem(k); } } catch {} }
+function invalidateImgCaches(){ try { localStorage.removeItem('tb_libimg'); localStorage.removeItem('tb_imgtrash'); localStorage.removeItem('tb_imglog'); for (let i = localStorage.length - 1; i >= 0; i--) { const k = localStorage.key(i); if (k && k.indexOf('tb_patimg_') === 0) localStorage.removeItem(k); } } catch {} }
 // v0.7.20.1 — shared image store (in-memory) · โหลดครั้งเดียว ใช้ร่วมทุกหน้า (library/patient-tab) · กันโหลดซ้ำ/ไม่ขึ้น skeleton
 const IMG_STORE = new Map();
 function storeImgs(arr) { (arr || []).forEach(im => { if (im && im.id) IMG_STORE.set(im.id, im); }); }
@@ -283,8 +283,8 @@ function removeStoredImg(id) { IMG_STORE.delete(id); }
 // ── แท็บรูปภาพในโปรไฟล์ผู้ป่วย (CXR/Lab/Document) ───────────────────────────
 // ── ระบบมุมมองรูป (การ์ด/แถว + ขนาด เล็ก/กลาง/ใหญ่) ใช้ร่วมกันทุกคลังรูป ──────
 const IMG_VIEW_SIZES = [
-  { label:'เล็ก', card:120, thumb:44, jh:120 },   // jh = ความสูงแกลเลอรี justified (โหมดการ์ด)
-  { label:'กลาง', card:168, thumb:56, jh:170 },
+  { label:'เล็ก', card:120, thumb:44, jh:100 },   // jh = ความสูงแกลเลอรี justified (โหมดการ์ด) · กระจายให้ 3 ขนาดต่างชัดแม้จอแคบ/รูปน้อย (verify Chrome cw=664 จอ768: 100/135/183)
+  { label:'กลาง', card:168, thumb:56, jh:135 },
   { label:'ใหญ่', card:230, thumb:76, jh:240 },
 ];
 function ImgViewToolbar({ mode, setMode, size, setSize }) {

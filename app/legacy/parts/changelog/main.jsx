@@ -2,7 +2,7 @@
 /** changelog/main.jsx — หน้า changelog + CommitDetailModal (แยกรอบ 3) */
 import * as React from 'react'
 const { useState, useEffect, useRef, useCallback, useMemo } = React
-import { useModalAnim, AvatarCircle, nameInitials, ScrollNav } from '../shared'
+import { useModalAnim, AvatarCircle, nameInitials, ScrollNav, loadCache, saveCache } from '../shared'
 import { CHANGELOG_STATUS_META, ChangelogCommentSection } from './comments'
 
 function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
@@ -36,12 +36,13 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
   const [expandedComments, setExpandedComments] = useState(new Set()); // version ที่เปิด comments ใน Timeline view
   // v0.7.15.4 — track version ที่เคยเปิด (keep mounted) → เปิด/ปิดครั้งถัดไป instant
   const [everOpenedVersions, setEverOpenedVersions] = useState(new Set());
-  const [commentCounts, setCommentCounts] = useState({}); // {version: active count รวม reply}
-  const [commentDeletedCounts, setCommentDeletedCounts] = useState({}); // {version: deleted count รวม reply}
+  const _seedC = loadCache('tb_changelog_comments');   // seed comment counts/data ทันที (โหลดครั้งเดียว · revalidate เบื้องหลัง)
+  const [commentCounts, setCommentCounts] = useState(_seedC ? _seedC.data.counts : {}); // {version: active count รวม reply}
+  const [commentDeletedCounts, setCommentDeletedCounts] = useState(_seedC ? _seedC.data.dcounts : {}); // {version: deleted count รวม reply}
   const [onlyWithComments, setOnlyWithComments] = useState(false); // filter: เฉพาะมี comment
   // ── Bulk comments store — fetch รวด 1 ครั้งแทน fetch ต่อ version ──
-  const [allCommentsByVersion, setAllCommentsByVersion] = useState({}); // {version: [comments]}
-  const [commentsMeta, setCommentsMeta] = useState({ currentUserId: null, isAdmin: false });
+  const [allCommentsByVersion, setAllCommentsByVersion] = useState(_seedC ? _seedC.data.byVersion : {}); // {version: [comments]}
+  const [commentsMeta, setCommentsMeta] = useState(_seedC ? _seedC.data.meta : { currentUserId: null, isAdmin: false });
 
   // ── แถบที่ 2: Comment-specific filters (v0.7.14.7) ──
   const [commentSearch, setCommentSearch] = useState('');
@@ -86,6 +87,7 @@ function ChangelogPage({ highlightCommentTarget, onClearHighlight } = {}) {
       });
       setCommentCounts(counts);
       setCommentDeletedCounts(dcounts);
+      saveCache('tb_changelog_comments', { byVersion, counts, dcounts, meta: { currentUserId: j.current_user_id, isAdmin: !!j.is_admin } });
       // auto-expand version ที่มี comment
       const withComments = Object.keys(byVersion);
       if (withComments.length > 0) {

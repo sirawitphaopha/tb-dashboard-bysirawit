@@ -32,6 +32,10 @@ export function useModalAnim(onClose, opts = {}) {
 // className มาตรฐานของช่อง input (ใช้ทั่วทุกฟอร์ม)
 export const INP = `w-full p-2.5 border rounded-xl bg-gray-50 outline-none focus:ring-2 focus:ring-teal-400 text-sm`;
 
+// ── cache กลาง (localStorage · "โหลดครั้งเดียว" seed+revalidate) — seed state ตอน mount (ไม่ skeleton ซ้ำ) แล้ว fetch สดเบื้องหลัง swap ถ้ามีใหม่ ──
+export function loadCache(key){ try { const s = localStorage.getItem(key); if (s) { const o = JSON.parse(s); if (Date.now() - o.ts < 7200000) return o; } } catch {} return null; }
+export function saveCache(key, data){ try { localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() })); } catch {} }
+
 // ── leaf UI ชิ้นเล็ก ๆ (ใช้ข้าม domain) ──
 export function FormSection({icon,title,children}){return(<div><div className="flex items-center gap-2 mb-4"><div className="w-7 h-7 bg-teal-100 text-teal-700 rounded-lg flex items-center justify-center text-xs"><i className={`fa-solid ${icon}`}></i></div><h3 className="font-bold text-gray-800 text-sm">{title}</h3></div>{children}</div>);}
 export function FieldError({msg}){return msg?<p className="text-red-500 text-xs mt-1">{msg}</p>:null;}
@@ -317,7 +321,7 @@ export function loadImageEl(src) {
 // ── AvatarLightbox — ดูรูปเต็มจอ (ซูม/ลาก/สไลด์) ────────────────────────────
 // ใช้ร่วมข้าม domain: รูปผู้ป่วย (parts/patient-images) + avatar (UserProfileModal ใน shell → parts/account เฟส 6)
 // ย้ายเข้า shared.jsx เฟส 5 (เดิมอยู่ tb-monolith.jsx) — โค้ดเดิม ไม่แก้ logic · เติม export หน้า function
-export function AvatarLightbox({ src, thumb, originRect, info, onExpire, onClose, hasPrev, hasNext, onPrev, onNext, menuActions }) {
+export function AvatarLightbox({ src, thumb, originRect, info, onExpire, onClose, hasPrev, hasNext, onPrev, onNext, menuActions, infoAction }) {
   const [open, setOpen]       = React.useState(false);
   const [settled, setSettled] = React.useState(false); // เปิดเสร็จแล้ว → สลับ transition ซูมให้ไว
   const [scale, setScale]     = React.useState(1);
@@ -635,6 +639,7 @@ export function AvatarLightbox({ src, thumb, originRect, info, onExpire, onClose
               <p style={{fontSize:'13px',color:'#0f766e',fontWeight:600,margin:0,wordBreak:'break-all'}}>{v}</p>
             </div>
           ))}
+          {infoAction && <button onClick={e=>{stop(e); infoAction();}} style={{width:'100%',marginTop:'16px',padding:'11px',borderRadius:'10px',background:'#0d9488',color:'#fff',border:'none',fontWeight:700,fontSize:'13px',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:'7px'}}><i className="fa-solid fa-rectangle-list"></i>ดูรายละเอียดเต็ม (popup)</button>}
         </div>
       </div>
 

@@ -163,6 +163,8 @@ body {
 .tb-hovgray:hover { background-color: #e5e7eb !important; }
 .tb-hovteal { transition: background-color 0.15s ease; }
 .tb-hovteal:hover { background-color: #f0fdfa !important; }
+.tb-hovtealbtn { transition: background-color 0.15s ease; }
+.tb-hovtealbtn:hover { background-color: #0f766e !important; }
 
 /* Comment card classes (v0.7.15.5) */
 .cm-card {

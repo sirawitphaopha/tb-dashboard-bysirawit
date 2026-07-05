@@ -8,7 +8,7 @@ import { compressToWebp, putWithProgress, JustifiedGallery, IMG_SORTS, imgInRang
   patientImgInfo, PATIENT_IMG_TYPES, CACHE_TTL, loadCache, saveCache, invalidateImgCaches,
   IMG_VIEW_SIZES, ImgViewToolbar, PendingDeleteOverlay, ImageRequestDeleteModal, ImageReviewDeleteModal, ImageCancelRequestModal,
   storeImgs, getStoredImgs, updateStoredImg, removeStoredImg } from './helpers'
-import { ImageLogPage } from './image-log'
+import { ImageLogPage, SnapModal, imageToSnap } from './image-log'
 import { phashDistance } from './image-hash'
 
 const DUP_COLORS = ['#7c3aed', '#db2777', '#2563eb', '#ea580c', '#0891b2', '#65a30d', '#c026d3'];   // สีป้ายรูปซ้ำ (วนตาม cluster)
@@ -27,6 +27,7 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
   const [uploaderFilter, setUploaderFilter] = React.useState('all');
   const [q, setQ]           = React.useState('');
   const [lightbox, setLightbox] = React.useState(null);
+  const [detailImg, setDetailImg] = React.useState(null);   // รูปที่กดดูข้อมูล (popup ทับ · จากปุ่มในการ์ด/ตัวดูรูป)
   const [reqTarget, setReqTarget] = React.useState(null);        // v0.7.20 — รูปที่กำลัง "ขอลบ"
   const [reviewTarget, setReviewTarget] = React.useState(null);  // v0.7.20 — {im, action} แอดมินอนุมัติ/ปฏิเสธ
   const [cancelTarget, setCancelTarget] = React.useState(null);  // v0.7.20.2 — รูปที่กำลังยืนยัน "ยกเลิกคำขอลบ"
@@ -238,6 +239,7 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
         <span style={{position:'absolute',top:'5px',right:'5px',fontSize:'9px',fontWeight:800,padding:'2px 6px',borderRadius:'999px',background:meta.bg,color:meta.fg}}>{meta.label}</span>
         {dupMap[im.id] && (()=>{ const d=dupMap[im.id]; const col=DUP_COLORS[(d.id-1)%DUP_COLORS.length]; return <span title={d.exact?'ไฟล์เดียวกันเป๊ะ':'ภาพเดียวกัน (คนละไฟล์)'} style={{position:'absolute',top:'5px',left:'5px',fontSize:'9px',fontWeight:800,padding:'2px 6px',borderRadius:'999px',background:col,color:'#fff',display:'inline-flex',alignItems:'center',gap:'3px'}}><i className={'fa-solid '+(d.exact?'fa-clone':'fa-images')} style={{fontSize:'8px'}}></i>{d.exact?'ซ้ำ':'คล้าย'} #{d.id}</span>; })()}
         <span style={{position:'absolute',bottom:0,left:0,right:0,padding:'10px 6px 4px',background:'linear-gradient(transparent,rgba(0,0,0,0.6))',color:'#fff',fontSize:'9px'}}>{new Date(im.uploaded_at).toLocaleDateString('th-TH',{day:'numeric',month:'short'})}</span>
+        <button onClick={(e)=>{ e.stopPropagation(); setDetailImg(im); }} title="ดูข้อมูล" style={{position:'absolute',bottom:'6px',right:'6px',zIndex:3,width:'28px',height:'28px',borderRadius:'50%',background:'rgba(0,0,0,0.62)',color:'#fff',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'12px'}}><i className="fa-solid fa-circle-info"></i></button>
       </div>
     );
   };
@@ -281,7 +283,7 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
   return (
     <div>
       {/* ส่วนหัว — ตรึงไว้ด้านบน (sticky) */}
-      <div style={{position:'sticky',top:0,zIndex:20,background:'#f0fdfa',marginLeft:'-24px',marginRight:'-24px',paddingLeft:'24px',paddingRight:'24px',paddingTop:'2px',paddingBottom:'10px',marginBottom:'8px'}}>
+      <div style={{position:'sticky',top:'-24px',zIndex:20,background:'#f0fdfa',margin:'0 -24px 8px',padding:'12px 24px 10px'}}>
       {viewToggle}
       {/* ตัวกรอง + ค้นหา (ชื่อหน้าอยู่บนแถบหัวเรื่องด้านบนแล้ว) */}
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'10px',marginBottom:'0',flexWrap:'wrap'}}>
@@ -408,6 +410,7 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
       {reqTarget && <ImageRequestDeleteModal image={reqTarget} lightboxOpen={!!lightbox} onClose={()=>setReqTarget(null)} onDone={(reason)=>onReqDone(reqTarget, reason)}/>}
       {reviewTarget && <ImageReviewDeleteModal image={reviewTarget.im} action={reviewTarget.action} lightboxOpen={!!lightbox} onClose={()=>setReviewTarget(null)} onDone={(action)=>onReviewDone(reviewTarget.im, action)}/>}
       {cancelTarget && <ImageCancelRequestModal image={cancelTarget} lightboxOpen={!!lightbox} onClose={()=>setCancelTarget(null)} onDone={()=>doCancelImgRequest(cancelTarget)}/>}
+      {detailImg && createPortal(<SnapModal snap={imageToSnap(detailImg)} onClose={()=>setDetailImg(null)}/>, document.body)}
       {lightbox && (()=>{
         const cur = displayList[lightbox.idx]; if (!cur) return null;
         const meta = PATIENT_IMG_TYPES[cur.type] || PATIENT_IMG_TYPES.other;
@@ -432,7 +435,7 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
         const info = patientImgInfo(cur, meta, name);
         info.noteEditable = canEdit;
         info.onSaveNote = async (text) => { await fetch('/api/patient/images/'+cur.id,{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({note:text||null})}); setImages(arr=>(arr||[]).map(x=>x.id===cur.id?{...x,note:text||null}:x)); invalidateImgCaches(); };
-        return <AvatarLightbox src={cur.url} thumb={cur.thumbUrl} originRect={lightbox.rect} info={info} menuActions={acts}
+        return <AvatarLightbox src={cur.url} thumb={cur.thumbUrl} originRect={lightbox.rect} info={info} menuActions={acts} infoAction={()=>setDetailImg(cur)}
           hasPrev={lightbox.idx>0} hasNext={lightbox.idx<displayList.length-1}
           onPrev={()=>setLightbox(l=>({ idx: Math.max(0, l.idx-1) }))}
           onNext={()=>setLightbox(l=>({ idx: Math.min(displayList.length-1, l.idx+1) }))}

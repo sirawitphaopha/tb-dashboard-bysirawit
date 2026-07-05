@@ -6,7 +6,7 @@
  */
 import * as React from 'react'
 const { useState, useEffect } = React
-import { FilterSelect } from '../shared'
+import { FilterSelect, loadCache, saveCache } from '../shared'
 
 // ─────────────────────────────────────────────────────
 // ActivityLogTab — บันทึกกิจกรรม (timeline รวม เข้า/ออก/รหัสผ่าน/easter)
@@ -56,12 +56,14 @@ function activityDeviceIcon(t) {
 // dropdown ที่มีไอคอนนำหน้า + ลูกศรเอง (สวย consistent)
 // FilterSelect ย้ายไป parts/shared.jsx (เฟส 1c)
 function ActivityLogTab() {
-  const [events, setEvents]       = useState([])
-  const [loading, setLoading]     = useState(true)
+  const _seedA = loadCache('tb_activity_default')   // seed มุมมองเริ่มต้น (30 วัน ไม่กรอง) — โหลดครั้งเดียว
+  const _seededA = React.useRef(!!_seedA)
+  const [events, setEvents]       = useState(_seedA ? _seedA.data.events : [])
+  const [loading, setLoading]     = useState(!_seedA)
   const [loadingMore, setLoadingMore] = useState(false)
   const [page, setPage]           = useState(0)
-  const [hasMore, setHasMore]     = useState(false)
-  const [total, setTotal]         = useState(null)
+  const [hasMore, setHasMore]     = useState(_seedA ? _seedA.data.hasMore : false)
+  const [total, setTotal]         = useState(_seedA ? _seedA.data.total : null)
   const [error, setError]         = useState('')
 
   // v0.7.16.0 — Phase 2 MV refresh
@@ -141,8 +143,11 @@ function ActivityLogTab() {
     return params
   }
 
+  // มุมมองเริ่มต้น (ไม่กรองอะไร · 30 วัน) — ใช้ตัดสินใจ seed/บันทึก cache
+  const isDefaultView = () => (!fUser && !fType && fTime==='30d' && !fDevice && !fDeviceFp && !fDateFrom && !fDateTo && !fSearch && !fSuspicious)
   const loadPage = async (p) => {
-    p === 0 ? setLoading(true) : setLoadingMore(true)
+    if (p === 0) { if (!(_seededA.current && isDefaultView())) setLoading(true) }   // seed อยู่ + มุมมองเริ่มต้น = ไม่ skeleton ทับ (revalidate เงียบ)
+    else setLoadingMore(true)
     setError('')
     try {
       const res  = await fetch(`/api/admin/activity-log?${buildParams(p).toString()}`)
@@ -153,8 +158,10 @@ function ActivityLogTab() {
         setHasMore(data.hasMore)
         if (typeof data.total === 'number') setTotal(data.total)
         setPage(p)
+        if (p === 0 && isDefaultView()) saveCache('tb_activity_default', { events: data.events || [], hasMore: !!data.hasMore, total: (typeof data.total === 'number' ? data.total : null) })
       }
     } catch { setError('เกิดข้อผิดพลาด กรุณาลองใหม่') }
+    _seededA.current = false   // หลังโหลดรอบแรก → เปลี่ยนฟิลเตอร์ครั้งถัดไปโชว์ skeleton ปกติ
     setLoading(false); setLoadingMore(false)
   }
 
