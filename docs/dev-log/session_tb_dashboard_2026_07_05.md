@@ -1,0 +1,62 @@
+---
+name: tb-dashboard-2026-07-05-v0-7-21-1
+description: TB Dashboard — v0.7.21.1 เก็บ hash WebP + แก้บั๊ก SHA-256 บน IP (crypto.subtle secure-context) + หน้าประวัติกรองทันที/multi-select/มุมตามรูป/snapshot ภาษาคน + กรองรูปซ้ำในคลัง + ตรึงส่วนหัว 3 หน้า · กฎใหม่ version 4 ตำแหน่ง · แก้ CORS พอร์ต local
+metadata:
+  node_type: memory
+  type: project
+  originSessionId: 7aa68f83-dda6-4087-a662-3dcb5fe5fceb
+---
+# TB Dashboard — Session 2026-07-05 (ต่อจาก 07-04)
+
+**Repo:** `D:\tb-dashboard-bysirawit` · main · push ตรง (Cloudflare Pages) · Live tbjourney.care
+
+## ✅ push v0.7.21.1 (feature 4fac47e + chore ff3c322) — ⚠️ พี่กันขอ push ก่อนเทส (ยังไม่เทส action)
+ต่อยอด v0.7.21 (ระบบประวัติรูป audit log + hash) ให้ใช้งานได้ครบจริง
+
+### 🔑 เก็บ hash ไฟล์ WebP (คู่ต้นฉบับ)
+- อัป = คำนวณ hash 2 ไฟล์: ต้นฉบับ (นิ่ง) + WebP (ไฟล์เก็บจริง) + pHash · คอลัมน์ใหม่ `webp_sha256/md5/crc32` (รันผ่าน MCP แล้ว)
+- โชว์ hash **ครบทุกค่า** ในตัวดูรูป (shared.jsx แผงข้อมูล) + หน้ารายละเอียดประวัติ (ค่าเต็ม ไม่ตัด)
+
+### 🐛🐛 บทเรียนใหญ่ 1 — SHA-256/MD5/CRC32 ว่างตอนเปิดผ่านเลข IP (LAN)
+- **ต้นเหตุ:** `crypto.subtle` เบราว์เซอร์ให้ใช้เฉพาะ **secure context (https / localhost)** · เปิดผ่าน `http://192.168.x.x` = ไม่ secure → `crypto.subtle` = **undefined** → `sha256Hex` โยน TypeError · โค้ดเดิม sha256 อยู่ try เดียวกันก่อน md5/crc32 → พังลากตัวอื่นด้วยหมด (log: `Cannot read properties of undefined (reading 'digest')`)
+- **แก้ (image-hash.js):** (1) เขียน `_sha256` pure-JS fallback — verify test vector (abc/""/ยาว) + node crypto (200KB) ตรงเป๊ะ · (2) `sha256Hex` ลอง native ก่อน ไม่มีค่อย fallback → ทำงานทุก context · (3) `computeByteHashes` แยก try แต่ละ hash (ตัวพังไม่ลากตัวอื่น)
+- **จำ:** hashing/crypto ฝั่ง client ที่ต้องรองรับ LAN → อย่าพึ่ง crypto.subtle อย่างเดียว ต้องมี fallback + isolate
+
+### 🐛🐛 บทเรียนใหญ่ 2 — อัปรูปไม่ได้ใน local ("เครือข่ายมีปัญหา") = CORS พอร์ต ไม่ใช่บั๊กโค้ด
+- **ต้นเหตุ:** R2 CORS ของ bucket `tb-patient-images` อนุญาต origin แค่ **localhost:3001 + tbjourney.care** · แต่ `next dev` = พอร์ต **3000** → R2 บล็อก PUT (403 preflight) → `xhr.onerror` (helpers.jsx putWithProgress) → เด้ง "อัปโหลดไม่สำเร็จ — เครือข่ายมีปัญหา"
+- **วินิจฉัย:** ยิง `curl -X OPTIONS` preflight เทส origin จริง (localhost:3000=403 · 3001=204 · tbjourney.care=204) → พิสูจน์ชัด ไม่เดา · (Windows curl ต้อง `--ssl-no-revoke`)
+- **แก้:** เพิ่ม `http://localhost:3000` + IP LAN (`http://192.168.34.126:3000`) เข้า R2 Allowed Origins (Cloudflare dashboard) · ไม่แตะโค้ด
+- **จำ:** อัปตรง browser→R2 ล้มใน local = เช็ค R2 CORS ก่อน (พอร์ต dev ต้องอยู่ใน allowlist) · IP LAN เปลี่ยนได้ตาม DHCP (ไม่ใช่ต่อการรัน) · page bg = teal-50 `#f0fdfa`
+
+### 📜 หน้าประวัติรูป (image-log.jsx เขียนใหม่) — โหลดครั้งเดียว กรองทันที
+- API `log/route.ts` เขียนใหม่ = คืน event ทั้งหมดรอบเดียว (cap 5000 · +imageId) · เอา server group/pagination ออก → client `useMemo` กรอง/group/dedup → **กดกรองปุ๊บทันที** (เดิมยิง server ทุกครั้ง+debounce=หน่วง)
+- ดรอปดาวน์กรองเหตุการณ์ = **เลือกหลายข้อ** (checkbox + ล้าง/เลือกทั้งหมด) · ปุ่มกว้างคงที่ 178px (ติ๊กแล้วไม่ขยาย/ยุบ)
+- มุม **"ตามรูป"** (group image_id) — การ์ดต่อรูป + สถานะ + จำนวน event + แฮชย่อ + ไทม์ไลน์ในรูป · ป้ายรูปซ้ำ (union-find · SHA เป๊ะ=ซ้ำ / pHash Hamming≤8=คล้าย)
+- snapshot = **ภาษาคน** (SnapModal · grid แนวนอน auto-fit → จอกว้างไม่ต้องเลื่อน · มือถือเรียงลง) หมวด ข้อมูลรูป/ต้นฉบับ/ไฟล์เก็บ(บีบลด%)/เวลา/แฮช(เต็ม) + ปุ่ม "ดูข้อมูลดิบ JSON"
+
+### 🖼 คลังรูป (library.jsx) — กรองเฉพาะรูปซ้ำ
+- `dupMap` (useMemo · union-find · SHA เป๊ะ + pHash≤8) จากรูปทั้งหมด → ป้าย "ซ้ำ #n"/"คล้าย #n" การ์ด+แถว · ปุ่ม **"เฉพาะรูปซ้ำ"** (ม่วง · exclusive กับ "เฉพาะรูปที่ขอลบ") · import `phashDistance` จาก image-hash
+
+### 📌 ตรึงส่วนหัว (sticky) — คลังรูป/ประวัติ/ถังขยะ
+- toggle + แถบกรอง `position:sticky top:0` · bg `#f0fdfa` (=teal-50 พื้นหน้า) · full-bleed ด้วย negative margin -24px (scroll container = `mainScrollRef` p-6)
+- ประวัติ/ถังขยะ: ส่ง toggle เข้า sticky ผ่าน prop `headerExtra` (ตรึงก้อนเดียวไม่ทับกัน) · ถังขยะย้ายกล่องเตือน 60 วันลงใต้แถบกรอง
+- hover class กลางใน globals.css: `.tb-hovbg` / `.tb-hovgray` / `.tb-hovteal` (ใช้กับ element inline-style)
+
+## 🆕 กฎใหม่ (5 ก.ค. 69) — เวอร์ชัน 4 ตำแหน่งเสมอ
+- **`X.Y.Z.W` เสมอ** — เติม `.0` ถ้าขาด (`0.7.21` → `0.7.21.0`) · **ห้ามเกิน 4** (`0.7.21.2.5` → `0.7.21.2`) · ที่ push แล้วไม่แก้ย้อนหลัง (`0.7.19.6.22` เก่าคงไว้)
+- จดใน: skill (working-with-gun ทั้ง master + repo copy) · MEMORY.md · CLAUDE.md · README.md
+
+## 🔭 งานต่อไป / ค้าง
+1. **เทส v0.7.21.1 (พี่กันยังไม่เทส — push ก่อนเทส):**
+   - อัปรูปใหม่ → hash ครบ 7 ค่า (ต้นฉบับ 3 + WebP 3 + pHash) · ทดสอบทั้ง localhost + IP LAN
+   - หน้าประวัติ: ดรอปดาวน์เลือกหลายข้อ + กรองทันที + snapshot ภาษาคน (grid) + ปุ่ม JSON + มุมตามรูป + ป้ายรูปซ้ำ
+   - คลังรูป: อัปไฟล์เดียวกัน 2 ครั้ง → ป้าย "ซ้ำ" + ปุ่ม "เฉพาะรูปซ้ำ"
+   - sticky: เลื่อน 3 หน้า ส่วนหัวตรึง · hover ปุ่ม/รายการ · ปุ่มปิด/ดูข้อมูลดิบ hover
+   - action เดิม v0.7.21 (11 event log · อัป/แก้/ขอลบ/ยกเลิก/อนุมัติ/ปฏิเสธ/ลบตรง/กู้/ลบถาวร) ยังไม่เทส
+2. **0.8:** คลังความรู้ TB + PDF viewer + อัปไฟล์ไกด์ไลน์ (roadmap จริง = `docs/ideas.md` #5)
+3. **ค้างไกล:** bug audit · split monolith · 0.9 AI · 1.0
+
+## หมายเหตุ
+- dev server รันอยู่ (bg task · localhost:3000) · SQL webp columns รันบน dev=prod แล้ว (MCP)
+- ⚠️ scripts/rollback-cleanup-easter-egg-log.sql (untracked · ไม่ใช่ของเรา) = ไม่ commit
+- ดู [[tb-dashboard-2026-07-04-v0-7-19-7]] (session ก่อน · v0.7.20-0.7.21)
