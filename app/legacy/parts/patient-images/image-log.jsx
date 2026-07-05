@@ -6,6 +6,7 @@
 import * as React from 'react'
 import { createPortal } from 'react-dom'
 import { loadCache, saveCache, CACHE_TTL } from './helpers'
+import { highlightMagic } from '../shared'
 
 const LOG_CACHE_KEY = 'tb_imglog'   // โหลด event ครั้งเดียว (cache) — เปิดหน้าซ้ำไม่โหลดใหม่
 
@@ -432,19 +433,19 @@ function SnapModal({ snap, onClose }) {
                 <div style={{ padding:'8px 13px', fontSize:'12.5px', lineHeight:1.95, color:'#374151' }}>
                   {(s.orig_sha256 || s.orig_md5 || s.orig_crc32) && <>
                     <div style={{ fontSize:'11px', fontWeight:700, color:'#7c3aed', margin:'0 0 2px' }}>ต้นฉบับ ({mimeLabel(s.orig_mime)})</div>
-                    {s.orig_sha256 ? row('SHA-256', s.orig_sha256, true) : null}
-                    {s.orig_md5 ? row('MD5', s.orig_md5, true) : null}
-                    {s.orig_crc32 ? row('CRC32', s.orig_crc32, true) : null}
+                    {s.orig_sha256 ? row('SHA-256', highlightMagic(s.orig_sha256, '#0d9488'), true) : null}
+                    {s.orig_md5 ? row('MD5', highlightMagic(s.orig_md5, '#0d9488'), true) : null}
+                    {s.orig_crc32 ? row('CRC32', highlightMagic(s.orig_crc32, '#0d9488'), true) : null}
                   </>}
                   {(s.webp_sha256 || s.webp_md5 || s.webp_crc32) && <>
                     <div style={{ fontSize:'11px', fontWeight:700, color:'#7c3aed', margin:'9px 0 2px' }}>ไฟล์ที่เก็บ ({mimeLabel(s.mime)})</div>
-                    {s.webp_sha256 ? row('SHA-256', s.webp_sha256, true) : null}
-                    {s.webp_md5 ? row('MD5', s.webp_md5, true) : null}
-                    {s.webp_crc32 ? row('CRC32', s.webp_crc32, true) : null}
+                    {s.webp_sha256 ? row('SHA-256', highlightMagic(s.webp_sha256, '#0d9488'), true) : null}
+                    {s.webp_md5 ? row('MD5', highlightMagic(s.webp_md5, '#0d9488'), true) : null}
+                    {s.webp_crc32 ? row('CRC32', highlightMagic(s.webp_crc32, '#0d9488'), true) : null}
                   </>}
                   {s.phash ? <>
                     <div style={{ fontSize:'11px', fontWeight:700, color:'#7c3aed', margin:'9px 0 2px' }}>pHash (ภาพ · เทียบรูปซ้ำ)</div>
-                    <div style={{ fontFamily:'ui-monospace, monospace', wordBreak:'break-all' }}>{s.phash}</div>
+                    <div style={{ fontFamily:'ui-monospace, monospace', wordBreak:'break-all' }}>{highlightMagic(s.phash, '#0d9488')}</div>
                   </> : null}
                 </div>
               </div>

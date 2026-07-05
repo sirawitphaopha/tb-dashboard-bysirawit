@@ -36,6 +36,16 @@ export const INP = `w-full p-2.5 border rounded-xl bg-gray-50 outline-none focus
 export function loadCache(key){ try { const s = localStorage.getItem(key); if (s) { const o = JSON.parse(s); if (Date.now() - o.ts < 7200000) return o; } } catch {} return null; }
 export function saveCache(key, data){ try { localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() })); } catch {} }
 
+// ── 🥚 Easter egg "เลขวิเศษ" — ตรวจ/ไฮไลต์เลขที่บังเอิญโผล่ในค่าแฮชรูป (พี่กันสั่ง 5 ก.ค. 69 · เลขสั้นดูไม่ออกว่าเลขอะไร) ──
+export const MAGIC_NUMBERS = ['28938','9928','9297','6126','2538','928','705'];   // เรียงยาว→สั้น กันจับซ้อน (regex alternation)
+export function detectMagic(...vals){ const j = vals.filter(Boolean).join(' '); return MAGIC_NUMBERS.filter(m => j.includes(m)); }
+export function highlightMagic(str, color){   // คืน JSX ไฮไลต์เลขวิเศษในสตริง (ถ้าไม่มี คืนสตริงเดิม)
+  if (!str) return str;
+  const s = String(str), found = MAGIC_NUMBERS.filter(m => s.includes(m));
+  if (!found.length) return s;
+  return s.split(new RegExp('(' + found.join('|') + ')', 'g')).map((p, i) => (i % 2 === 1) ? <span key={i} style={{ color, fontWeight:800 }}>{p}</span> : p);
+}
+
 // ── leaf UI ชิ้นเล็ก ๆ (ใช้ข้าม domain) ──
 export function FormSection({icon,title,children}){return(<div><div className="flex items-center gap-2 mb-4"><div className="w-7 h-7 bg-teal-100 text-teal-700 rounded-lg flex items-center justify-center text-xs"><i className={`fa-solid ${icon}`}></i></div><h3 className="font-bold text-gray-800 text-sm">{title}</h3></div>{children}</div>);}
 export function FieldError({msg}){return msg?<p className="text-red-500 text-xs mt-1">{msg}</p>:null;}
@@ -625,13 +635,13 @@ export function AvatarLightbox({ src, thumb, originRect, info, onExpire, onClose
             ['อัปเดตล่าสุด', info && info.updatedAt ? new Date(info.updatedAt).toLocaleString('th-TH') : '—'],
             ['แหล่งเก็บ', (info && info.storage) ? info.storage : 'Cloudflare R2 · img.tbjourney.care'],
             ...(info && info.hashes ? [
-              ['SHA-256 (ต้นฉบับ)', info.hashes.origSha256 || '—'],
-              ['MD5 (ต้นฉบับ)', info.hashes.origMd5 || '—'],
-              ['CRC32 (ต้นฉบับ)', info.hashes.origCrc32 || '—'],
-              ['SHA-256 (WebP)', info.hashes.webpSha256 || '—'],
-              ['MD5 (WebP)', info.hashes.webpMd5 || '—'],
-              ['CRC32 (WebP)', info.hashes.webpCrc32 || '—'],
-              ['pHash (ภาพ · เทียบรูปซ้ำ)', info.hashes.phash || '—'],
+              ['SHA-256 (ต้นฉบับ)', info.hashes.origSha256 ? highlightMagic(info.hashes.origSha256, '#d97706') : '—'],
+              ['MD5 (ต้นฉบับ)', info.hashes.origMd5 ? highlightMagic(info.hashes.origMd5, '#d97706') : '—'],
+              ['CRC32 (ต้นฉบับ)', info.hashes.origCrc32 ? highlightMagic(info.hashes.origCrc32, '#d97706') : '—'],
+              ['SHA-256 (WebP)', info.hashes.webpSha256 ? highlightMagic(info.hashes.webpSha256, '#d97706') : '—'],
+              ['MD5 (WebP)', info.hashes.webpMd5 ? highlightMagic(info.hashes.webpMd5, '#d97706') : '—'],
+              ['CRC32 (WebP)', info.hashes.webpCrc32 ? highlightMagic(info.hashes.webpCrc32, '#d97706') : '—'],
+              ['pHash (ภาพ · เทียบรูปซ้ำ)', info.hashes.phash ? highlightMagic(info.hashes.phash, '#d97706') : '—'],
             ] : []),
           ].map(([k,v]) => (
             <div key={k} style={{padding:'11px 0',borderBottom:'1px solid #f1f5f9'}}>

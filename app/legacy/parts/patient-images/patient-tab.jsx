@@ -102,14 +102,15 @@ function PatientImagesTab({ patient, currentUser, locked }) {
     if (!file) return;
     setErr('');
     const name = (file.name || '').toLowerCase();
-    const okExt = /\.(jpe?g|png|webp|avif|gif|bmp|heic|heif|tiff?)$/.test(name);
-    if (!file.type.startsWith('image/') && !okExt) { setErr('รองรับไฟล์รูป: JPG/PNG/WebP/AVIF/GIF/BMP/HEIC/TIFF — ไม่รองรับ RAW/DICOM'); return; }
+    const isSvg = file.type === 'image/svg+xml' || /\.svg$/.test(name);   // SVG = เก็บต้นฉบับ ไม่แปลง WebP (vector ซูมไม่สิ้นสุด)
+    const okExt = /\.(jpe?g|png|webp|avif|gif|bmp|heic|heif|tiff?|svg)$/.test(name);
+    if (!file.type.startsWith('image/') && !okExt) { setErr('รองรับไฟล์รูป: JPG/PNG/WebP/AVIF/GIF/BMP/HEIC/TIFF/SVG — ไม่รองรับ RAW/DICOM'); return; }
     if (file.size > 200 * 1024 * 1024) { setErr('ไฟล์ใหญ่เกิน 200MB'); return; }
-    setPendingUpload({ file, decoding: true, previewUrl: null, isAnimated: false, dims: { width: 0, height: 0 }, origMime: file.type || ('image/' + name.split('.').pop()), error: '' });
+    setPendingUpload({ file, decoding: true, previewUrl: null, isAnimated: false, isSvg, dims: { width: 0, height: 0 }, origMime: file.type || (isSvg ? 'image/svg+xml' : ('image/' + name.split('.').pop())), error: '' });
     (async () => {
       try {
-        const animated = await isAnimatedGif(file);
-        const previewUrl = animated ? URL.createObjectURL(file) : await decodeImageToDataURL(file);
+        const animated = isSvg ? false : await isAnimatedGif(file);
+        const previewUrl = (animated || isSvg) ? URL.createObjectURL(file) : await decodeImageToDataURL(file);
         let dims = { width: 0, height: 0 };
         try { const im = await loadImageEl(previewUrl); dims = { width: im.naturalWidth, height: im.naturalHeight }; } catch {}
         setPendingUpload(pu => (pu && pu.file === file) ? { ...pu, decoding: false, previewUrl, isAnimated: animated, dims } : pu);
@@ -126,7 +127,9 @@ function PatientImagesTab({ patient, currentUser, locked }) {
     try {
       const isCxr = upType === 'cxr';
       let mainBlob, width, height, ext, mime;
-      if (pu.isAnimated) {
+      if (pu.isSvg) {
+        mainBlob = pu.file; ext = 'svg'; mime = 'image/svg+xml'; width = pu.dims.width; height = pu.dims.height;   // เก็บ SVG ต้นฉบับ ไม่บีบ
+      } else if (pu.isAnimated) {
         mainBlob = pu.file; ext = 'gif'; mime = 'image/gif'; width = pu.dims.width; height = pu.dims.height;
       } else {
         // CXR คมชัด 4096px/92% · รูปทั่วไป 2560px (2K)/87%
@@ -145,15 +148,15 @@ function PatientImagesTab({ patient, currentUser, locked }) {
       const webpH = await computeByteHashes(mainBlob);      // hash ไฟล์ WebP ที่เก็บจริง (GIF = ไฟล์เดียวกับต้นฉบับ)
       const phash = await computePerceptualHash(pu.previewUrl);   // dHash ภาพ (จับภาพเดียวกันแม้คนละไฟล์)
       const conf = await fetch('/api/patient/images/confirm', { method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ patientId: patient.id, key: pd.key, thumbKey: pd.thumbKey, type: upType, note: upNote || null, size: mainBlob.size, width, height, mime, origSize: pu.file.size, origMime: pu.origMime, origWidth: pu.dims.width, origHeight: pu.dims.height, quality: pu.isAnimated ? null : (isCxr ? 92 : 87), device: detectDevice(), origSha256: origH.sha256, origMd5: origH.md5, origCrc32: origH.crc32, webpSha256: webpH.sha256, webpMd5: webpH.md5, webpCrc32: webpH.crc32, phash }) });
+        body: JSON.stringify({ patientId: patient.id, key: pd.key, thumbKey: pd.thumbKey, type: upType, note: upNote || null, size: mainBlob.size, width, height, mime, origSize: pu.file.size, origMime: pu.origMime, origWidth: pu.dims.width, origHeight: pu.dims.height, quality: (pu.isAnimated || pu.isSvg) ? null : (isCxr ? 92 : 87), device: detectDevice(), origSha256: origH.sha256, origMd5: origH.md5, origCrc32: origH.crc32, webpSha256: webpH.sha256, webpMd5: webpH.md5, webpCrc32: webpH.crc32, phash }) });
       const cd = await conf.json();
       if (!conf.ok) throw new Error(cd.error || 'บันทึกไม่สำเร็จ');
-      if (pu.isAnimated) { try { URL.revokeObjectURL(pu.previewUrl); } catch {} }
+      if (pu.isAnimated || pu.isSvg) { try { URL.revokeObjectURL(pu.previewUrl); } catch {} }
       setUpNote(''); setPendingUpload(null); invalidateImgCaches(); await load(true, true);
     } catch (e) { setErr(e.message || 'เกิดข้อผิดพลาด'); }
     setUploading(false); setUpPhase(''); setUpProgress(0);
   };
-  const cancelUpload = () => { if (pendingUpload?.isAnimated) { try { URL.revokeObjectURL(pendingUpload.previewUrl); } catch {} } setPendingUpload(null); };
+  const cancelUpload = () => { if (pendingUpload?.isAnimated || pendingUpload?.isSvg) { try { URL.revokeObjectURL(pendingUpload.previewUrl); } catch {} } setPendingUpload(null); };
 
   const freshUrl = async (im) => {
     try { const r = await fetch(`/api/patient/images/${im.id}/url`); if (r.ok) { const d = await r.json(); if (d.url) return d.url; } } catch {}
@@ -254,8 +257,8 @@ function PatientImagesTab({ patient, currentUser, locked }) {
             style={{padding:'8px 16px',borderRadius:'8px',background:(preparing||uploading)?'#5eead4':'#0d9488',color:'#fff',fontWeight:700,fontSize:'13px',border:'none',cursor:(preparing||uploading)?'wait':'pointer'}}>
             {preparing ? <><i className="fa-solid fa-spinner fa-spin" style={{marginRight:'6px'}}></i>กำลังเปิดไฟล์...</> : <><i className="fa-solid fa-cloud-arrow-up" style={{marginRight:'6px'}}></i>เลือกรูป</>}
           </button>
-          <input ref={fileRef} type="file" accept="image/*,.heic,.heif,.tif,.tiff,.avif,.bmp" onChange={pickFile} style={{display:'none'}}/>
-          <span style={{fontSize:'11px',color:'#9ca3af',flexBasis:'100%'}}>รองรับ JPG/PNG/WebP/AVIF/GIF/BMP/HEIC/TIFF (iPhone ได้) · CXR คมชัด ≤4096px/92% · ทั่วไป ≤2560px (2K)/87% · ≤200MB · GIF เคลื่อนไหวเก็บต้นฉบับ</span>
+          <input ref={fileRef} type="file" accept="image/*,.heic,.heif,.tif,.tiff,.avif,.bmp,.svg" onChange={pickFile} style={{display:'none'}}/>
+          <span style={{fontSize:'11px',color:'#9ca3af',flexBasis:'100%'}}>รองรับ JPG/PNG/WebP/AVIF/GIF/BMP/HEIC/TIFF/SVG (iPhone ได้) · CXR คมชัด ≤4096px/92% · ทั่วไป ≤2560px (2K)/87% · ≤200MB · GIF เคลื่อนไหว/SVG เก็บต้นฉบับ (SVG ซูมไม่สิ้นสุด)</span>
         </div>
       )}
 

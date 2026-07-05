@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { createPortal } from 'react-dom'
 const { useState, useEffect, useCallback } = React
-import { AvatarLightbox } from '../shared'
+import { AvatarLightbox, detectMagic } from '../shared'
 import { compressToWebp, putWithProgress, JustifiedGallery, IMG_SORTS, imgInRange, imgSortCmp,
   patientImgInfo, PATIENT_IMG_TYPES, CACHE_TTL, loadCache, saveCache, invalidateImgCaches,
   IMG_VIEW_SIZES, ImgViewToolbar, PendingDeleteOverlay, ImageRequestDeleteModal, ImageReviewDeleteModal, ImageCancelRequestModal,
@@ -13,6 +13,24 @@ import { phashDistance } from './image-hash'
 
 const DUP_COLORS = ['#7c3aed', '#db2777', '#2563eb', '#ea580c', '#0891b2', '#65a30d', '#c026d3'];   // สีป้ายรูปซ้ำ (วนตาม cluster)
 
+// ── 🥚 รูปปลอม easter egg "เลขวิเศษ" — ไม่มีในคลังจริง · โผล่เฉพาะตอนกรอง "เฉพาะเลขวิเศษ" · แฮช crafted ให้มีเลขวิเศษครบ · กดดูได้ ลบไม่ได้ ──
+const MAGIC_SVG = 'data:image/svg+xml,' + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 600'><rect width='800' height='600' fill='#ffffff'/><text x='400' y='285' font-family='sans-serif' font-size='84' font-weight='800' fill='#0d9488' text-anchor='middle'>magic number</text><text x='400' y='378' font-family='sans-serif' font-size='40' fill='#5eead4' text-anchor='middle'>&#10024; &#10024; &#10024;</text></svg>");
+const MAGIC_IMAGE = {
+  id: 'magic-egg', isMagic: true,
+  patient_id: 'magic-patient', patient_name: 'เลข วิเศษ', patient_hn: '9297',
+  uploader_name: 'ระบบลับ', uploaded_by: 'magic',
+  type: 'other', note: 'รูปนี้ไม่มีอยู่จริง — โผล่เฉพาะตอนกรอง "เฉพาะเลขวิเศษ" (ข้อมูลทั้งหมดเป็นของปลอม)',
+  mime: 'image/webp', size_bytes: 62126, width: 800, height: 600,
+  orig_size_bytes: 92970, orig_mime: 'image/png', orig_width: 800, orig_height: 600,
+  quality: 100, device: 'ระบบลับ', uploaded_at: '2026-07-05T09:29:07.000Z',
+  url: MAGIC_SVG, thumbUrl: MAGIC_SVG,
+  orig_sha256: 'b9297f6126a705d2538c0928e9928f289380123456789abcdef0123456789abc',
+  orig_md5: '9297f6126705a25380928a9928fbcdef', orig_crc32: '28938abc',
+  webp_sha256: 'a9928b705c2538d9297e6126f0928a289380fedcba9876543210fedcba987654',
+  webp_md5: '6126a9297b705c25380928d9928abcde', webp_crc32: '9297abcd',
+  phash: '28938a9297b0705a',
+};
+
 function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onConsumeWant, onGoTrash }) {
   const _lc0 = loadCache('tb_libimg');
   const _seed0 = _lc0 ? _lc0.data : (getStoredImgs().length ? getStoredImgs() : null);   // v0.7.20.1 — seed จาก shared store (โหลดในหน้าอื่นแล้ว) กันขึ้น skeleton
@@ -20,7 +38,7 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
   const [loading, setLoading] = React.useState(!_seed0);
   const _seededRef = React.useRef(!!_seed0);
   const [err, setErr]       = React.useState('');
-  const [filter, setFilter] = React.useState('all');
+  const [typeSet, setTypeSet] = React.useState(() => new Set());   // หมวดรูปที่กรอง (multi-select · ว่าง = ทั้งหมด) · กดซ้ำ = เลิกกรอง · เลือกหลายอันได้
   const [sortBy, setSortBy] = React.useState('new');
   const [dateFrom, setDateFrom] = React.useState('');
   const [dateTo, setDateTo]     = React.useState('');
@@ -45,6 +63,7 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
   const pendingCount = pendingImageRequests?.length || 0;
   const [pendingMode, setPendingMode] = React.useState(false);   // v0.7.20.1 — โหมดกรองเฉพาะรูปที่ขอลบ (client-side · ไม่โหลดใหม่)
   const [dupMode, setDupMode] = React.useState(false);           // กรองเฉพาะรูปซ้ำ (client-side · ยึดแฮช)
+  const [magicMode, setMagicMode] = React.useState(false);       // 🥚 กรองเฉพาะเลขวิเศษ (โชว์รูปปลอม + รูปจริงที่แฮชมีเลขวิเศษ)
 
   // โหลดทุกรูปครั้งเดียว → กรอง/ค้นหาในเครื่อง + cache (เปิดซ้ำ/รีเฟรชไม่โหลดใหม่)
   const load = React.useCallback(async (force, silent) => {
@@ -131,14 +150,15 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
   }, [images]);
   const dupCount = Object.keys(dupMap).length;
   const flat = (images || []).filter(im =>
-    (filter === 'all' || im.type === filter) &&
+    (typeSet.size === 0 || typeSet.has(im.type)) &&
     (uploaderFilter === 'all' || im.uploader_name === uploaderFilter) &&
     imgInRange(im, dateFrom, dateTo) &&
     (!qq || (im.patient_name || '').toLowerCase().includes(qq) || (im.patient_hn || '').toLowerCase().includes(qq))
   ).sort(imgSortCmp(sortBy));
   const displayList = pendingMode ? flat.filter(im => im.delete_req_by)
     : dupMode ? flat.filter(im => dupMap[im.id])
-    : flat;   // กรอง "ขอลบ"/"รูปซ้ำ" client-side จากรูปที่โหลดแล้ว (ทันที · ไม่ skeleton/ไม่ยิง server)
+    : magicMode ? [MAGIC_IMAGE, ...flat.filter(im => detectMagic(im.orig_sha256, im.orig_md5, im.orig_crc32, im.webp_sha256, im.webp_md5, im.webp_crc32, im.phash).length)]   // 🥚 รูปปลอม + รูปจริงที่แฮชบังเอิญมีเลขวิเศษ
+    : flat;   // กรอง "ขอลบ"/"รูปซ้ำ"/"เลขวิเศษ" client-side จากรูปที่โหลดแล้ว (ทันที · ไม่ skeleton/ไม่ยิง server)
   const showLoading = loading;
   const openImage = (im, rect) => {   // เปิดด้วย index → ลูกศรเลื่อนข้ามทุกผู้ป่วยได้
     const idx = displayList.findIndex(x => x.id === im.id);
@@ -288,9 +308,17 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
       {/* ตัวกรอง + ค้นหา (ชื่อหน้าอยู่บนแถบหัวเรื่องด้านบนแล้ว) */}
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'10px',marginBottom:'0',flexWrap:'wrap'}}>
         <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
-          {['all',...Object.keys(PATIENT_IMG_TYPES)].map(k=>{const active=filter===k;const v=PATIENT_IMG_TYPES[k];return <button key={k} onClick={()=>setFilter(k)} style={{padding:'5px 14px',borderRadius:'999px',fontSize:'12px',fontWeight:700,border:'1px solid '+(active?'#0d9488':'#e5e7eb'),background:active?'#0d9488':'#fff',color:active?'#fff':'#6b7280',cursor:'pointer'}}>{k==='all'?'ทั้งหมด':v.label}</button>;})}
+          {['all',...Object.keys(PATIENT_IMG_TYPES)].map(k=>{
+            const active = k==='all' ? typeSet.size===0 : typeSet.has(k);
+            const v=PATIENT_IMG_TYPES[k];
+            return <button key={k} onClick={()=>{
+              if(k==='all') setTypeSet(new Set());
+              else setTypeSet(prev=>{ const n=new Set(prev); if(n.has(k)) n.delete(k); else n.add(k); return n; });
+              setMagicMode(false);   // กดหมวด = ยกเลิกกรองเลขวิเศษ (exclusive)
+            }} style={{padding:'5px 14px',borderRadius:'999px',fontSize:'12px',fontWeight:700,border:'1px solid '+(active?'#0d9488':'#e5e7eb'),background:active?'#0d9488':'#fff',color:active?'#fff':'#6b7280',cursor:'pointer'}}>{k==='all'?'ทั้งหมด':v.label}</button>;
+          })}
           {/* v0.7.20.1 — ปุ่มกรองเฉพาะรูปที่ขอลบ · เรืองแสงเมื่อมีคำขอ · จางกดไม่ได้เมื่อไม่มี */}
-          <button onClick={()=>{ if(pendingCount>0) setPendingMode(m=>{ const nv=!m; if(nv) setDupMode(false); return nv; }); }} disabled={pendingCount===0}
+          <button onClick={()=>{ if(pendingCount>0) setPendingMode(m=>{ const nv=!m; if(nv){ setDupMode(false); setMagicMode(false); } return nv; }); }} disabled={pendingCount===0}
             title={pendingCount===0?'ไม่มีรูปที่ขอลบ':'ดูเฉพาะรูปที่ขอลบ'}
             className={pendingCount>0 && !pendingMode ? 'tb-pend-glow' : ''}
             style={{display:'inline-flex',alignItems:'center',gap:'6px',fontSize:'12px',fontWeight:800,padding:'5px 14px',borderRadius:'999px',cursor:pendingCount===0?'not-allowed':'pointer',...(pendingMode?{background:'#f59e0b',color:'#fff',border:'1.5px solid #f59e0b'}:pendingCount>0?{background:'#fef3c7',color:'#92400e',border:'1.5px solid #f59e0b'}:{background:'#fff',color:'#cbd5e1',border:'1px solid #e5e7eb'})}}>
@@ -298,11 +326,17 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
             {pendingCount>0 && <span style={{background:pendingMode?'#fff':'#dc2626',color:pendingMode?'#b45309':'#fff',fontSize:'10px',fontWeight:800,minWidth:'17px',height:'17px',borderRadius:'999px',display:'inline-flex',alignItems:'center',justifyContent:'center',padding:'0 4px'}}>{pendingCount}</span>}
           </button>
           {/* กรองเฉพาะรูปซ้ำ (ยึดแฮช) · จางกดไม่ได้เมื่อไม่มีรูปซ้ำ */}
-          <button onClick={()=>{ if(dupCount>0) setDupMode(m=>{ const nv=!m; if(nv) setPendingMode(false); return nv; }); }} disabled={dupCount===0}
+          <button onClick={()=>{ if(dupCount>0) setDupMode(m=>{ const nv=!m; if(nv){ setPendingMode(false); setMagicMode(false); } return nv; }); }} disabled={dupCount===0}
             title={dupCount===0?'ไม่มีรูปซ้ำในคลัง':'ดูเฉพาะรูปที่ซ้ำกัน'}
             style={{display:'inline-flex',alignItems:'center',gap:'6px',fontSize:'12px',fontWeight:800,padding:'5px 14px',borderRadius:'999px',cursor:dupCount===0?'not-allowed':'pointer',...(dupMode?{background:'#7c3aed',color:'#fff',border:'1.5px solid #7c3aed'}:dupCount>0?{background:'#f3e8ff',color:'#6b21a8',border:'1.5px solid #a78bfa'}:{background:'#fff',color:'#cbd5e1',border:'1px solid #e5e7eb'})}}>
             <i className="fa-solid fa-clone"></i>เฉพาะรูปซ้ำ
             {dupCount>0 && <span style={{background:dupMode?'#fff':'#7c3aed',color:dupMode?'#6b21a8':'#fff',fontSize:'10px',fontWeight:800,minWidth:'17px',height:'17px',borderRadius:'999px',display:'inline-flex',alignItems:'center',justifyContent:'center',padding:'0 4px'}}>{dupCount}</span>}
+          </button>
+          {/* 🥚 กรองเฉพาะเลขวิเศษ (easter egg) */}
+          <button onClick={()=>setMagicMode(m=>{ const nv=!m; if(nv){ setPendingMode(false); setDupMode(false); setTypeSet(new Set()); } return nv; })}
+            title="เฉพาะรูปที่มีเลขวิเศษในค่าแฮช"
+            style={{display:'inline-flex',alignItems:'center',gap:'6px',fontSize:'12px',fontWeight:800,padding:'5px 14px',borderRadius:'999px',cursor:'pointer',...(magicMode?{background:'#0d9488',color:'#fff',border:'1.5px solid #0d9488'}:{background:'#f0fdfa',color:'#0f766e',border:'1.5px solid #5eead4'})}}>
+            <i className="fa-solid fa-wand-magic-sparkles"></i>เฉพาะเลขวิเศษ
           </button>
         </div>
         <div style={{display:'flex',gap:'8px',alignItems:'center',flexWrap:'wrap'}}>
@@ -321,7 +355,7 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
           {(dateFrom||dateTo) && <button onClick={()=>{setDateFrom('');setDateTo('');}} title="ล้างวันที่" style={{fontSize:'13px',color:'#0d9488',background:'none',border:'none',cursor:'pointer'}}><i className="fa-solid fa-xmark"></i></button>}
           {uploaders.length>1 && <select value={uploaderFilter} onChange={e=>setUploaderFilter(e.target.value)} title="กรองตามคนอัปโหลด" style={{padding:'7px 10px',borderRadius:'10px',border:'1px solid #d1d5db',fontSize:'13px',color:'#6b7280',cursor:'pointer',maxWidth:'160px'}}><option value="all">คนอัปโหลด: ทุกคน</option>{uploaders.map(u=><option key={u} value={u}>{u}</option>)}</select>}
           <input value={q} onChange={e=>setQ(e.target.value)} placeholder="ค้นหาชื่อ / HN ผู้ป่วย" style={{padding:'8px 12px',borderRadius:'10px',border:'1px solid #d1d5db',fontSize:'13px',minWidth:'160px'}}/>
-          {(filter!=='all'||sortBy!=='new'||dateFrom||dateTo||uploaderFilter!=='all'||q||pendingMode||dupMode) && <button onClick={()=>{setFilter('all');setSortBy('new');setDateFrom('');setDateTo('');setUploaderFilter('all');setQ('');setPendingMode(false);setDupMode(false);}} title="ล้างตัวกรองทั้งหมด" style={{display:'inline-flex',alignItems:'center',gap:'5px',padding:'7px 12px',borderRadius:'10px',border:'1px solid #fca5a5',background:'#fff',color:'#dc2626',fontSize:'12px',fontWeight:700,cursor:'pointer'}}><i className="fa-solid fa-filter-circle-xmark"></i>ล้างค่า</button>}
+          {(typeSet.size>0||sortBy!=='new'||dateFrom||dateTo||uploaderFilter!=='all'||q||pendingMode||dupMode||magicMode) && <button onClick={()=>{setTypeSet(new Set());setSortBy('new');setDateFrom('');setDateTo('');setUploaderFilter('all');setQ('');setPendingMode(false);setDupMode(false);setMagicMode(false);}} title="ล้างตัวกรองทั้งหมด" style={{display:'inline-flex',alignItems:'center',gap:'5px',padding:'7px 12px',borderRadius:'10px',border:'1px solid #fca5a5',background:'#fff',color:'#dc2626',fontSize:'12px',fontWeight:700,cursor:'pointer'}}><i className="fa-solid fa-filter-circle-xmark"></i>ล้างค่า</button>}
           <ImgViewToolbar mode={vMode} setMode={setVMode} size={vSize} setSize={setVSize}/>
         </div>
       </div>
@@ -343,9 +377,9 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
           <div style={{width:'80px',height:'80px',borderRadius:'50%',background:pendingMode?'#fffbeb':dupMode?'#f3e8ff':'#f3f4f6',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'16px'}}>
             <i className={pendingMode?'fa-solid fa-clock':dupMode?'fa-solid fa-clone':'fa-solid fa-images'} style={{fontSize:'32px',color:pendingMode?'#fcd34d':dupMode?'#c4b5fd':'#cbd5e1'}}></i>
           </div>
-          <p style={{fontSize:'15px',fontWeight:700,color:'#6b7280',margin:'0 0 4px'}}>{pendingMode?'ไม่มีรูปที่ขอลบ':dupMode?'ไม่พบรูปซ้ำที่ตรงกับตัวกรอง':((q||filter!=='all'||dateFrom||dateTo||uploaderFilter!=='all')?'ไม่พบรูปที่ตรงกับตัวกรอง':'ยังไม่มีรูปในระบบ')}</p>
-          <p style={{fontSize:'12px',color:'#9ca3af',margin:0,textAlign:'center'}}>{pendingMode?'ไม่มีคำขอลบรูปรออนุมัติในตอนนี้':dupMode?'ลองล้างตัวกรองอื่น หรือเปลี่ยนคำค้นหา':((q||filter!=='all'||dateFrom||dateTo||uploaderFilter!=='all')?'ลองล้างตัวกรองหรือเปลี่ยนคำค้นหา':'อัปโหลดรูปได้จากแท็บ "รูปภาพ" ในหน้าผู้ป่วย')}</p>
-          {(pendingMode||dupMode) && <button onClick={()=>{setPendingMode(false);setDupMode(false);}} style={{marginTop:'14px',fontSize:'13px',fontWeight:700,color:'#0f766e',background:'#fff',border:'1px solid #99e1cb',borderRadius:'8px',padding:'8px 16px',cursor:'pointer'}}><i className="fa-solid fa-arrow-left" style={{marginRight:'6px'}}></i>ดูรูปทั้งหมด</button>}
+          <p style={{fontSize:'15px',fontWeight:700,color:'#6b7280',margin:'0 0 4px'}}>{pendingMode?'ไม่มีรูปที่ขอลบ':dupMode?'ไม่พบรูปซ้ำที่ตรงกับตัวกรอง':((q||typeSet.size>0||dateFrom||dateTo||uploaderFilter!=='all')?'ไม่พบรูปที่ตรงกับตัวกรอง':'ยังไม่มีรูปในระบบ')}</p>
+          <p style={{fontSize:'12px',color:'#9ca3af',margin:0,textAlign:'center'}}>{pendingMode?'ไม่มีคำขอลบรูปรออนุมัติในตอนนี้':dupMode?'ลองล้างตัวกรองอื่น หรือเปลี่ยนคำค้นหา':((q||typeSet.size>0||dateFrom||dateTo||uploaderFilter!=='all')?'ลองล้างตัวกรองหรือเปลี่ยนคำค้นหา':'อัปโหลดรูปได้จากแท็บ "รูปภาพ" ในหน้าผู้ป่วย')}</p>
+          {(pendingMode||dupMode||magicMode) && <button onClick={()=>{setPendingMode(false);setDupMode(false);setMagicMode(false);}} style={{marginTop:'14px',fontSize:'13px',fontWeight:700,color:'#0f766e',background:'#fff',border:'1px solid #99e1cb',borderRadius:'8px',padding:'8px 16px',cursor:'pointer'}}><i className="fa-solid fa-arrow-left" style={{marginRight:'6px'}}></i>ดูรูปทั้งหมด</button>}
         </div>
       )}
       {!showLoading && groupEntries.map(([pid,g])=>(
@@ -420,6 +454,8 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
         const pending = !!cur.delete_req_by;
         const myReq = cur.delete_req_by === currentUser?.id;
         const acts = [];
+        if (cur.isMagic) acts.push({ icon:'fa-download', label:'ดาวน์โหลด SVG', onClick:()=>{ try { const a=document.createElement('a'); a.href=cur.url; a.download='magic-number.svg'; document.body.appendChild(a); a.click(); a.remove(); } catch {} } });
+        if (!cur.isMagic) {   // 🥚 รูปปลอมเลขวิเศษ = ดูได้อย่างเดียว ลบ/แก้ไม่ได้ (แต่โหลด SVG ได้)
         if (canEdit && !pending) acts.push({ icon:'fa-pen', label:'แก้หมวด / คำอธิบาย', onClick:()=>{ openEdit(cur); } });
         if (isAdmin) {
           if (pending) {
@@ -432,14 +468,15 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
           if (pending && myReq) acts.push({ icon:'fa-rotate-left', label:'ยกเลิกคำขอลบ', onClick:()=>{ cancelImgRequest(cur); } });
           else if (!pending) acts.push({ icon:'fa-trash-can', label:'ขอลบรูป', onClick:()=>{ setReqTarget(cur); } });
         }
+        }
         const info = patientImgInfo(cur, meta, name);
-        info.noteEditable = canEdit;
+        info.noteEditable = canEdit && !cur.isMagic;
         info.onSaveNote = async (text) => { await fetch('/api/patient/images/'+cur.id,{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({note:text||null})}); setImages(arr=>(arr||[]).map(x=>x.id===cur.id?{...x,note:text||null}:x)); invalidateImgCaches(); };
         return <AvatarLightbox src={cur.url} thumb={cur.thumbUrl} originRect={lightbox.rect} info={info} menuActions={acts} infoAction={()=>setDetailImg(cur)}
           hasPrev={lightbox.idx>0} hasNext={lightbox.idx<displayList.length-1}
           onPrev={()=>setLightbox(l=>({ idx: Math.max(0, l.idx-1) }))}
           onNext={()=>setLightbox(l=>({ idx: Math.min(displayList.length-1, l.idx+1) }))}
-          onExpire={async()=>{ try { const r=await fetch(`/api/patient/images/${cur.id}/url`); if(r.ok){ const d=await r.json(); return d.url; } } catch {} return null; }}
+          onExpire={cur.isMagic ? undefined : async()=>{ try { const r=await fetch(`/api/patient/images/${cur.id}/url`); if(r.ok){ const d=await r.json(); return d.url; } } catch {} return null; }}
           onClose={()=>setLightbox(null)}/>;
       })()}
     </div>

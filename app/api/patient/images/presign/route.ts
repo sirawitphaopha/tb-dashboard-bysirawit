@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
     if (!isApproved) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
     const { patientId, ext } = await req.json().catch(() => ({} as any))
     if (!patientId) return NextResponse.json({ error: 'patientId required' }, { status: 400 })
-    const safeExt = (typeof ext === 'string' && /^(webp|gif)$/.test(ext)) ? ext : 'webp'  // รูปเต็ม (GIF เคลื่อนไหว = gif ต้นฉบับ)
+    const safeExt = (typeof ext === 'string' && /^(webp|gif|svg)$/.test(ext)) ? ext : 'webp'  // รูปเต็ม (GIF เคลื่อนไหว = gif · SVG = vector ต้นฉบับ)
     const uid = crypto.randomUUID()
     const key = `patients/${patientId}/${uid}.${safeExt}`       // รูปเต็ม
     const thumbKey = `patients/${patientId}/${uid}_thumb.webp`  // รูปย่อ (แกลเลอรี — เฟรมแรก WebP เสมอ)
