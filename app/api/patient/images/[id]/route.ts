@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRequester, PATIENT_BUCKET } from '@/lib/patient-image-helpers'
 import { r2Delete } from '@/lib/r2'
+import { logImageEvent } from '@/lib/image-event-log'
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -36,6 +37,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       .eq('id', id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+    await logImageEvent(admin, { imageId: id, eventType: 'delete_direct', actorId: user.id, actorRole: 'admin', reason })
     return NextResponse.json({ success: true })
   } catch (e: any) {
     return NextResponse.json({ error: e.message || 'error' }, { status: 500 })
@@ -77,6 +79,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     const { error } = await admin.from('tb_patient_images').update(upd).eq('id', id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    const chg = Object.keys(upd).filter(k => !['thumb_key','width','height','size_bytes','quality'].includes(k))
+      .map(k => (({ type:'หมวด', note:'คำอธิบาย', title:'ชื่อ', storage_key:'ย่อขนาดใหม่' } as Record<string,string>)[k] || k))
+    await logImageEvent(admin, { imageId: id, eventType: 'metadata_updated', actorId: user.id, actorRole: isAdmin ? 'admin' : 'user', reason: chg.length ? 'แก้ ' + chg.join(', ') : null })
 
     // ลบไฟล์เก่าใน R2 (กรณีย่อขนาดใหม่ = เปลี่ยนคีย์)
     if (b.storageKey && b.oldKey && b.oldKey !== b.storageKey) {

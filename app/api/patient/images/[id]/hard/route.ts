@@ -5,6 +5,7 @@ import { getRequester, PATIENT_BUCKET } from '@/lib/patient-image-helpers'
 import { r2Delete } from '@/lib/r2'
 import { getResend, EMAIL_FROM } from '@/lib/resend'
 import { imageHardDeletedEmail } from '@/lib/email-templates'
+import { logImageEvent } from '@/lib/image-event-log'
 
 const TYPE_LABEL: Record<string, string> = { cxr: 'ภาพเอกซเรย์ (CXR)', lab: 'ผลแล็บ', document: 'เอกสาร', other: 'อื่นๆ' }
 
@@ -18,7 +19,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const { data: im } = await admin
       .from('tb_patient_images')
-      .select('storage_key, thumb_key, uploaded_by, patient_id, type')
+      .select('*')
       .eq('id', id)
       .maybeSingle()
     if (!im) return NextResponse.json({ error: 'not found' }, { status: 404 })
@@ -28,6 +29,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const { error } = await admin.from('tb_patient_images').delete().eq('id', id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    await logImageEvent(admin, { imageId: id, eventType: 'hard_deleted', actorId: user.id, actorRole: 'admin', reason: im.delete_reason || null, imageRow: im })
 
     // แจ้งเจ้าของรูป (คนอัปโหลด) ว่าถูกลบถาวร — ไม่แจ้งถ้าแอดมินคือผู้อัปเอง
     if (im.uploaded_by && im.uploaded_by !== user.id) {

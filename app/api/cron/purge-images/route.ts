@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { r2Delete } from '@/lib/r2'
 import { PATIENT_BUCKET } from '@/lib/patient-image-helpers'
+import { logImageEvent } from '@/lib/image-event-log'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,13 +19,18 @@ export async function POST(req: NextRequest) {
     const cutoff = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString()   // เกิน 60 วัน
     const { data, error } = await admin
       .from('tb_patient_images')
-      .select('id, storage_key, thumb_key')
+      .select('*')
       .not('deleted_at', 'is', null)
       .lt('deleted_at', cutoff)
       .limit(200)   // ทีละ 200 กันtimeout · รันรายวัน (สะสมได้)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     const rows = data || []
     if (!rows.length) return NextResponse.json({ purged: 0 })
+
+    // log ก่อนลบ (เก็บ snapshot ถาวร · actor = ระบบอัตโนมัติ)
+    for (const im of rows) {
+      await logImageEvent(admin, { imageId: im.id, eventType: 'purged', actorName: 'ระบบอัตโนมัติ', reason: 'ลบอัตโนมัติ เกิน 60 วัน', imageRow: im })
+    }
 
     // ลบไฟล์จริงใน R2 (รูปเต็ม + รูปย่อ) — ทนทาน: บางไฟล์ล้มก็ลบ row ต่อ (ไฟล์กำพร้าเก็บกวาดทีหลังได้)
     await Promise.allSettled(rows.flatMap((im: any) => {

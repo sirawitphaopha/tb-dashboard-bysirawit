@@ -204,6 +204,7 @@ function App() {
   const [pendingDeleteRequests, setPendingDeleteRequests] = useState([]);
   const [pendingImageRequests, setPendingImageRequests] = useState([]);   // v0.7.20 — คำขอลบรูปรออนุมัติ (ทุกคนเห็น)
   const [imgWantPending, setImgWantPending] = useState(false);   // v0.7.20.1 — มาจากกระดิ่ง → เปิดตัวกรอง "ขอลบ" ในคลังภาพ
+  const [trashWantImages, setTrashWantImages] = useState(false); // v0.7.21 — จากคลังรูป กด "ถังขยะ" → เปิดถังหน้าแท็บรูปภาพ
   const [cancelledDeleteCount, setCancelledDeleteCount] = useState(0);
   const [trashCounts, setTrashCounts] = useState({ patients: 0, images: 0 });   // v0.7.20.2 — จำนวนของในถังขยะ (badge เมนู/แท็บ)
   // v0.7.17.0 — userDbNotifs ย้ายขึ้นไป declared บนสุดแล้ว (ใกล้ readAlerts useEffect)
@@ -979,10 +980,10 @@ function App() {
           {!dbLoading && nav==='weekly-prep'   && <WeeklyPrep patients={patients.filter(p=>!p.archived)} onOpen={setClinical}/>}
           {!dbLoading && nav==='reports'       && <Reports patients={patients}/>}
           {!dbLoading && nav==='knowledge'     && <KnowledgeBase/>}
-          {!dbLoading && nav==='image-library' && <ImageLibraryPage currentUser={currentUser} pendingImageRequests={pendingImageRequests} wantPending={imgWantPending} onConsumeWant={()=>setImgWantPending(false)}/>}
+          {!dbLoading && nav==='image-library' && <ImageLibraryPage currentUser={currentUser} pendingImageRequests={pendingImageRequests} wantPending={imgWantPending} onConsumeWant={()=>setImgWantPending(false)} onGoTrash={()=>{ setTrashWantImages(true); setNav('trash'); }}/>}
           {!dbLoading && nav==='settings'      && <AdminSettings settings={settings} setSettings={setSettings} setNav={setNav} currentUser={currentUser}/>}
           {!dbLoading && nav==='admin-users'   && <AdminUsersTab currentUser={currentUser} onPendingChange={setPendingUserCount} highlightUserId={highlightUserId} onClearHighlight={()=>setHighlightUserId(null)}/>}
-          {!dbLoading && nav==='trash'         && <TrashHub currentUser={currentUser} trashCounts={trashCounts} onRestore={restorePatient} onHardDelete={hardDeletePatient} pendingDeleteRequests={pendingDeleteRequests} onApproveDelete={approveDeleteRequest} onRejectDelete={rejectDeleteRequest} onAcknowledgeCancelled={async () => { await window.acknowledgeCancelledRequests(); setCancelledDeleteCount(0); }}/>}
+          {!dbLoading && nav==='trash'         && <TrashHub currentUser={currentUser} trashCounts={trashCounts} wantImages={trashWantImages} onConsumeWantImages={()=>setTrashWantImages(false)} onRestore={restorePatient} onHardDelete={hardDeletePatient} pendingDeleteRequests={pendingDeleteRequests} onApproveDelete={approveDeleteRequest} onRejectDelete={rejectDeleteRequest} onAcknowledgeCancelled={async () => { await window.acknowledgeCancelledRequests(); setCancelledDeleteCount(0); }}/>}
           {!dbLoading && nav==='activity-log'  && <ActivityLogTab/>}
           {!dbLoading && nav==='audit-log'     && <AuditLogTab/>}
           {!dbLoading && nav==='changelog'     && <ChangelogPage highlightCommentTarget={highlightCommentTarget} onClearHighlight={()=>setHighlightCommentTarget(null)}/>}
@@ -1076,7 +1077,7 @@ const DEMO_USER = {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.20.3';
+const APP_VERSION = '0.7.21';
 const BUILD_DATE = '5 ก.ค. 2569';
 // bridge: ให้ parts/* (เช่น changelog.jsx, about.jsx) อ่านเวอร์ชันผ่าน window.* ได้ (เฟส 2 + แยกรอบ 2)
 if (typeof window !== 'undefined') { window.APP_VERSION = APP_VERSION; window.BUILD_DATE = BUILD_DATE; }

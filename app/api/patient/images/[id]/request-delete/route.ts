@@ -6,13 +6,14 @@ import { getResend, EMAIL_FROM, ADMIN_EMAILS } from '@/lib/resend'
 import { adminImageDeleteRequestEmail, adminImageDeleteRequestCancelledEmail,
   imageDeleteRequestSubmittedEmail, imageDeleteRequestCancelledByAdminEmail } from '@/lib/email-templates'
 import { professionLabel } from '@/lib/professions'
+import { logImageEvent } from '@/lib/image-event-log'
 
 const TYPE_LABEL: Record<string, string> = { cxr: 'ภาพเอกซเรย์ (CXR)', lab: 'ผลแล็บ', document: 'เอกสาร', other: 'อื่นๆ' }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const { user, isApproved, admin } = await getRequester(req)
+    const { user, isApproved, isAdmin, admin } = await getRequester(req)
     if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     if (!isApproved) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
 
@@ -40,6 +41,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       delete_req_reason: reason,
     }).eq('id', id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    await logImageEvent(admin, { imageId: id, eventType: 'delete_requested', actorId: user.id, actorRole: isAdmin ? 'admin' : 'user', reason })
 
     // เมลแจ้ง (ล้มเหลวไม่ทำให้คำขอพัง) — โหลดชื่อผู้ป่วยครั้งเดียว
     const { data: pt } = await admin.from('tb_patients').select('name, hn').eq('id', im.patient_id).maybeSingle()
@@ -83,6 +86,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       delete_req_by: null, delete_req_name: null, delete_req_at: null, delete_req_reason: null,
     }).eq('id', id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    await logImageEvent(admin, { imageId: id, eventType: 'delete_request_cancelled', actorId: user.id, actorRole: im.delete_req_by === user.id ? 'user' : 'admin' })
 
     // แจ้งเตือนการยกเลิก (ล้มเหลวไม่ทำให้การยกเลิกพัง) — แยกตามคนที่กดยกเลิก
     const { data: pt } = await admin.from('tb_patients').select('name, hn').eq('id', im.patient_id).maybeSingle()

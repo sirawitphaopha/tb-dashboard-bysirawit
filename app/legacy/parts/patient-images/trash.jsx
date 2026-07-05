@@ -233,6 +233,9 @@ function ImageTrashPage({ currentUser, isAdmin }) {
 // ── ศูนย์รวมถังขยะ (สลับ ผู้ป่วย / รูปภาพ) ─────────────────────────────────
 function TrashHub(props) {
   const [sub, setSub] = React.useState('patients');
+  React.useEffect(() => {   // v0.7.21 — มาจากคลังรูป กด "ถังขยะ" → เปิดแท็บรูปภาพเลย
+    if (props.wantImages) { setSub('images'); if (props.onConsumeWantImages) props.onConsumeWantImages(); }
+  }, [props.wantImages]);
   const isAdmin = props.currentUser?.role === 'admin';
   const tc = props.trashCounts || { patients: 0, images: 0 };   // v0.7.20.2 — จำนวนของในถัง (deleted)
   const seg = (on) => ({display:'inline-flex',alignItems:'center',padding:'7px 14px',fontSize:'13px',fontWeight:700,border:'none',borderRadius:'8px',background:on?'#0f766e':'transparent',color:on?'#fff':'#6b7280',cursor:'pointer'});

@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getRequester } from '@/lib/patient-image-helpers'
 import { getResend, EMAIL_FROM } from '@/lib/resend'
 import { imageDeleteApprovedEmail, imageDeleteRejectedEmail } from '@/lib/email-templates'
+import { logImageEvent } from '@/lib/image-event-log'
 
 const TYPE_LABEL: Record<string, string> = { cxr: 'ภาพเอกซเรย์ (CXR)', lab: 'ผลแล็บ', document: 'เอกสาร', other: 'อื่นๆ' }
 
@@ -46,6 +47,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }).eq('id', id)
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     }
+
+    await logImageEvent(admin, { imageId: id, eventType: action === 'approve' ? 'delete_approved' : 'delete_rejected', actorId: user.id, actorRole: 'admin', reason: action === 'approve' ? (im.delete_req_reason || null) : (note || null) })
 
     // แจ้งผู้ขอ (เมล + กระดิ่ง) — ล้มเหลวไม่ทำให้การอนุมัติ/ปฏิเสธพัง
     try {

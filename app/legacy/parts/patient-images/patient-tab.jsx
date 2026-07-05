@@ -9,6 +9,7 @@ import { compressToWebp, putWithProgress, decodeImageToDataURL, isAnimatedGif, J
   PATIENT_IMG_TYPES, CXRCompareModal, CACHE_TTL, loadCache, saveCache, invalidateImgCaches,
   IMG_VIEW_SIZES, ImgViewToolbar, PendingDeleteOverlay, ImageRequestDeleteModal, ImageReviewDeleteModal, ImageCancelRequestModal,
   storeImgs, getStoredImgsFor, updateStoredImg, removeStoredImg } from './helpers'
+import { computeImageHashes } from './image-hash'
 
 function PatientImagesTab({ patient, currentUser, locked }) {
   const LSKEY = 'tb_patimg_' + patient.id;
@@ -138,8 +139,9 @@ function PatientImagesTab({ patient, currentUser, locked }) {
       await putWithProgress(pd.uploadUrl, mainBlob, setUpProgress, mime);   // รูปเต็ม (รายงาน %)
       if (pd.uploadUrlThumb) { try { await fetch(pd.uploadUrlThumb, { method: 'PUT', body: thumb.blob, headers: { 'content-type': 'image/webp' } }); } catch {} }
       setUpPhase('save');
+      const hashes = await computeImageHashes(pu.file, pu.previewUrl);   // v0.7.21 — hash ต้นฉบับ + dHash ภาพ (ตรวจรูปซ้ำ)
       const conf = await fetch('/api/patient/images/confirm', { method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ patientId: patient.id, key: pd.key, thumbKey: pd.thumbKey, type: upType, note: upNote || null, size: mainBlob.size, width, height, mime, origSize: pu.file.size, origMime: pu.origMime, origWidth: pu.dims.width, origHeight: pu.dims.height, quality: pu.isAnimated ? null : (isCxr ? 92 : 87), device: detectDevice() }) });
+        body: JSON.stringify({ patientId: patient.id, key: pd.key, thumbKey: pd.thumbKey, type: upType, note: upNote || null, size: mainBlob.size, width, height, mime, origSize: pu.file.size, origMime: pu.origMime, origWidth: pu.dims.width, origHeight: pu.dims.height, quality: pu.isAnimated ? null : (isCxr ? 92 : 87), device: detectDevice(), sha256: hashes.sha256, md5: hashes.md5, crc32: hashes.crc32, phash: hashes.phash }) });
       const cd = await conf.json();
       if (!conf.ok) throw new Error(cd.error || 'บันทึกไม่สำเร็จ');
       if (pu.isAnimated) { try { URL.revokeObjectURL(pu.previewUrl); } catch {} }

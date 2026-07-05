@@ -8,8 +8,9 @@ import { compressToWebp, putWithProgress, JustifiedGallery, IMG_SORTS, imgInRang
   patientImgInfo, PATIENT_IMG_TYPES, CACHE_TTL, loadCache, saveCache, invalidateImgCaches,
   IMG_VIEW_SIZES, ImgViewToolbar, PendingDeleteOverlay, ImageRequestDeleteModal, ImageReviewDeleteModal, ImageCancelRequestModal,
   storeImgs, getStoredImgs, updateStoredImg, removeStoredImg } from './helpers'
+import { ImageLogPage } from './image-log'
 
-function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onConsumeWant }) {
+function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onConsumeWant, onGoTrash }) {
   const _lc0 = loadCache('tb_libimg');
   const _seed0 = _lc0 ? _lc0.data : (getStoredImgs().length ? getStoredImgs() : null);   // v0.7.20.1 — seed จาก shared store (โหลดในหน้าอื่นแล้ว) กันขึ้น skeleton
   const [images, setImages] = React.useState(_seed0);
@@ -26,6 +27,7 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
   const [reqTarget, setReqTarget] = React.useState(null);        // v0.7.20 — รูปที่กำลัง "ขอลบ"
   const [reviewTarget, setReviewTarget] = React.useState(null);  // v0.7.20 — {im, action} แอดมินอนุมัติ/ปฏิเสธ
   const [cancelTarget, setCancelTarget] = React.useState(null);  // v0.7.20.2 — รูปที่กำลังยืนยัน "ยกเลิกคำขอลบ"
+  const [libView, setLibView] = React.useState('gallery');       // v0.7.21 — สลับ คลังรูป/ประวัติ (admin)
   const [editTarget, setEditTarget] = React.useState(null);
   const [editType, setEditType]   = React.useState('cxr');
   const [editNote, setEditNote]   = React.useState('');
@@ -233,8 +235,22 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
     );
   };
 
+  // v0.7.21 — สลับมุมมอง คลังรูป/ประวัติรูปภาพ (แอดมินเท่านั้น)
+  const viewToggle = isAdmin ? (
+    <div style={{display:'inline-flex',background:'#f1f5f9',borderRadius:'10px',padding:'3px',marginBottom:'16px'}}>
+      <button onClick={()=>setLibView('gallery')} style={{display:'inline-flex',alignItems:'center',gap:'6px',padding:'7px 16px',fontSize:'13px',fontWeight:700,border:'none',borderRadius:'8px',background:libView==='gallery'?'#0f766e':'transparent',color:libView==='gallery'?'#fff':'#6b7280',cursor:'pointer'}}><i className="fa-solid fa-images"></i>คลังรูป</button>
+      <button onClick={()=>setLibView('log')} style={{display:'inline-flex',alignItems:'center',gap:'6px',padding:'7px 16px',fontSize:'13px',fontWeight:700,border:'none',borderRadius:'8px',background:libView==='log'?'#0f766e':'transparent',color:libView==='log'?'#fff':'#6b7280',cursor:'pointer'}}><i className="fa-solid fa-clock-rotate-left"></i>ประวัติ</button>
+      <button onClick={()=>{ if(onGoTrash) onGoTrash(); }} title="ไปหน้าถังขยะ (แท็บรูปภาพ)" style={{display:'inline-flex',alignItems:'center',gap:'6px',padding:'7px 16px',fontSize:'13px',fontWeight:700,border:'none',borderRadius:'8px',background:'transparent',color:'#6b7280',cursor:'pointer'}}><i className="fa-solid fa-trash"></i>ถังขยะ</button>
+    </div>
+  ) : null;
+
+  if (isAdmin && libView === 'log') {
+    return (<div>{viewToggle}<ImageLogPage/></div>);
+  }
+
   return (
     <div>
+      {viewToggle}
       {/* ตัวกรอง + ค้นหา (ชื่อหน้าอยู่บนแถบหัวเรื่องด้านบนแล้ว) */}
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'10px',marginBottom:'16px',flexWrap:'wrap'}}>
         <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>

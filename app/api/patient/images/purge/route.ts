@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRequester, PATIENT_BUCKET } from '@/lib/patient-image-helpers'
 import { r2Delete } from '@/lib/r2'
+import { logImageEvent } from '@/lib/image-event-log'
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,13 +19,14 @@ export async function POST(req: NextRequest) {
     // ดึงรูปทั้งหมดของผู้ป่วย (รวมที่อยู่ถังขยะ soft-deleted)
     const { data: imgs } = await admin
       .from('tb_patient_images')
-      .select('id, storage_key, thumb_key')
+      .select('*')
       .eq('patient_id', patientId)
 
     let r2Deleted = 0
     for (const im of imgs || []) {
       if (im.storage_key) { try { await r2Delete(im.storage_key, PATIENT_BUCKET); r2Deleted++ } catch {} }
       if (im.thumb_key)   { try { await r2Delete(im.thumb_key, PATIENT_BUCKET) } catch {} }
+      await logImageEvent(admin, { imageId: im.id, eventType: 'purged', actorId: user.id, actorRole: 'admin', reason: 'ลบผู้ป่วยถาวร', imageRow: im })
     }
 
     // ลบ row ออกจาก DB (ชัดเจน · ถ้าผู้ป่วยถูกลบทีหลัง cascade ก็ไม่เจออะไรแล้ว)

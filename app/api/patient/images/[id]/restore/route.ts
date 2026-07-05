@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getRequester } from '@/lib/patient-image-helpers'
 import { getResend, EMAIL_FROM } from '@/lib/resend'
 import { imageRestoredEmail } from '@/lib/email-templates'
+import { logImageEvent } from '@/lib/image-event-log'
 
 const TYPE_LABEL: Record<string, string> = { cxr: 'ภาพเอกซเรย์ (CXR)', lab: 'ผลแล็บ', document: 'เอกสาร', other: 'อื่นๆ' }
 
@@ -21,6 +22,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .update({ deleted_at: null, deleted_by: null, deleter_name: null, delete_reason: null })
       .eq('id', id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    await logImageEvent(admin, { imageId: id, eventType: 'restored', actorId: user.id, actorRole: 'admin' })
 
     // แจ้งเจ้าของรูป (คนอัปโหลด) ว่าถูกกู้คืน — ไม่แจ้งถ้าแอดมินคือผู้อัปเอง
     if (im?.uploaded_by && im.uploaded_by !== user.id) {
