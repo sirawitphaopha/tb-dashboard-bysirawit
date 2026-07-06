@@ -54,3 +54,11 @@ public/tb-modals.compiled.js
 public/pdf.worker.min.mjs
 public/pdf_viewer.css
 
+
+# OpenNext
+.open-next
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
