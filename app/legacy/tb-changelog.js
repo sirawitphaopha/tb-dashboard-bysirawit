@@ -23,6 +23,29 @@ window.TB_CHANGELOG = [
     description: "",
     versions: [
       {
+        version: "0.8.0.1",
+        date: "6 ก.ค. 2569",
+        commit: "356a75b",
+        commitFull: "356a75b476925c7cf70aef770ad036a8d9999a3f",
+        title: "คลังความรู้วัณโรค (ระบบ PDF) ครบวง — API หลังบ้าน + หน้าคลัง + ตัวอ่าน PDF + realtime",
+        changes: [
+          { tag: "backend", text: "lib/knowledge-helpers.ts (ใหม่): LIBRARY_BUCKET (env R2_BUCKET_LIBRARY || 'tb-knowledge') + re-export getRequester จาก patient-image-helpers" },
+          { tag: "ui", text: "presign/route.ts (ใหม่ · POST admin): presigned PUT url ของ PDF (library/<uuid>.pdf) + ปก (library/<uuid>_thumb.webp) อายุ 900s" },
+          { tag: "ui", text: "confirm/route.ts (ใหม่ · POST admin): insert row · validate category (guideline/trial/other) · title/sourceUrl trim -> null" },
+          { tag: "security", text: "route.ts (ใหม่ · GET approved): ?category=&q= -> docs + url/thumbUrl signed (7200s) + ชื่อคนอัป (join profiles) · q sanitize [%,()] กัน .or() พัง · order uploaded_at desc" },
+          { tag: "feature", text: "[id]/url/route.ts (ใหม่ · GET approved): signed url สด 3600s + fileName (เรียกตอนกดเปิด)" },
+          { tag: "feature", text: "[id]/route.ts (ใหม่ · DELETE admin): r2Delete PDF+thumb (try ห่อ ไม่ให้ไฟล์บล็อกการลบ row) -> ลบ row (hard delete ไม่มีถังขยะ)" },
+          { tag: "feature", text: "ทุก route guard 401 !user / 403 !isApproved / 403 !isAdmin (เฉพาะ write) · เขียนผ่าน createAdminClient()" },
+          { tag: "ui", text: "knowledge/upload-modal.jsx (ใหม่): KnowledgeUploadModal (admin) — drop zone + fields (ชื่อ/หมวด/ลิงก์) · presign -> putWithProgress(% จริง) -> PUT ปก -> confirm · แถบ % · tb-backdrop" },
+          { tag: "backend", text: "knowledge/pdf-viewer.jsx (ใหม่): PdfViewer เต็มจอ pdf.js (เลื่อน/ซูม/พอดีกว้าง/หมุน/หน้าย่อ/ค้นหา+ไฮไลต์+นับ/เลือก-คัดลอก/ดาวน์โหลด/พิมพ์/ปิด+Esc)" },
+          { tag: "feature", text: "knowledge.jsx (ใหม่ barrel): export KnowledgeLibraryPage" },
+          { tag: "feature", text: "misc.jsx: KnowledgeBase({onOpenPdf}) — เพิ่มแถบ \"คลังเอกสาร PDF\" + ปุ่ม \"เปิดคลัง PDF\" ใต้ Hero (คงการ์ด placeholder เดิม)" },
+          { tag: "backend", text: "tb-monolith.jsx: import KnowledgeLibraryPage + state knowledgeView (home<->pdf · reset เมื่อออกจากแท็บ) + render swap · APP_VERSION 0.8.0.1" },
+          { tag: "feature", text: "login/page.tsx: Version 0.8.0.1" },
+        ],
+        body: "รวม Step 2 (API) + Step 3 (frontend + ตัวอ่าน PDF) + ส่วนเสริม เป็นเวอร์ชันเดียว\nต่อจาก v0.8.0.0 (ฐานราก DB + ติดตั้ง pdf.js) · ทุกคนที่อนุมัติอ่านได้ · แอดมินอัป/ลบ\nเข้าจากหน้า \"คลังความรู้วัณโรค\" เดิม (ปุ่ม \"เปิดคลัง PDF\") — คงการ์ด placeholder เดิมไว้ (ระบบเขียนบทความในอนาคต)\n\n== Step 2 — API หลังบ้าน (app/api/knowledge/* + lib/knowledge-helpers.ts) ==\n- lib/knowledge-helpers.ts (ใหม่): LIBRARY_BUCKET (env R2_BUCKET_LIBRARY || 'tb-knowledge') + re-export getRequester จาก patient-image-helpers\n- presign/route.ts (ใหม่ · POST admin): presigned PUT url ของ PDF (library/<uuid>.pdf) + ปก (library/<uuid>_thumb.webp) อายุ 900s\n- confirm/route.ts (ใหม่ · POST admin): insert row · validate category (guideline/trial/other) · title/sourceUrl trim -> null\n- route.ts (ใหม่ · GET approved): ?category=&q= -> docs + url/thumbUrl signed (7200s) + ชื่อคนอัป (join profiles) · q sanitize [%,()] กัน .or() พัง · order uploaded_at desc\n- [id]/url/route.ts (ใหม่ · GET approved): signed url สด 3600s + fileName (เรียกตอนกดเปิด)\n- [id]/route.ts (ใหม่ · DELETE admin): r2Delete PDF+thumb (try ห่อ ไม่ให้ไฟล์บล็อกการลบ row) -> ลบ row (hard delete ไม่มีถังขยะ)\n- ทุก route guard 401 !user / 403 !isApproved / 403 !isAdmin (เฉพาะ write) · เขียนผ่าน createAdminClient()\n\n== Step 3 — Frontend (app/legacy/parts/knowledge/* + barrel + แก้ 2 ไฟล์) ==\n- knowledge/helpers.jsx (ใหม่): KNOWLEDGE_CATEGORIES 3 หมวด · getPdfjs() lazy + set workerSrc · renderPdfCover() render หน้าแรก WebP 2560px(2K)/คุณภาพ 0.8 + นับหน้า (best-effort ล้มก็อัปได้) · KNOW_CACHE/invalidateKnowCache · re-export putWithProgress/fmtFileSize/loadCache/saveCache\n- knowledge/upload-modal.jsx (ใหม่): KnowledgeUploadModal (admin) — drop zone + fields (ชื่อ/หมวด/ลิงก์) · presign -> putWithProgress(% จริง) -> PUT ปก -> confirm · แถบ % · tb-backdrop\n- knowledge/library-page.jsx (ใหม่): KnowledgeLibraryPage — sticky header (top:-24px) + chips หมวด(นับ) + ค้นหา + ปรับขนาดทัมเนล 3 ระดับ + ปุ่มอัป(admin) · การ์ดปกแนวตั้ง A4 (aspectRatio 210/297 + objectFit contain) · กดการ์ด -> เปิดตัวอ่าน · ลบ optimistic\n- knowledge/pdf-viewer.jsx (ใหม่): PdfViewer เต็มจอ pdf.js (เลื่อน/ซูม/พอดีกว้าง/หมุน/หน้าย่อ/ค้นหา+ไฮไลต์+นับ/เลือก-คัดลอก/ดาวน์โหลด/พิมพ์/ปิด+Esc)\n- knowledge.jsx (ใหม่ barrel): export KnowledgeLibraryPage\n- misc.jsx: KnowledgeBase({onOpenPdf}) — เพิ่มแถบ \"คลังเอกสาร PDF\" + ปุ่ม \"เปิดคลัง PDF\" ใต้ Hero (คงการ์ด placeholder เดิม)\n- tb-monolith.jsx: import KnowledgeLibraryPage + state knowledgeView (home<->pdf · reset เมื่อออกจากแท็บ) + render swap · APP_VERSION 0.8.0.1\n- login/page.tsx: Version 0.8.0.1\n\n== ตัวอ่าน PDF (pdf.js 6.1.200) — เทคนิค ==\n- ประกอบ viewer เอง (EventBus/PDFViewer/PDFLinkService/PDFFindController) — บิลด์นี้ไม่มี PDFThumbnailViewer -> หน้าย่อทำเอง (render lazy IntersectionObserver)\n- pdf_viewer.css คัดลอกเข้า public/ (Next.js ห้าม import css จาก node_modules) โหลดผ่าน <link> runtime\n- scroll-lock body + StrictMode-safe (cancelled flag + destroy) · getDocument({isEvalSupported:false}) · l10n ปล่อย default · CSP ไม่ต้องแก้\n\n== R2 + realtime + optimistic + โหลด ==\n- scripts/copy-pdf-worker.mjs: + คัดลอก pdf_viewer.css เข้า public (คู่กับ worker)\n- .gitignore: + public/pdf_viewer.css (auto-gen)\n- scripts/add-knowledge-realtime.sql (ใหม่): เพิ่ม tb_knowledge_docs เข้า publication supabase_realtime (รันผ่าน MCP แล้ว)\n- realtime: subscribe tb_knowledge_docs (debounce 500ms -> load) -> เครื่องอื่นเห็นการอัป/ลบเอง\n- โหลดแบบ seed-cache + revalidate เงียบเสมอ (แก้บั๊ก 192 ค้างของเก่าข้ามเครื่อง)\n- ลบ optimistic: กดยืนยัน = ปิดป๊อป+เอาการ์ดออกทันที -> DELETE เบื้องหลัง · ล้มเหลว = คืนการ์ด + แถบ flash\n- ปรับขนาดทัมเนล 3 ระดับ (CARD_SIZES 150/205/280 · grid auto-fill · จำใน localStorage tb_libknow_size)\n\n== เอกสาร ==\n- CLAUDE.md + README.md: + section คลังความรู้ (ระบบ PDF) + env R2_BUCKET_LIBRARY\n- docs/mockup-knowledge-pdf-v0.8.html: mockup อ้างอิง (Claude คลาวทำ)\n\n== ก่อน deploy จริง (checklist) ==\n- ใส่ R2_BUCKET_LIBRARY=tb-knowledge ใน Cloudflare Worker env\n- ตั้ง CORS ถัง tb-knowledge ให้มี tbjourney.care (GET/PUT/HEAD)\n- verify /pdf.worker.min.mjs + /pdf_viewer.css content-type หลัง deploy\n\n== ต่อไป ==\n- storage monitor นับพื้นที่ถัง library · ระบบเขียนบทความ (idea 5C) · สรุป trial (5D)",
+      },
+      {
         version: "0.8",
         date: "6 ก.ค. 2569",
         commit: "44761b1",
@@ -297,7 +320,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.19.7",
-        date: "3 ก.ค. 2569",
+        date: "4 ก.ค. 2569",
         commit: "be14abc",
         commitFull: "be14abcd43bd1e4deb279b40dc01d5bc05173d36",
         title: "ยกเครื่อง scrollbar ทั้งเว็บเป็น custom overlay (ลอยทับ/ละมุน/ลากได้) + จัด sidebar ยุบ (hover สมมาตร/ปุ่มโปร่งใส) + แถบเลื่อนติดขอบจอทุกหน้า",
@@ -767,7 +790,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.19.5",
-        date: "2 ก.ค. 2569",
+        date: "3 ก.ค. 2569",
         commit: "01ee271",
         commitFull: "01ee27196e81d06492740a799c032e3850274c45",
         title: "ระบบวัดพื้นที่จัดเก็บ (Storage usage) สำหรับแอดมิน + จัด sidebar ยุบให้ icon อยู่กลาง",
@@ -1103,7 +1126,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.16.1",
-        date: "31 พ.ค. 2569",
+        date: "1 มิ.ย. 2569",
         commit: "9ae1eab",
         commitFull: "9ae1eab266bf0326bcd9887f2c4a3f360846bb83",
         title: "Phase 3 Step 2 — Teal Skeleton Loading (ลด perceived blank time เหลือ 0)",
@@ -1127,7 +1150,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.16.0",
-        date: "31 พ.ค. 2569",
+        date: "1 มิ.ย. 2569",
         commit: "b958385",
         commitFull: "b958385e4d7ebf190f0a11ac7d3007de8c653cb9",
         title: "Phase 3 Step 1 — Pre-compile JSX (ลบ Babel 2.1 MB จาก prod) ลด first load ~30%",
@@ -1151,7 +1174,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.15.5",
-        date: "31 พ.ค. 2569",
+        date: "1 มิ.ย. 2569",
         commit: "4da584c",
         commitFull: "4da584c1bcec7a3c040f5f50e94e40bc5402f670",
         title: "Phase 2 Step 4 — Style refactor Comment card (inline → CSS class · ลด React allocation 50%)",
@@ -1175,7 +1198,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.15.4",
-        date: "31 พ.ค. 2569",
+        date: "1 มิ.ย. 2569",
         commit: "297dad2",
         commitFull: "297dad2138a8d3b53288a817e5a3c61609a79960",
         title: "Phase 2 Step 3 — Keep mounted CommentSection (เปิดปิดคอมเม้น instant ครั้งถัดไป)",
@@ -1199,7 +1222,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.15.3",
-        date: "31 พ.ค. 2569",
+        date: "1 มิ.ย. 2569",
         commit: "468134b",
         commitFull: "468134b933c7697c27159a745b54903a640d0424",
         title: "Phase 2 Step 2 — RLS strict tb_changelog_comments + pg_cron auto-refresh MV ทุก 5 นาที",
@@ -1223,7 +1246,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.15.2",
-        date: "31 พ.ค. 2569",
+        date: "1 มิ.ย. 2569",
         commit: "c19894d",
         commitFull: "c19894da6f5e468928a297147f33d318cdb610d2",
         title: "Phase 2 Step 1 — Materialized View บันทึกกิจกรรม + KPI border 4 อัน + Virtual scroll content-visibility",
@@ -1415,7 +1438,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.14.4",
-        date: "30 พ.ค. 2569",
+        date: "31 พ.ค. 2569",
         commit: "73757b9",
         commitFull: "73757b97a72e259f29695370a1257fa617b08137",
         title: "Brand visual refresh — icon ปอด 3 สี + Font Manrope + Plus Jakarta Sans + Sidebar ขยาย",
@@ -1439,7 +1462,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.14.3",
-        date: "30 พ.ค. 2569",
+        date: "31 พ.ค. 2569",
         commit: "4c8dbc7",
         commitFull: "4c8dbc72395ce185faa012aced099c5acd276a1a",
         title: "Patch รวม UX/bug fixes — icon ปอด-ไวรัส, เคอร์เซอร์, search popup, bulk fetch comments, click-outside",
@@ -1463,7 +1486,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.14.2",
-        date: "30 พ.ค. 2569",
+        date: "31 พ.ค. 2569",
         commit: "b9e10ae",
         commitFull: "b9e10ae10f78ab9ecbada5524be416d4881e9686",
         title: "Changelog: ระบบ Comment ต่อ version (DB + API + Email) + ป้าย \"New\" บน sidebar + Housekeeping + UX polish รอบใหญ่",
@@ -2595,7 +2618,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.4",
-        date: "16 พ.ค. 2569",
+        date: "17 พ.ค. 2569",
         commit: "64637d6",
         commitFull: "64637d6b3e91b4fb32f0354ddc163fc44e511961",
         title: "ระบบถังขยะ + Admin notifications + แก้ 3 บั๊ก infrastructure",
@@ -2643,7 +2666,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.2.4",
-        date: "15 พ.ค. 2569",
+        date: "16 พ.ค. 2569",
         commit: "bfe274a",
         commitFull: "bfe274a2117c6a6a801ad9ff7a04b52bcc084812",
         title: "rename index.html to app.html กัน Cloudflare เสิร์ฟ static ข้าม Next.js auth",
@@ -2662,7 +2685,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.2.3",
-        date: "15 พ.ค. 2569",
+        date: "16 พ.ค. 2569",
         commit: "f67023e",
         commitFull: "f67023e44d833324c2e6f191cf154e878df1a241",
         title: "server-side auth check ใน root page กัน bypass login บน Cloudflare",
@@ -2686,7 +2709,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.2.2",
-        date: "15 พ.ค. 2569",
+        date: "16 พ.ค. 2569",
         commit: "a2de01d",
         commitFull: "a2de01d19e2720e41f77c17dc6b06dcf4d758b1b",
         title: "force-dynamic บน auth pages กัน prerender crash บน Cloudflare",
@@ -2708,7 +2731,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.2.1",
-        date: "15 พ.ค. 2569",
+        date: "16 พ.ค. 2569",
         commit: "e436055",
         commitFull: "e43605560882f76209988b0afd1c6a8656ce9006",
         title: "bump version to v0.7.2.1 (hotfix release tag)",
@@ -2719,7 +2742,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.2",
-        date: "15 พ.ค. 2569",
+        date: "16 พ.ค. 2569",
         commit: "092d2b5",
         commitFull: "092d2b5f6ecf618831f4c27c8ffab62e2733bcf3",
         title: "Phase 1 Backend Complete (Supabase Auth จริง + Resend Email + Admin Approval + Profile Real Data)",
@@ -2796,12 +2819,12 @@ window.TB_CHANGELOG = [
     era: "First Real Build",
     icon: "🚀",
     color: "#0891b2",
-    period: "11 พ.ค. – 14 พ.ค. 2569",
+    period: "11 พ.ค. – 15 พ.ค. 2569",
     description: "Full App Build ครั้งแรก — Dashboard, Patient List, Modal ทุกอย่างเปิดตัวพร้อมกัน",
     versions: [
       {
         version: "0.6.21",
-        date: "14 พ.ค. 2569",
+        date: "15 พ.ค. 2569",
         commit: "33d4281",
         commitFull: "33d4281996112d2f254f51b727f1a772fa75f63c",
         title: "UI overhaul: login, charts, table, sidebar, search",
