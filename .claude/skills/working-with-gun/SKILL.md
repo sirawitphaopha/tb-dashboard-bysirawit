@@ -33,6 +33,7 @@ description: คู่มือครบสำหรับช่วยพี่�
 ## 4. เวอร์ชัน + push + commit + บันทึก
 - 🚨🚨 **ห้าม push ก่อนพี่กันเทส** — แก้เสร็จ→"ลองรีเฟรช+เทสดูค่ะ"→รอ "OK เทสแล้ว"→ถาม "push ด้วยไหมคะ"→ค่อย push · push ก่อนเทสเจอบั๊ก = ต้อง rewrite history (force-squash) เจ็บ
 - **ห้าม push โดยไม่ถาม · ห้าม bump version เอง** รอสั่ง · "ทำต่อให้จบ/ทำยาวๆ" ≠ อนุญาต push (ต้องพูด "push/พุช" ชัด)
+- 🚀🆕 **push ขึ้น `main` โดยตรง ไม่ใช้ feature branch/PR** (พี่กันสั่ง 6 ก.ค. 69 "เอาขึ้นเมน" · solo dev เจ้าของ repo · main=ตัว deploy) · ข้อยกเว้น: session ที่ setup บังคับ branch เฉพาะ (Claude Code on web) — ถ้าพี่กันสั่ง main แต่ระบบบล็อก = บอกตรง ๆ ว่าติดข้อจำกัด session ไม่ใช่แอบ push branch แทน
 - 🚨🚨🚨 **ก่อน bump version** รัน `git log --oneline -10` เช็ค version ที่ push จริง (อย่าเชื่อ APP_VERSION ใน code — อาจเตรียมไว้ยังไม่ push) · ถ้าเลข jump ผิดปกติ (14→16) เตือนก่อน · เปลี่ยน version = แก้ในโค้ดก่อน commit (เช่น APP_VERSION + login/page.tsx)
 - 🚨🆕 **รูปแบบเวอร์ชัน = 4 ตำแหน่งเสมอ `X.Y.Z.W`** (พี่กันสั่ง 5 ก.ค. 69) — เติม `.0` ถ้าขาด (`0.7.21` → เขียน `0.7.21.0`) · **ห้ามเกิน 4 ตำแหน่ง** (`0.7.21.2.5` → เหลือ `0.7.21.2` ไม่มีตำแหน่งที่ 5) · **ของที่ push แล้วไม่แก้ย้อนหลัง** (`0.7.19.6.22` เก่าคงไว้ · กฎใช้กับ version ใหม่ไปข้างหน้า) · TB แดชใช้ TB Calc/Daily Quest ฯลฯ ด้วย
 - **ก่อน push** เตือน checklist: Cloudflare env / รัน SQL / **ปรับ CLAUDE.md + README.md ให้ตรงก่อนเสมอ**
@@ -42,7 +43,7 @@ description: คู่มือครบสำหรับช่วยพี่�
 - 🚨🆕 **tool "Server error"/เน็ตหลุด ≠ git ล้มเหลว** (พลาด 5 ก.ค. 69) — เน็ตหลุดตอนจบ tool แต่ push อาจลง GitHub ไปแล้ว · **verify `git fetch origin` + `git log origin/main` + `git rev-list --left-right --count origin/main...HEAD` (ต้อง 0 0) ก่อนสรุปว่าสำเร็จ** · **อย่าลืม Phase 3 save session** (เคยบอก "สำเร็จ" ทั้งที่ยังไม่ได้ save) · **ถ้าพี่กันบอก "ยังไม่เสร็จ/ยัง error" = เชื่อ + เช็คสดใหม่ ห้ามเถียง**
 
 ## 5. ไฟล์ + เครื่องมือ
-- 🚨🚨 **ไฟล์ .sql = echo path เต็มใน code block ใน text reply เสมอ** ก่อนคำอธิบายอื่น (Write tool แสดง path เอง=ยังไม่พอ พี่กันไม่เลื่อนหา) · ห้ามสอนวิธีรัน Supabase/เปิดไฟล์
+- 🚨🚨🆕 **ไฟล์ .sql:** ถ้า **Supabase MCP ต่ออยู่ (`execute_sql`) → แคลร์รันเองเลย อย่าให้พี่กันรัน อย่า echo path** (พี่กันสั่ง 6 ก.ค. 69 "เราต่อกับ supabase จะไม่รันเอง" · project `cioswzdbonnbhbyynrhh`) · ยังสร้างไฟล์ .sql ใน scripts/ เก็บใน repo เสมอ · **ถ้า MCP ไม่ได้ต่อ (fallback เดิม) → echo path เต็มใน code block ใน text reply** ก่อนคำอธิบายอื่น (Write tool แสดง path เอง=ยังไม่พอ) · ห้ามสอนวิธีรัน Supabase/เปิดไฟล์
 - 🚨🚨 **ห้าม PowerShell Get-Content/Set-Content แก้ไฟล์ไทย** (CP874→mojibake) → ใช้ **Bash sed** · kill dev server ใช้ PowerShell tool
 - credential/API key → **บอก path ไฟล์+ตัวแปร+ตำแหน่ง ให้พี่กันกรอกเอง** ห้าม paste ในแชท ห้ามส่ง tool-call malformed หลุดเป็น text
 - **อ่าน memory เองทุก session** · ถามงานเหลือ/ค้าง → เชื่อ section "ต่อไป/ค้าง" ใน session ไฟล์ล่าสุด (อย่าสังเคราะห์จาก roadmap เก่า) · TB Dashboard: อ่าน `project_tb_dashboard_pending_master.md` ก่อน
@@ -82,7 +83,9 @@ description: คู่มือครบสำหรับช่วยพี่�
 - ❌ **ทำ UI เบี่ยงจาก mockup ที่ approve**
 - ❌ **PowerShell แก้ไฟล์ไทย → mojibake** (ทำลาย MEMORY.md ตอนย้าย path C:→D:)
 - ❌ **ลืม echo path .sql** (ถามซ้ำหลายรอบ)
-- ❌ **ตีความ "ทำต่อ/ทำยาวๆ" = อนุญาต push**
+- ❌🔴 **ตีความคำอื่นว่า = อนุญาต push (ทำซ้ำหนักมาก 6 ก.ค. 69)** — "ทำต่อ/ทำยาวๆ/เอาขึ้นเมน/ทำเลย" **ไม่ใช่** การอนุญาต push · **push ได้เฉพาะเมื่อพี่กันพิมพ์คำว่า "push / พุช" ตรง ๆ เท่านั้น** · "เอาขึ้นเมน" = บอก*ที่*ที่จะ push (main ไม่ใช่ branch) ไม่ใช่*คำสั่ง*ให้ push เดี๋ยวนี้ → ยังต้องถาม "push เลยไหมคะ" รอตอบก่อน · พลาด 6 ก.ค. 69 push ทั้งที่พี่กันไม่ได้สั่ง พี่กันโมโหมาก
+- ❌🔴 **เอาเลขเวอร์ชันไปแปะ subject commit ทั้งที่ไม่ได้ bump จริง (6 ก.ค. 69)** — เขียน `v0.8 (Step 1): ...` เป็น subject → **generator จะสร้างหัวข้อเวอร์ชัน "v0.8" ปลอมใน changelog เว็บ** · subject `vX.Y.Z:` ใช้ได้**เฉพาะ commit ที่ bump จริง** (แก้ APP_VERSION+BUILD_DATE+login/page.tsx พร้อมกัน · 4 ตำแหน่ง · พี่กันสั่ง bump แล้วเท่านั้น) · commit ระหว่างทำฟีเจอร์ห้ามมีเลขเวอร์ชันใน subject (ใช้ `wip:` / คำอธิบายเฉย ๆ)
+- ❌🔴 **grep/อ่านกฎทีละท่อนแทนอ่านทั้งไฟล์ (6 ก.ค. 69)** — พี่กันสั่ง "ไปอ่านให้หมด แยกอ่านทำซากอะไร" · **ก่อนลงมือ + ก่อน push ต้องอ่าน SKILL.md + CLAUDE.md ทั้งไฟล์จริง ๆ** ไม่ใช่ grep เฉพาะบรรทัดที่จะแก้ (พลาดกฎ Version bumping เพราะไม่ได้อ่านหัวข้อนั้น)
 - ❌ **revert งานใหญ่ทั้งก้อนโดยไม่ diff/ไม่ถาม** (content-visibility popup ค้าง)
 - ❌ **ถามงานเหลือแล้วดึงจาก roadmap เก่าแทน section ล่าสุด**
 - ❌ **เทล=teal (เขียวน้ำเงิน) ไม่ใช่เทา** (พลาด 2 รอบ)

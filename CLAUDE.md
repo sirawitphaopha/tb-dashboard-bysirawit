@@ -58,7 +58,9 @@ CRON_SECRET                       # v0.7.20 — guards /api/cron/purge-images (p
 - `scripts/*.mjs` — one-off Node scripts (`node scripts/<name>.mjs`): `bootstrap-admin`, `clean-test-profiles`, `delete-test-user`, `generate-changelog`.
 - `scripts/*.sql` — migrations run **manually** in the Supabase SQL editor. There is no migration tooling; apply in order.
 
-> 🚨 **When Claude creates or edits any `.sql` file in `scripts/`**, the reply MUST surface the full Windows path in a code block **before** any other explanation — e.g. `D:\tb-dashboard-bysirawit\scripts\xxx.sql`. The user opens the path manually; do NOT explain how to run Supabase. Forgotten repeatedly — see user memory `feedback_sql_file_path.md`.
+> 🚨 **When Claude creates or edits any `.sql` file in `scripts/`:**
+> - **ถ้า Supabase MCP ต่ออยู่ (มี `execute_sql`) → แคลร์รัน SQL เองผ่าน MCP เลย** (project `cioswzdbonnbhbyynrhh`) · **อย่าให้พี่กันรันเอง อย่า echo path** — พี่กันสั่ง 6 ก.ค. 69 ("เราต่อกับ supabase ดังนั้นเราจะไม่รันเอง") · ยังสร้างไฟล์ `.sql` ใน `scripts/` เก็บเป็น record ใน repo เสมอ
+> - **ถ้า Supabase MCP ไม่ได้ต่อ (fallback กฎเดิม) →** the reply MUST surface the full Windows path in a code block **before** any other explanation — e.g. `D:\tb-dashboard-bysirawit\scripts\xxx.sql`. The user opens the path manually; do NOT explain how to run Supabase. Forgotten repeatedly — see user memory `feedback_sql_file_path.md`.
 
 ---
 
@@ -209,6 +211,7 @@ The `ยังไม่เผยแพร่` (not yet released) badge stays unt
 - **ห้ามลบเนื้อหา/ฟีเจอร์ โดยไม่ถามก่อน**
 - 🚨 **ห้าม push ก่อนพี่กันเทส** — แก้เสร็จ → บอก "ลองรีเฟรช + เทสดูค่ะ" → รอพี่กันยืนยัน "OK เทสแล้ว" → ค่อยถาม **"push ด้วยไหมคะ"** → รอตอบ → ค่อย push
 - **ห้าม push โดยไม่ถามทุกครั้ง**
+- 🚀 **push ขึ้น `main` โดยตรง — ไม่ใช้ feature branch/PR** (พี่กันสั่ง 6 ก.ค. 69 "เอาขึ้นเมน" · เป็น solo dev เจ้าของ repo · main = ตัว deploy) · ข้อยกเว้น: session ที่ setup **บังคับ** ให้ทำงานบน branch เฉพาะ (เช่น Claude Code on web ที่ระบุ branch มา) — ถ้าพี่กันสั่งให้ขึ้น main แต่ระบบบล็อก ให้บอกพี่กันตรง ๆ ว่าติดข้อจำกัดของ session · กฎ "ห้าม push ก่อนเทส/ก่อนถาม" ยังอยู่
 - **ห้าม bump version เอง** — รอพี่กันสั่ง · ก่อน bump ทุกครั้งรัน `git log --oneline` ดู version ที่ push จริง (อย่าเชื่อเลขในโค้ดอย่างเดียว อาจมีเลขเตรียมไว้ยังไม่ push)
 - **push เสร็จ → บันทึก session ต่อทันที ไม่ต้องถาม/ขออนุญาต** (ลงมือเลย)
 - 📁 **บันทึก session (dev log) เก็บใน `docs/dev-log/` และขึ้น git ทุกครั้ง** (กฎ · พี่กันสั่ง 4 ก.ค. 69) — สรุปทุก session ของ TB Dashboard ตั้งแต่วันแรก + คู่มือ `.claude/skills/working-with-gun/SKILL.md` เพื่อให้ Claude บนมือถือ (ทำผ่าน git) อ่านเข้าใจบริบท/กฎ/ประวัติได้ · ก่อน push อัปเดต docs/dev-log ให้ตรง session ล่าสุด · ⚠️🔑 **ลบ secret/key จริง (Supabase service key / Resend / token / รหัส) ออกจากไฟล์ dev-log ก่อน commit เสมอ** — session เก่าเคยจดคีย์จริงไว้ GitHub secret-scanning บล็อก push (redact เป็น `_REDACTED`)
