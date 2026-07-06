@@ -393,7 +393,7 @@ function TrashList({ currentUser, onRestore, onHardDelete, pendingDeleteRequests
 }
 
 // ═══════════════ KnowledgeBase — คลังความรู้วัณโรค ═══════════════
-function KnowledgeBase() {
+function KnowledgeBase({ onOpenPdf }) {
   const [activeTab, setActiveTab] = useState('all');
 
   const GUIDELINES = [
@@ -462,6 +462,20 @@ function KnowledgeBase() {
             <p className="text-xs text-teal-100">วิดีโอ</p>
           </div>
         </div>
+      </div>
+
+      {/* เข้าคลังเอกสาร PDF (ระบบใหม่ v0.8) */}
+      <div className="bg-white rounded-2xl border border-teal-100 p-5 flex items-center gap-4 flex-wrap shadow-sm">
+        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-600 to-teal-700 flex items-center justify-center flex-shrink-0">
+          <i className="fa-solid fa-file-pdf text-white text-xl"></i>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-gray-800 text-base">คลังเอกสาร PDF</p>
+          <p className="text-xs text-gray-500 mt-0.5">แนวทางการรักษา · งานวิจัย/Trial เก็บไฟล์ PDF อ่านได้เลยในเว็บ</p>
+        </div>
+        <button onClick={onOpenPdf} className="bg-teal-600 hover:bg-teal-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors">
+          <i className="fa-solid fa-folder-open"></i>เปิดคลัง PDF
+        </button>
       </div>
 
       {/* Filter tabs */}

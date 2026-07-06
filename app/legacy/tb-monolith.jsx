@@ -37,6 +37,7 @@ import { ChangelogPage } from './parts/changelog'
 import { StorageMiniCard, StorageDetail, StorageAlert } from './parts/storage'
 import { AdminUsersTab, ActivityLogTab, AuditLogTab, AdminSettings } from './parts/admin'
 import { TrashList, KnowledgeBase } from './parts/misc'
+import { KnowledgeLibraryPage } from './parts/knowledge'
 import { TrashHub, PatientImagesTab, ImageLibraryPage } from './parts/patient-images'
 import { UserProfileModal } from './parts/account'
 import { ClinicalModal, AddPatientPage } from './parts/patient-modal'
@@ -86,8 +87,9 @@ const PROFESSION_LABELS_TH = window.TB_PROFESSION_LABELS;
 // ===================== APP =====================
 function App() {
   const [nav, setNavRaw] = useState('dashboard');
+  const [knowledgeView, setKnowledgeView] = useState('home');   // คลังความรู้: 'home' = หน้าเดิม (การ์ด) · 'pdf' = คลังเอกสาร PDF (v0.8)
   const mainScrollRef = React.useRef(null);  // v0.7.17.3 — สำหรับ ScrollNav
-  React.useEffect(() => { if (mainScrollRef.current) mainScrollRef.current.scrollTop = 0; }, [nav]);   // เปลี่ยนหน้า → เลื่อนขึ้นบนสุด (กันค้างตำแหน่งหน้าเดิม)
+  React.useEffect(() => { if (mainScrollRef.current) mainScrollRef.current.scrollTop = 0; if (nav !== 'knowledge') setKnowledgeView('home'); }, [nav]);   // เปลี่ยนหน้า → เลื่อนขึ้นบนสุด + ออกจากคลังความรู้ = รีเซ็ตกลับหน้าเดิม
   // ── custom overlay scrollbar ทั้งเว็บ (global) — native ถูกซ่อนหมดใน globals.css แล้ววาด thumb ลอย "ตัวเดียว" วิ่งตาม container ที่กำลังเลื่อน
   //   ครอบทุกที่อัตโนมัติ (หน้าหลัก/sidebar/popup/ตาราง/คลังรูป) · ลอยทับ ไม่กินที่ (hover ไม่เบี้ยว/ไม่ layout shift) · opacity fade เนียน
   //   (WebKit fade สี native ไม่ได้ → ต้องวาดเอง) · โผล่ 0.6 วิ · หยุดเลื่อน 0.4 วิ → จาง 1.3 วิ · แยกแนวตั้ง(vt)/แนวนอน(ht) · capture จับ scroll ทุก container ซ้อน
@@ -979,7 +981,9 @@ function App() {
           {!dbLoading && nav==='add-patient'   && <AddPatientPage onBack={()=>{setFormDirty(false);setNav('patient-list');}} onAdd={p=>{addPatient(p);setFormDirty(false);setNav('patient-list');}} settings={settings} onDirtyChange={setFormDirty}/>}
           {!dbLoading && nav==='weekly-prep'   && <WeeklyPrep patients={patients.filter(p=>!p.archived)} onOpen={setClinical}/>}
           {!dbLoading && nav==='reports'       && <Reports patients={patients}/>}
-          {!dbLoading && nav==='knowledge'     && <KnowledgeBase/>}
+          {!dbLoading && nav==='knowledge'     && (knowledgeView==='pdf'
+            ? <KnowledgeLibraryPage currentUser={currentUser} onBack={()=>setKnowledgeView('home')}/>
+            : <KnowledgeBase onOpenPdf={()=>setKnowledgeView('pdf')}/>)}
           {!dbLoading && nav==='image-library' && <ImageLibraryPage currentUser={currentUser} pendingImageRequests={pendingImageRequests} wantPending={imgWantPending} onConsumeWant={()=>setImgWantPending(false)} onGoTrash={()=>{ setTrashWantImages(true); setNav('trash'); }} onOpenPatient={(pid)=>{ const p = patients.find(x=>x.id===pid); if(p) setClinical(p); }}/>}
           {!dbLoading && nav==='settings'      && <AdminSettings settings={settings} setSettings={setSettings} setNav={setNav} currentUser={currentUser}/>}
           {!dbLoading && nav==='admin-users'   && <AdminUsersTab currentUser={currentUser} onPendingChange={setPendingUserCount} highlightUserId={highlightUserId} onClearHighlight={()=>setHighlightUserId(null)}/>}
@@ -1077,7 +1081,7 @@ const DEMO_USER = {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.8.0.0';
+const APP_VERSION = '0.8.0.1';
 const BUILD_DATE = '6 ก.ค. 2569';
 // bridge: ให้ parts/* (เช่น changelog.jsx, about.jsx) อ่านเวอร์ชันผ่าน window.* ได้ (เฟส 2 + แยกรอบ 2)
 if (typeof window !== 'undefined') { window.APP_VERSION = APP_VERSION; window.BUILD_DATE = BUILD_DATE; }

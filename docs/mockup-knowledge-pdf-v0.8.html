@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mockup 2 — คลังความรู้วัณโรค + ตัวอ่าน PDF</title>
+<style>
+  :root{
+    --teal600:#0d9488; --teal700:#0f766e; --teal500:#14b8a6; --teal50:#f0fdfa;
+    --g100:#f1f5f9; --g200:#e5e7eb; --g300:#d1d5db; --g400:#9ca3af; --g500:#6b7280; --g700:#374151; --g800:#1f2937;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Sarabun','Noto Sans Thai',-apple-system,'Segoe UI',sans-serif;background:var(--teal50);color:var(--g800);line-height:1.5}
+  .app{max-width:1240px;margin:0 auto;padding:24px}
+
+  .banner{background:#fff;border:1px dashed #99f6e4;border-radius:12px;padding:11px 16px;font-size:12.5px;color:var(--teal700);display:flex;gap:8px;align-items:center;margin-bottom:20px}
+  .banner b{color:var(--teal600)}
+  .banner .k{background:var(--teal50);border:1px solid #99f6e4;border-radius:6px;padding:1px 7px;font-weight:700;font-size:11px}
+
+  /* sticky header */
+  .head{position:sticky;top:0;background:var(--teal50);padding-bottom:14px;z-index:20;margin-bottom:4px}
+  .htop{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+  .htop .ic{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--teal600),var(--teal700));display:flex;align-items:center;justify-content:center}
+  .htop .ic svg{width:22px;height:22px;fill:#fff}
+  .htop h1{font-size:20px;font-weight:800}
+  .htop p{font-size:12px;color:var(--g500)}
+  .hrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .chips{display:flex;gap:7px;flex-wrap:wrap}
+  .chip{padding:7px 14px;border-radius:999px;font-size:12.5px;font-weight:700;border:1px solid var(--g200);background:#fff;color:var(--g500);cursor:pointer;transition:.15s;display:flex;align-items:center;gap:6px}
+  .chip svg{width:13px;height:13px;fill:currentColor}
+  .chip:hover{border-color:#5eead4;color:var(--teal600)}
+  .chip.on{background:var(--teal600);color:#fff;border-color:var(--teal600)}
+  .chip .cnt{background:rgba(255,255,255,.25);border-radius:999px;padding:0 6px;font-size:10px}
+  .chip:not(.on) .cnt{background:var(--g100);color:var(--g400)}
+  .search{margin-left:auto;position:relative}
+  .search input{padding:9px 14px 9px 34px;border-radius:10px;border:1px solid var(--g200);font-size:13px;width:210px;font-family:inherit;background:#fff}
+  .search svg{position:absolute;left:11px;top:10px;width:15px;height:15px;fill:var(--g400)}
+  .btn-up{background:var(--teal600);color:#fff;border:none;padding:9px 15px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:7px;font-family:inherit}
+  .btn-up:hover{background:var(--teal700)}
+  .btn-up .lock{font-size:10px;opacity:.85}
+
+  /* grid */
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:6px}
+  @media(max-width:1100px){.grid{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:820px){.grid{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:560px){.grid{grid-template-columns:1fr}}
+
+  .card{background:#fff;border-radius:16px;border:1px solid var(--g100);overflow:hidden;transition:.15s;cursor:pointer;position:relative;display:flex;flex-direction:column}
+  .card:hover{box-shadow:0 6px 20px rgba(13,148,136,.14);border-color:#99f6e4;transform:translateY(-2px)}
+  .cover{height:150px;background:linear-gradient(135deg,#f8fafc,#eef2f7);border-bottom:1px solid var(--g100);position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  /* fake first-page preview */
+  .pg-mini{width:88px;height:118px;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.14);border-radius:3px;padding:9px 8px;transform:rotate(-2deg)}
+  .pg-mini .bar{height:4px;border-radius:2px;background:#e2e8f0;margin-bottom:4px}
+  .pg-mini .bar.t{background:var(--teal500);width:60%;height:5px;margin-bottom:6px}
+  .pg-mini .bar.s{width:100%}.pg-mini .bar.s2{width:85%}.pg-mini .bar.s3{width:92%}.pg-mini .bar.s4{width:70%}
+  .catbadge{position:absolute;top:10px;left:10px;font-size:10px;font-weight:800;padding:3px 9px;border-radius:999px;display:flex;align-items:center;gap:4px}
+  .catbadge svg{width:10px;height:10px;fill:currentColor}
+  .pages{position:absolute;bottom:10px;right:10px;font-size:10px;font-weight:700;background:rgba(31,41,55,.72);color:#fff;padding:2px 8px;border-radius:999px}
+  .del{position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:8px;background:rgba(255,255,255,.92);border:1px solid var(--g200);display:none;align-items:center;justify-content:center;cursor:pointer}
+  .card:hover .del{display:flex}
+  .del svg{width:13px;height:13px;fill:#dc2626}
+  .cbody{padding:13px 14px 14px}
+  .cbody h4{font-size:13.5px;font-weight:800;line-height:1.35;color:var(--g800);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:37px}
+  .cmeta{font-size:11px;color:var(--g400);margin-top:6px;display:flex;flex-direction:column;gap:2px}
+  .cmeta .row{display:flex;align-items:center;gap:5px}
+  .cmeta svg{width:11px;height:11px;fill:var(--g300)}
+  .srclink{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;color:var(--teal600);background:var(--teal50);padding:2px 8px;border-radius:999px;margin-top:8px;font-weight:600;width:fit-content}
+  .srclink svg{width:11px;height:11px;fill:currentColor}
+
+  /* ===== upload modal ===== */
+  .backdrop{position:fixed;inset:0;background:rgba(12,68,62,.35);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;z-index:80;padding:20px}
+  .backdrop.open{display:flex}
+  .modal{background:#fff;border-radius:20px;width:440px;max-width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+  .modal h3{font-size:17px;font-weight:800;display:flex;align-items:center;gap:9px;margin-bottom:4px}
+  .modal h3 svg{width:19px;height:19px;fill:var(--teal600)}
+  .modal .sub{font-size:12px;color:var(--g400);margin-bottom:18px}
+  .drop{border:2px dashed #99f6e4;border-radius:14px;background:var(--teal50);padding:22px;text-align:center;margin-bottom:16px}
+  .drop svg{width:34px;height:34px;fill:var(--teal500);margin-bottom:8px}
+  .drop .fn{font-weight:700;font-size:13px;color:var(--teal700)}
+  .drop .hint{font-size:11px;color:var(--g400);margin-top:3px}
+  .fld{margin-bottom:13px}
+  .fld label{font-size:12px;font-weight:700;color:var(--g700);display:block;margin-bottom:5px}
+  .fld label .opt{font-weight:400;color:var(--g400);font-size:11px}
+  .fld input,.fld select{width:100%;padding:9px 12px;border-radius:9px;border:1px solid var(--g200);font-size:13px;font-family:inherit;background:#fff}
+  .prog{height:8px;border-radius:999px;background:var(--g100);overflow:hidden;margin:6px 0 16px}
+  .prog i{display:block;height:100%;width:64%;background:linear-gradient(90deg,var(--teal500),var(--teal600));border-radius:999px}
+  .mrow{display:flex;gap:10px;margin-top:4px}
+  .mbtn{flex:1;padding:10px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid var(--g200);background:#fff;color:var(--g700);font-family:inherit}
+  .mbtn.primary{background:var(--teal600);color:#fff;border-color:var(--teal600)}
+
+  /* ===== PDF VIEWER ===== */
+  .viewer{position:fixed;inset:0;background:#33353a;display:none;flex-direction:column;z-index:100}
+  .viewer.open{display:flex}
+  .vbar{height:50px;background:#26272b;display:flex;align-items:center;gap:6px;padding:0 12px;color:#e5e7eb;font-size:13px;flex-shrink:0;box-shadow:0 1px 8px rgba(0,0,0,.4);z-index:5}
+  .vbar button{background:none;border:none;color:#e5e7eb;cursor:pointer;font-family:inherit;padding:6px 8px;border-radius:7px;display:flex;align-items:center;gap:5px;font-size:12.5px}
+  .vbar button:hover{background:#3a3c42}
+  .vbar svg{width:16px;height:16px;fill:#e5e7eb}
+  .vbar .grp{display:flex;align-items:center;gap:3px;background:#33353a;border-radius:8px;padding:3px 4px;margin:0 2px}
+  .vbar .vtitle{font-weight:700;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0 6px}
+  .vbar .sp{margin-left:auto}
+  .vbar .vclose:hover{background:#dc2626}
+  .vbar input.pg{width:34px;background:#1c1d20;border:1px solid #444;color:#fff;border-radius:5px;text-align:center;padding:3px;font-family:inherit;font-size:12px}
+  .vbar .tot{color:#9ca3af;font-size:12px}
+
+  /* find bar */
+  .findbar{position:absolute;top:56px;right:14px;background:#26272b;border:1px solid #3a3c42;border-radius:10px;padding:8px;display:none;align-items:center;gap:6px;box-shadow:0 6px 20px rgba(0,0,0,.4);z-index:6}
+  .findbar.open{display:flex}
+  .findbar input{background:#1c1d20;border:1px solid #444;color:#fff;border-radius:6px;padding:6px 9px;font-size:12.5px;font-family:inherit;width:170px}
+  .findbar .mc{font-size:11.5px;color:#9ca3af;min-width:52px;text-align:center}
+  .findbar button{background:none;border:none;color:#e5e7eb;cursor:pointer;padding:5px;border-radius:6px;display:flex}
+  .findbar button:hover{background:#3a3c42}
+  .findbar svg{width:15px;height:15px;fill:#e5e7eb}
+  .findbar label{font-size:11px;color:#cbd5e1;display:flex;align-items:center;gap:4px;cursor:pointer}
+
+  .vbody{flex:1;display:flex;min-height:0}
+  /* thumbnails */
+  .thumbs{width:150px;background:#1f2023;overflow-y:auto;flex-shrink:0;padding:12px 0;display:flex;flex-direction:column;align-items:center;gap:10px}
+  .thumbs.hide{display:none}
+  .thumb{width:96px;cursor:pointer}
+  .thumb .p{height:126px;background:#fff;border-radius:2px;border:2px solid transparent;box-shadow:0 1px 4px rgba(0,0,0,.4);padding:7px 6px}
+  .thumb.cur .p{border-color:var(--teal500)}
+  .thumb .p .bar{height:3px;background:#e2e8f0;border-radius:2px;margin-bottom:3px}
+  .thumb .p .bar.t{background:#5eead4;width:55%;height:4px;margin-bottom:5px}
+  .thumb .n{text-align:center;font-size:10px;color:#9ca3af;margin-top:4px}
+  .thumb.cur .n{color:#5eead4;font-weight:700}
+
+  .pagearea{flex:1;overflow:auto;display:flex;flex-direction:column;align-items:center;gap:16px;padding:22px}
+  .page{width:640px;max-width:94%;background:#fff;border-radius:2px;box-shadow:0 3px 18px rgba(0,0,0,.5);padding:46px 54px;color:#1f2937;transform-origin:top center}
+  .page h1{font-size:19px;color:var(--teal700);border-bottom:2px solid var(--teal600);padding-bottom:8px;margin-bottom:14px}
+  .page h3{font-size:14px;margin:15px 0 6px;color:#0f766e}
+  .page p{font-size:12.5px;color:#374151;margin-bottom:8px;text-align:justify}
+  .page ul{font-size:12.5px;color:#374151;margin:6px 0 8px 20px}
+  .page li{margin-bottom:4px}
+  .page .sel{background:#bfdbfe}
+  .hl{background:#fde047;border-radius:2px;padding:0 1px}
+  .hl.cur{background:#fb923c;color:#fff}
+  .page .pfoot{margin-top:22px;font-size:10px;color:#9ca3af;text-align:center;border-top:1px solid #f1f5f9;padding-top:9px}
+  .tip{color:#9ca3af;font-size:11px;font-style:italic;margin-top:10px}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="banner">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="#0d9488"><path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/></svg>
+    <span><b>Mockup จำลอง</b> — กดการ์ด = เปิด<b>ตัวอ่าน PDF</b> · กด <span class="k">อัปโหลด PDF</span> = ดูหน้าอัป · ในตัวอ่านลองกด <span class="k">🔍 ค้นหา</span> กับ <span class="k">หน้าย่อ</span></span>
+  </div>
+
+  <!-- ===== sticky header ===== -->
+  <div class="head">
+    <div class="htop">
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M4 6c0-1.1.9-2 2-2h6v14H6c-1.1 0-2 .9-2 2V6zm16 0v14c0-1.1-.9-2-2-2h-4V4h4c1.1 0 2 .9 2 2z"/></svg></div>
+      <div>
+        <h1>คลังความรู้วัณโรค</h1>
+        <p>แนวทางการรักษา · งานวิจัย/Trial · อ่าน PDF ได้เลยในเว็บ</p>
+      </div>
+    </div>
+    <div class="hrow">
+      <div class="chips">
+        <div class="chip on">ทั้งหมด <span class="cnt">7</span></div>
+        <div class="chip"><svg viewBox="0 0 24 24"><path d="M18 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V4a2 2 0 00-2-2zM8 6h8v2H8zm0 4h8v2H8zm0 4h5v2H8z"/></svg>แนวทางการรักษา <span class="cnt">3</span></div>
+        <div class="chip"><svg viewBox="0 0 24 24"><path d="M9 2v2h1v6L5.5 18A2 2 0 007.3 21h9.4a2 2 0 001.8-3L14 10V4h1V2H9z"/></svg>งานวิจัย · Trial <span class="cnt">2</span></div>
+        <div class="chip"><svg viewBox="0 0 24 24"><path d="M4 4h16v2H4zm0 5h16v2H4zm0 5h10v2H4z"/></svg>อื่นๆ <span class="cnt">2</span></div>
+      </div>
+      <div class="search">
+        <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 10-.7.7l.27.28v.79l5 4.99L20.49 19zm-6 0A4.5 4.5 0 1114 9.5 4.5 4.5 0 019.5 14z"/></svg>
+        <input placeholder="ค้นหาชื่อเรื่อง">
+      </div>
+      <button class="btn-up" onclick="openUp()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
+        อัปโหลด PDF <span class="lock">🔒</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ===== grid ===== -->
+  <div class="grid">
+
+    <!-- card 1 -->
+    <div class="card" onclick="openViewer('แนวทางการควบคุมวัณโรค ประเทศไทย พ.ศ. 2564')">
+      <div class="cover">
+        <div class="catbadge" style="background:#dbeafe;color:#1d4ed8"><svg viewBox="0 0 24 24"><path d="M18 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V4a2 2 0 00-2-2zM8 6h8v2H8z"/></svg>แนวทาง</div>
+        <div class="del" onclick="event.stopPropagation();alert('→ ป๊อปยืนยันลบ 2 ขั้น')"><svg viewBox="0 0 24 24"><path d="M6 7h12l-1 14H7L6 7zm3-3h6l1 2H8z"/></svg></div>
+        <div class="pg-mini"><div class="bar t"></div><div class="bar s"></div><div class="bar s2"></div><div class="bar s3"></div><div class="bar s4"></div><div class="bar s"></div><div class="bar s2"></div></div>
+        <div class="pages">128 หน้า</div>
+      </div>
+      <div class="cbody">
+        <h4>แนวทางการควบคุมวัณโรค ประเทศไทย พ.ศ. 2564</h4>
+        <div class="cmeta">
+          <div class="row"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 4a2 2 0 110 4 2 2 0 010-4zm0 14a8 8 0 01-6-2.7c0-2 4-3 6-3s6 1 6 3A8 8 0 0112 20z"/></svg>อัปโดย พี่กัน · 6 ก.ค. 69</div>
+          <div class="row"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v13a2 2 0 01-2 2H6a2 2 0 01-2-2V4a2 2 0 012-2z"/></svg>12.4 MB</div>
+        </div>
+        <span class="srclink"><svg viewBox="0 0 24 24"><path d="M3.9 12a5 5 0 015-5h3v1.9h-3a3.1 3.1 0 000 6.2h3V17h-3a5 5 0 01-5-5zm5.5-1h5.2v2H9.4zM15 7h3a5 5 0 010 10h-3v-1.9h3a3.1 3.1 0 000-6.2h-3z"/></svg>ลิงก์ต้นฉบับ</span>
+      </div>
+    </div>
+
+    <!-- card 2 -->
+    <div class="card" onclick="openViewer('WHO Consolidated Guidelines on Tuberculosis 2022')">
+      <div class="cover">
+        <div class="catbadge" style="background:#dbeafe;color:#1d4ed8"><svg viewBox="0 0 24 24"><path d="M18 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V4a2 2 0 00-2-2zM8 6h8v2H8z"/></svg>แนวทาง</div>
+        <div class="del" onclick="event.stopPropagation();alert('→ ป๊อปยืนยันลบ 2 ขั้น')"><svg viewBox="0 0 24 24"><path d="M6 7h12l-1 14H7L6 7zm3-3h6l1 2H8z"/></svg></div>
+        <div class="pg-mini" style="transform:rotate(2deg)"><div class="bar t"></div><div class="bar s"></div><div class="bar s3"></div><div class="bar s2"></div><div class="bar s"></div><div class="bar s4"></div><div class="bar s3"></div></div>
+        <div class="pages">96 หน้า</div>
+      </div>
+      <div class="cbody">
+        <h4>WHO Consolidated Guidelines on Tuberculosis 2022</h4>
+        <div class="cmeta">
+          <div class="row"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 4a2 2 0 110 4 2 2 0 010-4zm0 14a8 8 0 01-6-2.7c0-2 4-3 6-3s6 1 6 3A8 8 0 0112 20z"/></svg>อัปโดย พี่กัน · 6 ก.ค. 69</div>
+          <div class="row"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v13a2 2 0 01-2 2H6a2 2 0 01-2-2V4a2 2 0 012-2z"/></svg>8.1 MB</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- card 3 -->
+    <div class="card" onclick="openViewer('Study 31/A5349 — 4-month Rifapentine-Moxi Regimen')">
+      <div class="cover">
+        <div class="catbadge" style="background:#f3e8ff;color:#7e22ce"><svg viewBox="0 0 24 24"><path d="M9 2v2h1v6L5.5 18A2 2 0 007.3 21h9.4a2 2 0 001.8-3L14 10V4h1V2z"/></svg>Trial</div>
+        <div class="del" onclick="event.stopPropagation();alert('→ ป๊อปยืนยันลบ 2 ขั้น')"><svg viewBox="0 0 24 24"><path d="M6 7h12l-1 14H7L6 7zm3-3h6l1 2H8z"/></svg></div>
+        <div class="pg-mini" style="transform:rotate(-3deg)"><div class="bar t" style="background:#c4b5fd"></div><div class="bar s"></div><div class="bar s2"></div><div class="bar s"></div><div class="bar s3"></div><div class="bar s4"></div><div class="bar s2"></div></div>
+        <div class="pages">14 หน้า</div>
+      </div>
+      <div class="cbody">
+        <h4>Study 31/A5349 — สูตร 4 เดือน (Rifapentine + Moxi)</h4>
+        <div class="cmeta">
+          <div class="row"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 4a2 2 0 110 4 2 2 0 010-4zm0 14a8 8 0 01-6-2.7c0-2 4-3 6-3s6 1 6 3A8 8 0 0112 20z"/></svg>อัปโดย พี่กัน · 5 ก.ค. 69</div>
+          <div class="row"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v13a2 2 0 01-2 2H6a2 2 0 01-2-2V4a2 2 0 012-2z"/></svg>2.3 MB</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- card 4 -->
+    <div class="card" onclick="openViewer('ZeNix Trial — BPaL สำหรับ MDR/XDR-TB')">
+      <div class="cover">
+        <div class="catbadge" style="background:#f3e8ff;color:#7e22ce"><svg viewBox="0 0 24 24"><path d="M9 2v2h1v6L5.5 18A2 2 0 007.3 21h9.4a2 2 0 001.8-3L14 10V4h1V2z"/></svg>Trial</div>
+        <div class="del" onclick="event.stopPropagation();alert('→ ป๊อปยืนยันลบ 2 ขั้น')"><svg viewBox="0 0 24 24"><path d="M6 7h12l-1 14H7L6 7zm3-3h6l1 2H8z"/></svg></div>
+        <div class="pg-mini" style="transform:rotate(1deg)"><div class="bar t" style="background:#c4b5fd"></div><div class="bar s"></div><div class="bar s3"></div><div class="bar s2"></div><div class="bar s"></div><div class="bar s4"></div><div class="bar s2"></div></div>
+        <div class="pages">11 หน้า</div>
+      </div>
+      <div class="cbody">
+        <h4>ZeNix Trial — BPaL สำหรับ MDR/XDR-TB</h4>
+        <div class="cmeta">
+          <div class="row"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 4a2 2 0 110 4 2 2 0 010-4zm0 14a8 8 0 01-6-2.7c0-2 4-3 6-3s6 1 6 3A8 8 0 0112 20z"/></svg>อัปโดย พี่กัน · 5 ก.ค. 69</div>
+          <div class="row"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v13a2 2 0 01-2 2H6a2 2 0 01-2-2V4a2 2 0 012-2z"/></svg>1.9 MB</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- card 5 other -->
+    <div class="card" onclick="openViewer('ตารางขนาดยา TB ปรับตามน้ำหนัก (เอกสารเภสัช)')">
+      <div class="cover">
+        <div class="catbadge" style="background:#f3f4f6;color:#4b5563"><svg viewBox="0 0 24 24"><path d="M4 4h16v2H4zm0 5h16v2H4zm0 5h10v2H4z"/></svg>อื่นๆ</div>
+        <div class="del" onclick="event.stopPropagation();alert('→ ป๊อปยืนยันลบ 2 ขั้น')"><svg viewBox="0 0 24 24"><path d="M6 7h12l-1 14H7L6 7zm3-3h6l1 2H8z"/></svg></div>
+        <div class="pg-mini" style="transform:rotate(-1deg)"><div class="bar t" style="background:#94a3b8"></div><div class="bar s"></div><div class="bar s2"></div><div class="bar s3"></div><div class="bar s"></div><div class="bar s2"></div><div class="bar s4"></div></div>
+        <div class="pages">2 หน้า</div>
+      </div>
+      <div class="cbody">
+        <h4>ตารางขนาดยา TB ปรับตามน้ำหนัก (เอกสารเภสัช)</h4>
+        <div class="cmeta">
+          <div class="row"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 4a2 2 0 110 4 2 2 0 010-4zm0 14a8 8 0 01-6-2.7c0-2 4-3 6-3s6 1 6 3A8 8 0 0112 20z"/></svg>อัปโดย พี่กัน · 4 ก.ค. 69</div>
+          <div class="row"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v13a2 2 0 01-2 2H6a2 2 0 01-2-2V4a2 2 0 012-2z"/></svg>640 KB</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <p class="tip">* การ์ดโชว์รูปหน้าปก (หน้าแรกของ PDF) — อันนี้คือส่วนเสริมที่แคลร์เสนอ ถ้าไม่เอาจะเป็นไอคอน PDF ธรรมดา</p>
+</div>
+
+<!-- ===== UPLOAD MODAL ===== -->
+<div class="backdrop" id="up">
+  <div class="modal">
+    <h3><svg viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>อัปโหลด PDF เข้าคลัง</h3>
+    <div class="sub">เฉพาะแอดมิน · ไฟล์เก็บบนคลาวด์ของเว็บ อ่านได้เลยในเว็บ</div>
+    <div class="drop">
+      <svg viewBox="0 0 24 24"><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
+      <div class="fn">NTP-Guideline-2564.pdf</div>
+      <div class="hint">12.4 MB · ลากไฟล์มาวาง หรือกดเลือกไฟล์</div>
+    </div>
+    <div class="fld">
+      <label>ชื่อเรื่อง <span class="opt">(ไม่บังคับ · เว้นว่างจะใช้ชื่อไฟล์)</span></label>
+      <input value="แนวทางการควบคุมวัณโรค ประเทศไทย พ.ศ. 2564">
+    </div>
+    <div class="fld">
+      <label>หมวดหมู่</label>
+      <select><option>แนวทางการรักษา</option><option>งานวิจัย · Trial</option><option>อื่นๆ</option></select>
+    </div>
+    <div class="fld">
+      <label>ลิงก์ต้นฉบับ <span class="opt">(ไม่บังคับ)</span></label>
+      <input placeholder="https://...">
+    </div>
+    <div style="font-size:11px;color:var(--g400);margin-bottom:3px">กำลังอัปโหลด... 64%</div>
+    <div class="prog"><i></i></div>
+    <div class="mrow">
+      <button class="mbtn" onclick="closeUp()">ยกเลิก</button>
+      <button class="mbtn primary">อัปโหลด</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== PDF VIEWER ===== -->
+<div class="viewer" id="viewer">
+  <div class="vbar">
+    <button class="vclose" onclick="closeViewer()" title="ปิด"><svg viewBox="0 0 24 24"><path d="M19 6.4L17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button>
+    <button onclick="toggleThumbs()" title="หน้าย่อ"><svg viewBox="0 0 24 24"><path d="M3 3h8v8H3zm10 0h8v8h-8zM3 13h8v8H3zm10 0h8v8h-8z"/></svg></button>
+    <span class="vtitle" id="vtitle">ชื่อเอกสาร</span>
+    <div class="grp">
+      <button onclick="pg(-1)"><svg viewBox="0 0 24 24"><path d="M15.4 7.4L14 6l-6 6 6 6 1.4-1.4L10.8 12z"/></svg></button>
+      <input class="pg" id="pgin" value="3"><span class="tot">/ 24</span>
+      <button onclick="pg(1)"><svg viewBox="0 0 24 24"><path d="M8.6 7.4L10 6l6 6-6 6-1.4-1.4L13.2 12z"/></svg></button>
+    </div>
+    <div class="grp">
+      <button onclick="zoom(-1)"><svg viewBox="0 0 24 24"><path d="M5 11h14v2H5z"/></svg></button>
+      <span id="zlbl" style="min-width:42px;text-align:center;font-size:12px">100%</span>
+      <button onclick="zoom(1)"><svg viewBox="0 0 24 24"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg></button>
+    </div>
+    <button onclick="fit()" title="พอดีกว้าง"><svg viewBox="0 0 24 24"><path d="M3 5h18v2H3zm4 4h10v10H7z" fill="none" stroke="#e5e7eb" stroke-width="2"/></svg></button>
+    <button onclick="rot()" title="หมุน"><svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7a6 6 0 11-6 6H4a8 8 0 108-8z"/></svg></button>
+    <button onclick="toggleFind()" title="ค้นหา"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 10-.7.7l.27.28v.79l5 4.99L20.49 19zm-6 0A4.5 4.5 0 1114 9.5 4.5 4.5 0 019.5 14z"/></svg>ค้นหา</button>
+    <div class="sp"></div>
+    <button title="ดาวน์โหลด"><svg viewBox="0 0 24 24"><path d="M5 20h14v-2H5zm7-18v10l4-4 1.4 1.4L12 16 6.6 10.4 8 9l4 4V2z" transform="rotate(180 12 12)"/></svg>ดาวน์โหลด</button>
+    <button title="พิมพ์"><svg viewBox="0 0 24 24"><path d="M19 8H5c-1.7 0-3 1.3-3 3v6h4v4h12v-4h4v-6c0-1.7-1.3-3-3-3zm-3 11H8v-5h8zm3-7a1 1 0 110-2 1 1 0 010 2zm-1-9H6v4h12z"/></svg>พิมพ์</button>
+  </div>
+
+  <div class="findbar" id="findbar">
+    <input value="isoniazid" id="findinput" oninput="doFind()">
+    <span class="mc" id="mc">3 / 12</span>
+    <button onclick="findStep(-1)"><svg viewBox="0 0 24 24"><path d="M7 14l5-5 5 5z"/></svg></button>
+    <button onclick="findStep(1)"><svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg></button>
+    <label><input type="checkbox" checked>ไฮไลต์ทั้งหมด</label>
+    <button onclick="toggleFind()"><svg viewBox="0 0 24 24"><path d="M19 6.4L17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg></button>
+  </div>
+
+  <div class="vbody">
+    <div class="thumbs" id="thumbs">
+      <div class="thumb" onclick="goPage(1)"><div class="p"><div class="bar t"></div><div class="bar"></div><div class="bar"></div><div class="bar" style="width:80%"></div></div><div class="n">1</div></div>
+      <div class="thumb" onclick="goPage(2)"><div class="p"><div class="bar t"></div><div class="bar"></div><div class="bar" style="width:70%"></div><div class="bar"></div></div><div class="n">2</div></div>
+      <div class="thumb cur" onclick="goPage(3)"><div class="p"><div class="bar t"></div><div class="bar"></div><div class="bar"></div><div class="bar" style="width:90%"></div></div><div class="n">3</div></div>
+      <div class="thumb" onclick="goPage(4)"><div class="p"><div class="bar t"></div><div class="bar" style="width:85%"></div><div class="bar"></div><div class="bar"></div></div><div class="n">4</div></div>
+      <div class="thumb" onclick="goPage(5)"><div class="p"><div class="bar t"></div><div class="bar"></div><div class="bar"></div><div class="bar" style="width:75%"></div></div><div class="n">5</div></div>
+      <div class="thumb" onclick="goPage(6)"><div class="p"><div class="bar t"></div><div class="bar" style="width:60%"></div><div class="bar"></div><div class="bar"></div></div><div class="n">6</div></div>
+    </div>
+
+    <div class="pagearea">
+      <div class="page" id="pagebox">
+        <h1 id="ptitle">แนวทางการควบคุมวัณโรค ประเทศไทย</h1>
+        <p><b>บทที่ 3 — การรักษาวัณโรคปอดในผู้ใหญ่ (Drug-Susceptible TB)</b></p>
+        <h3>3.1 สูตรยามาตรฐาน</h3>
+        <p>ผู้ป่วยวัณโรคปอดรายใหม่ที่ไวต่อยา ให้ใช้สูตรมาตรฐาน <b>2HRZE / 4HR</b> โดยแบ่งเป็นระยะเข้มข้น (intensive phase) 2 เดือนแรกด้วยยา 4 ขนาน และระยะต่อเนื่อง (continuation phase) อีก 4 เดือนด้วย <span class="hl cur">Isoniazid</span> และ Rifampicin</p>
+        <ul>
+          <li><span class="hl">Isoniazid</span> (H) 5 มก./กก./วัน (สูงสุด 300 มก.)</li>
+          <li>Rifampicin (R) 10 มก./กก./วัน (สูงสุด 600 มก.)</li>
+          <li>Pyrazinamide (Z) 25 มก./กก./วัน</li>
+          <li>Ethambutol (E) 15–20 มก./กก./วัน</li>
+        </ul>
+        <h3>3.2 การติดตามพิษต่อตับ (DILI)</h3>
+        <p>ตรวจ AST / ALT ก่อนเริ่มยา และติดตามเป็นระยะ ผู้ป่วยที่ได้รับ <span class="hl">isoniazid</span> ร่วมกับ rifampicin มีความเสี่ยงตับอักเสบ หากค่าเอนไซม์ตับสูงเกิน 3 เท่าร่วมกับอาการ ให้พิจารณาหยุดยาแล้ว re-challenge เป็นลำดับ</p>
+        <p class="tip">— ข้อความในหน้านี้ "เลือกลากคลุมได้ · คัดลอกได้" เหมือน PDF จริง (คำว่า <b>isoniazid</b> ถูกไฮไลต์เพราะค้นหาอยู่) —</p>
+        <div class="pfoot">คลังความรู้วัณโรค · TB CARE &amp; JOURNEY — หน้า <span id="pfnum">3</span> / 24</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  var page=3,total=24,z=100,rotdeg=0;
+  function openViewer(t){document.getElementById('vtitle').textContent=t;document.getElementById('ptitle').textContent=t.length>46?'แนวทางการควบคุมวัณโรค ประเทศไทย':t;page=3;z=100;rotdeg=0;render();document.getElementById('viewer').classList.add('open');}
+  function closeViewer(){document.getElementById('viewer').classList.remove('open');document.getElementById('findbar').classList.remove('open');}
+  function pg(d){page=Math.min(total,Math.max(1,page+d));syncThumb();render();}
+  function goPage(n){page=n;syncThumb();render();}
+  function zoom(d){z=Math.min(250,Math.max(50,z+d*25));render();}
+  function fit(){z=125;render();}
+  function rot(){rotdeg=(rotdeg+90)%360;render();}
+  function render(){
+    document.getElementById('pgin').value=page;
+    document.getElementById('pfnum').textContent=page;
+    document.getElementById('zlbl').textContent=z+'%';
+    var b=document.getElementById('pagebox');
+    b.style.transform='scale('+(z/100)+') rotate('+rotdeg+'deg)';
+  }
+  function syncThumb(){document.querySelectorAll('.thumb').forEach(function(t,i){t.classList.toggle('cur',i+1===page);});}
+  function toggleThumbs(){document.getElementById('thumbs').classList.toggle('hide');}
+  function toggleFind(){document.getElementById('findbar').classList.toggle('open');}
+  function doFind(){var v=document.getElementById('findinput').value;document.getElementById('mc').textContent=v?'3 / 12':'0 / 0';}
+  function findStep(d){}
+  function openUp(){document.getElementById('up').classList.add('open');}
+  function closeUp(){document.getElementById('up').classList.remove('open');}
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'){closeViewer();closeUp();}});
+</script>
+</body>
+</html>
