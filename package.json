@@ -4,12 +4,16 @@
   "description": "",
   "main": "tb-data.js",
   "scripts": {
-    "dev": "next dev",
     "build": "next build",
+    "dev": "next dev",
     "start": "next start",
     "copy-pdf-worker": "node scripts/copy-pdf-worker.mjs",
     "postinstall": "node scripts/copy-pdf-worker.mjs",
-    "prebuild": "node scripts/copy-pdf-worker.mjs"
+    "prebuild": "node scripts/copy-pdf-worker.mjs",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
   },
   "repository": {
     "type": "git",
@@ -23,6 +27,7 @@
   },
   "homepage": "https://github.com/sirawitphaopha/tb-dashboard-bysirawit#readme",
   "dependencies": {
+    "@opennextjs/cloudflare": "^1.20.1",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.105.4",
     "aws4fetch": "^1.0.20",
@@ -44,6 +49,7 @@
     "autoprefixer": "^10.5.0",
     "postcss": "^8.5.14",
     "tailwindcss": "^3.4.19",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "wrangler": "^4.107.0"
   }
 }
