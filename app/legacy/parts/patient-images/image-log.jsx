@@ -5,8 +5,8 @@
  *  ดรอปดาวน์กรองเหตุการณ์แบบเลือกหลายข้อ · กดดูรายละเอียดเป็นภาษาคน (มีปุ่มดูข้อมูลดิบ JSON) */
 import * as React from 'react'
 import { createPortal } from 'react-dom'
-import { loadCache, saveCache, CACHE_TTL } from './helpers'
-import { highlightMagic } from '../shared'
+import { loadCache, saveCache, CACHE_TTL, patientImgInfo, PATIENT_IMG_TYPES } from './helpers'
+import { highlightMagic, AvatarLightbox } from '../shared'
 
 const LOG_CACHE_KEY = 'tb_imglog'   // โหลด event ครั้งเดียว (cache) — เปิดหน้าซ้ำไม่โหลดใหม่
 
@@ -17,7 +17,7 @@ const EV = {
   delete_requested:         { ic:'fa-clock',        c:'#d97706', bg:'#fef3c7', label:'ขอลบรูป' },
   delete_request_cancelled: { ic:'fa-rotate-left',  c:'#6b7280', bg:'#f3f4f6', label:'ยกเลิกคำขอลบ' },
   delete_direct:            { ic:'fa-trash',        c:'#dc2626', bg:'#fee2e2', label:'แอดมินลบตรง' },
-  delete_approved:          { ic:'fa-check-double', c:'#dc2626', bg:'#fee2e2', label:'อนุมัติลบ (เข้าถัง)' },
+  delete_approved:          { ic:'fa-check-double', c:'#dc2626', bg:'#fee2e2', label:'อนุมัติลบ (เข้าถังขยะ)' },
   delete_rejected:          { ic:'fa-xmark',        c:'#0d9488', bg:'#ccfbf1', label:'ปฏิเสธคำขอลบ' },
   restored:                 { ic:'fa-rotate-left',  c:'#0d9488', bg:'#ccfbf1', label:'กู้คืนจากถัง' },
   hard_deleted:             { ic:'fa-fire',         c:'#991b1b', bg:'#fee2e2', label:'ลบถาวร' },
@@ -73,16 +73,66 @@ function phashDist(a, b) {
   if (!a || !b) return 64
   try { let x = BigInt('0x' + a) ^ BigInt('0x' + b), c = 0; while (x) { c += Number(x & 1n); x >>= 1n } return c } catch { return 64 }
 }
-function hashShort(h) {
-  if (!h) return null
-  if (h.sha256) return { k:'SHA-256', v: h.sha256.slice(0, 16) + '…' }
-  if (h.phash)  return { k:'pHash', v: h.phash }
-  return null
+// รูปย่อในหัวการ์ด (มุมตามรูป) — รูปที่ยังอยู่ = signed URL จริง (กดดูได้) · ลบถาวรแล้ว = ไฟล์หายจึงโชว์ placeholder
+function LogThumb({ url, status, onOpen }) {
+  const [err, setErr] = React.useState(false)
+  React.useEffect(() => { setErr(false) }, [url])
+  const box = { width:'46px', height:'46px', flexShrink:0, borderRadius:'10px', overflow:'hidden', background:'#f3f4f6', display:'flex', alignItems:'center', justifyContent:'center' }
+  const gone = status === 'hard_deleted'
+  if (gone || !url || err) {
+    return (
+      <div style={{ ...box, background: gone ? '#fef2f2' : '#f3f4f6', flexDirection:'column', gap:'2px' }} title={gone ? 'ไฟล์รูปถูกลบถาวรแล้ว (เหลือแต่ประวัติ)' : 'ไม่มีรูปย่อ'}>
+        <i className={'fa-solid '+(gone?'fa-fire':'fa-image')} style={{ fontSize:'15px', color: gone?'#f87171':'#9ca3af' }}></i>
+        {gone && <span style={{ fontSize:'7.5px', color:'#f87171', fontWeight:700, lineHeight:1 }}>ลบถาวร</span>}
+      </div>
+    )
+  }
+  // รูปที่ยังไม่ลบ = กรอบเทลจางๆ (ให้รูปพื้นขาวมีขอบ) + กดดูรูปใหญ่ได้ (ตัวดูรูปเดียวกับคลังภาพ = กันเซฟ)
+  return (
+    <div onClick={(e)=>{ e.preventDefault(); e.stopPropagation(); onOpen && onOpen(e.currentTarget.getBoundingClientRect()) }} title="กดเพื่อดูรูปขนาดใหญ่"
+      style={{ ...box, border:'1px solid #99f6e4', cursor:'zoom-in', position:'relative' }}>
+      <img src={url} alt="" draggable="false" onContextMenu={(e)=>e.preventDefault()} onError={()=>setErr(true)} style={{ width:'100%', height:'100%', objectFit:'cover' }}/>
+    </div>
+  )
 }
 
-function ImageLogPage({ headerExtra } = {}) {
-  const _seed = loadCache(LOG_CACHE_KEY)
-  const [allEvents, setAllEvents] = React.useState(_seed ? _seed.data : null)   // seed จาก cache = ไม่ขึ้น skeleton ซ้ำ
+// ป้ายบทบาทผู้ทำ — สีตามที่เว็บใช้ (บันทึกกิจกรรม): แอดมิน=อำพัน · ผู้ใช้=ฟ้า
+function roleBadge(role) {
+  if (role === 'admin') return <span style={{ fontSize:'9px', fontWeight:700, padding:'1px 6px', borderRadius:'999px', background:'#fef3c7', color:'#92400e', marginLeft:'5px', whiteSpace:'nowrap' }}>แอดมิน</span>
+  if (role === 'user')  return <span style={{ fontSize:'9px', fontWeight:700, padding:'1px 6px', borderRadius:'999px', background:'#e0f2fe', color:'#0369a1', marginLeft:'5px', whiteSpace:'nowrap' }}>ผู้ใช้</span>
+  return null
+}
+// หมายเหตุกิจกรรม (เหตุผลลบ/ทำกิจกรรม) — มีคำนำหน้าให้รู้ว่าคือหมายเหตุ
+function noteText(reason) {
+  if (!reason) return null
+  return <span> · <span style={{ color:'#9ca3af' }}>หมายเหตุ:</span> <span style={{ fontStyle:'italic' }}>{reason}</span></span>
+}
+
+// สร้าง object แบบ record รูป (im) จาก snapshot ใน log → ใช้กับ patientImgInfo / AvatarLightbox (ตัวดูรูปเดียวกับคลังภาพ)
+function snapToImLike(v) {
+  const s = (v && v.snapshot) || {}
+  return {
+    mime: s.mime, type: v.type, note: s.note, device: s.device, uploaded_at: s.uploaded_at,
+    size_bytes: s.size_bytes, orig_size_bytes: s.orig_size_bytes, orig_mime: s.orig_mime,
+    orig_width: s.orig_width, orig_height: s.orig_height, uploader_name: v.owner_name,
+    orig_sha256: s.orig_sha256, orig_md5: s.orig_md5, orig_crc32: s.orig_crc32,
+    webp_sha256: s.webp_sha256, webp_md5: s.webp_md5, webp_crc32: s.webp_crc32, phash: s.phash,
+  }
+}
+
+// อ่าน cache — รองรับทั้งรูปแบบเก่า (array) และใหม่ ({events, thumbs})
+function readSeed(c) {
+  if (!c) return { events: null, thumbs: {}, fulls: {} }
+  const d = c.data
+  if (Array.isArray(d)) return { events: d, thumbs: {}, fulls: {} }
+  return { events: (d && d.events) || null, thumbs: (d && d.thumbs) || {}, fulls: (d && d.fulls) || {} }
+}
+
+function ImageLogPage({ headerExtra, onOpenInGallery, onOpenPatient } = {}) {
+  const _seed = readSeed(loadCache(LOG_CACHE_KEY))
+  const [allEvents, setAllEvents] = React.useState(_seed.events)   // seed จาก cache = ไม่ขึ้น skeleton ซ้ำ
+  const [thumbs, setThumbs] = React.useState(_seed.thumbs)         // image_id -> signed URL รูปย่อ (เฉพาะรูปที่ยังไม่ลบถาวร)
+  const [fulls, setFulls] = React.useState(_seed.fulls)           // image_id -> signed URL รูปเต็ม (กดดูรูปได้)
   const [capped, setCapped] = React.useState(false)
   const [loading, setLoading] = React.useState(false)
   const [view, setView] = React.useState('time')        // 'time' | 'image'
@@ -90,19 +140,23 @@ function ImageLogPage({ headerExtra } = {}) {
   const [ddOpen, setDdOpen] = React.useState(false)
   const [dateKey, setDateKey] = React.useState('7d')
   const [q, setQ] = React.useState('')
+  const [dupOnly, setDupOnly] = React.useState(false)   // มุมตามรูป: กรองเฉพาะรูปที่มีแฝด (ซ้ำ/คล้าย)
+  const [dupFocus, setDupFocus] = React.useState(null)  // กดป้าย "ภาพคล้าย #X" = โฟกัสดูเฉพาะกลุ่มนั้น {id, exact}
+  const [collapsed, setCollapsed] = React.useState(() => new Set())   // image_id ที่ยุบรายการกิจกรรมอยู่
   const [snap, setSnap] = React.useState(null)          // event ที่กดดูรายละเอียด
+  const [viewImg, setViewImg] = React.useState(null)    // URL รูปที่กดดู (เปิด lightbox)
   const [visTime, setVisTime] = React.useState(60)
   const [visImg, setVisImg] = React.useState(24)
   const ddRef = React.useRef(null)
 
   const reload = React.useCallback(async (force) => {
     const c = loadCache(LOG_CACHE_KEY)
-    if (c && !force) { setAllEvents(c.data); if (Date.now() - c.ts < CACHE_TTL) return }   // มี cache สด (<5นาที) = ไม่ยิง server ซ้ำ
+    if (c && !force) { const s = readSeed(c); setAllEvents(s.events); setThumbs(s.thumbs); setFulls(s.fulls); if (Date.now() - c.ts < CACHE_TTL) return }   // มี cache สด (<5นาที) = ไม่ยิง server ซ้ำ
     setLoading(true)
     try {
       const r = await fetch('/api/patient/images/log')
       const d = await r.json()
-      if (r.ok) { setAllEvents(d.events || []); setCapped(!!d.capped); saveCache(LOG_CACHE_KEY, d.events || []) }
+      if (r.ok) { setAllEvents(d.events || []); setThumbs(d.thumbs || {}); setFulls(d.fulls || {}); setCapped(!!d.capped); saveCache(LOG_CACHE_KEY, { events: d.events || [], thumbs: d.thumbs || {}, fulls: d.fulls || {} }) }
       else if (!c) setAllEvents([])
     } catch { if (!c) setAllEvents([]) }
     setLoading(false)
@@ -127,29 +181,35 @@ function ImageLogPage({ headerExtra } = {}) {
   }, [ddOpen])
 
   // รีเซ็ตจำนวนที่โชว์เมื่อเปลี่ยนตัวกรอง/มุมมอง
-  React.useEffect(() => { setVisTime(60); setVisImg(24) }, [eventSet, dateKey, q, view])
+  React.useEffect(() => { setVisTime(60); setVisImg(24) }, [eventSet, dateKey, q, view, dupOnly, dupFocus])
+  // ออกจากมุมตามรูป/เปลี่ยนตัวกรองหลัก = เลิกโฟกัสกลุ่มรูปคล้าย
+  React.useEffect(() => { setDupFocus(null) }, [view, eventSet, dateKey, q])
 
   const sinceMs = React.useMemo(() => computeSinceMs(dateKey), [dateKey])
 
-  // กรอง event ฝั่ง client (ทันที)
-  const filtered = React.useMemo(() => {
+  // กรองด้วยวันที่+ค้นหา (ยังไม่กรองชนิดกิจกรรม) — ใช้เป็นฐานของแถบสรุป เพื่อให้โชว์ทุกชนิดเสมอ (กดสลับได้)
+  const dateqFiltered = React.useMemo(() => {
     const list = allEvents || []
     const qq = q.trim().toLowerCase()
     return list.filter(e => {
-      if (eventSet.size && !eventSet.has(e.event_type)) return false
       if (sinceMs && new Date(e.created_at).getTime() < sinceMs) return false
       if (qq) { const hay = ((e.patient_name||'') + ' ' + (e.patient_hn||'') + ' ' + (e.actor_name||'')).toLowerCase(); if (!hay.includes(qq)) return false }
       return true
     })
-  }, [allEvents, eventSet, sinceMs, q])
+  }, [allEvents, sinceMs, q])
+  // กรองชนิดกิจกรรมทับอีกที (ทันที)
+  const filtered = React.useMemo(() => eventSet.size ? dateqFiltered.filter(e => eventSet.has(e.event_type)) : dateqFiltered, [dateqFiltered, eventSet])
+  // ยอดต่อชนิดกิจกรรม (จากฐานวันที่+ค้นหา · ไม่สนตัวกรองชนิด) — โชว์ในแถบสรุปให้กดกรองได้
+  const evCounts = React.useMemo(() => { const m = {}; for (const e of dateqFiltered) m[e.event_type] = (m[e.event_type] || 0) + 1; return m }, [dateqFiltered])
 
   // จัดกลุ่มตามรูป + ตรวจรูปซ้ำ (ฝั่ง client)
   const grouped = React.useMemo(() => {
     const map = new Map()
     for (const e of filtered) {
       let g = map.get(e.image_id)
-      if (!g) { g = { image_id:e.image_id, events:[], patient_name:null, patient_hn:null, owner_name:null, image_type:null, snapshot:null }; map.set(e.image_id, g) }
+      if (!g) { g = { image_id:e.image_id, events:[], patient_id:null, patient_name:null, patient_hn:null, owner_name:null, image_type:null, snapshot:null }; map.set(e.image_id, g) }
       g.events.push(e)
+      if (e.patient_id) g.patient_id = e.patient_id
       if (e.patient_name) g.patient_name = e.patient_name
       if (e.patient_hn) g.patient_hn = e.patient_hn
       if (e.owner_name) g.owner_name = e.owner_name
@@ -192,18 +252,37 @@ function ImageLogPage({ headerExtra } = {}) {
   }, [filtered])
 
   const toggleEvent = (v) => setEventSet(prev => { const n = new Set(prev); if (n.has(v)) n.delete(v); else n.add(v); return n })
+  const toggleCollapse = (id) => setCollapsed(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const openSnap = (ev) => { setSnap(ev) }
+  const focusDup = (dup) => { setDupFocus(dup ? { id: dup.id, exact: dup.exact } : null); setDupOnly(false) }
+  const dupCount = React.useMemo(() => grouped.filter(g => g.dup).length, [grouped])
+
+  // ปุ่มกระโดด: "ดูในคลัง" (เฉพาะรูปที่ยังไม่ลบ) + "เวชระเบียน" (เปิดเวชระเบียนคนไข้) — ใช้ทั้งมุมตามรูป/ตามเวลา
+  const navButtons = (imageId, patientId, status) => (<>
+    {status === 'active' && onOpenInGallery && <button onClick={(e)=>{ e.stopPropagation(); onOpenInGallery(imageId) }} className="tb-hovteal" title="เปิดรูปนี้ในหน้าคลังรูป (ดูข้างรูปอื่นของคนไข้ · แก้ไขได้)" style={{ fontSize:'11px', fontWeight:700, color:'#0d9488', background:'#f0fdfa', border:'0.5px solid #99f6e4', borderRadius:'5px', padding:'1px 8px', display:'inline-flex', alignItems:'center', gap:'4px', cursor:'pointer' }}><i className="fa-solid fa-up-right-from-square" style={{ fontSize:'9px' }}></i>ดูในคลัง</button>}
+    {onOpenPatient && patientId && <button onClick={(e)=>{ e.stopPropagation(); onOpenPatient(patientId) }} className="tb-hovbg" title="เปิดเวชระเบียนของผู้ป่วยคนนี้" style={{ fontSize:'11px', fontWeight:700, color:'#4b5563', background:'#f3f4f6', border:'0.5px solid #e5e7eb', borderRadius:'5px', padding:'1px 8px', display:'inline-flex', alignItems:'center', gap:'4px', cursor:'pointer' }}><i className="fa-solid fa-user-doctor" style={{ fontSize:'9px' }}></i>เวชระเบียน</button>}
+  </>)
+
+  // ยุบ/กางกิจกรรมทุกการ์ดในครั้งเดียว
+  const allIds = React.useMemo(() => grouped.map(g => g.image_id), [grouped])
+  const anyExpanded = allIds.some(id => !collapsed.has(id))
+  const toggleAll = () => setCollapsed(anyExpanded ? new Set(allIds) : new Set())
+  // สถานะรูปต่อ image_id (ให้รูปย่อในแถบตามเวลารู้ว่ารูปลบถาวรไหม → โชว์ placeholder ถูก)
+  const statusById = React.useMemo(() => { const m = {}; for (const g of grouped) m[g.image_id] = g.status; return m }, [grouped])
 
   const chip = (on) => ({ border:'0.5px solid '+(on?'#0d9488':'#e5e7eb'), background:on?'#0d9488':'#fff', color:on?'#fff':'#6b7280', borderRadius:'999px', padding:'5px 12px', fontSize:'12px', cursor:'pointer' })
   const segBtn = (on) => ({ display:'flex', alignItems:'center', gap:'6px', border:'none', background:on?'#0d9488':'transparent', color:on?'#fff':'#6b7280', borderRadius:'8px', padding:'7px 14px', fontSize:'13px', fontWeight:700, cursor:'pointer' })
 
+  const imgSource = dupFocus ? grouped.filter(g => g.dup && g.dup.id === dupFocus.id)
+    : dupOnly ? grouped.filter(g => g.dup) : grouped
   const isInitLoading = allEvents === null
-  const isEmpty = allEvents !== null && filtered.length === 0
-  const totalImages = grouped.length
+  const isEmpty = allEvents !== null && (view === 'image' ? imgSource.length === 0 : filtered.length === 0)
+  const totalImages = imgSource.length
   const totalEvents = filtered.length
+  const imgEventCount = imgSource.reduce((s, g) => s + g.count, 0)   // นับเหตุการณ์เฉพาะรูปที่แสดง (กันตัวนับไม่ลดตอนกรองรูปซ้ำ)
   const timeShown = filtered.slice(0, visTime)
-  const imgShown = grouped.slice(0, visImg)
-  const hasMore = view === 'image' ? visImg < grouped.length : visTime < filtered.length
+  const imgShown = imgSource.slice(0, visImg)
+  const hasMore = view === 'image' ? visImg < imgSource.length : visTime < filtered.length
 
   return (
     <div>
@@ -248,14 +327,39 @@ function ImageLogPage({ headerExtra } = {}) {
         </div>
 
         {DATE_OPTS.map(([v, l]) => <button key={v} onClick={()=>setDateKey(v)} style={chip(dateKey===v)}>{l}</button>)}
+        {view === 'image' && (
+          dupFocus
+            ? <button onClick={()=>setDupFocus(null)} title="เลิกดูเฉพาะกลุ่มนี้ (กลับไปดูทุกรูป)" style={{ ...chip(true), display:'inline-flex', alignItems:'center', gap:'6px' }}>
+                <i className={'fa-solid '+(dupFocus.exact?'fa-clone':'fa-images')} style={{ fontSize:'10px' }}></i>{dupFocus.exact ? 'รูปซ้ำ' : 'ภาพคล้าย'} #{dupFocus.id}<i className="fa-solid fa-xmark" style={{ fontSize:'11px', marginLeft:'1px' }}></i>
+              </button>
+            : <button onClick={()=>setDupOnly(v=>!v)} title="แสดงเฉพาะรูปที่มีแฝดในระบบ (เนื้อไฟล์ซ้ำ หรือภาพคล้ายกันมาก)" style={{ ...chip(dupOnly), display:'inline-flex', alignItems:'center', gap:'5px' }}>
+                <i className="fa-solid fa-clone" style={{ fontSize:'10px' }}></i>เฉพาะรูปซ้ำ{dupCount ? ' ('+dupCount+')' : ''}
+              </button>
+        )}
+        {view === 'image' && imgSource.length > 0 && (
+          <button onClick={toggleAll} title={anyExpanded ? 'ยุบรายละเอียดทุกการ์ด' : 'กางรายละเอียดทุกการ์ด'} style={{ display:'inline-flex', alignItems:'center', gap:'5px', border:'0.5px solid #e5e7eb', background:'#fff', color:'#6b7280', borderRadius:'999px', padding:'5px 12px', fontSize:'12px', cursor:'pointer' }}>
+            <i className={'fa-solid '+(anyExpanded?'fa-angles-up':'fa-angles-down')} style={{ fontSize:'10px' }}></i>{anyExpanded ? 'ยุบทั้งหมด' : 'กางทั้งหมด'}
+          </button>
+        )}
         <span style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:'6px', fontSize:'12px', color:'#9ca3af' }}>
           {loading && <i className="fa-solid fa-circle-notch fa-spin" style={{ fontSize:'12px' }}></i>}
-          {view === 'image' ? `${totalImages} รูป · ${totalEvents} เหตุการณ์` : `${totalEvents} เหตุการณ์`}
+          {view === 'image' ? `${totalImages} รูป · ${imgEventCount} เหตุการณ์` : `${totalEvents} เหตุการณ์`}
         </span>
       </div>
+      {/* แถบสรุปยอดต่อชนิดกิจกรรม (กดเพื่อกรอง · ตรึงรวมกับหัว) */}
+      {!isInitLoading && dateqFiltered.length > 0 && (
+        <div style={{ display:'flex', gap:'7px', flexWrap:'wrap', marginTop:'9px' }}>
+          {EV_LIST.map(([type]) => {
+            const c = evCounts[type]; if (!c) return null
+            const m = EV[type] || { ic:'fa-circle', c:'#6b7280', bg:'#f3f4f6', label:type }
+            const on = eventSet.has(type)
+            return <button key={type} onClick={()=>toggleEvent(type)} title={on ? 'เลิกกรองกิจกรรมนี้' : 'กดเพื่อกรองเฉพาะกิจกรรมนี้'} style={{ display:'inline-flex', alignItems:'center', gap:'5px', fontSize:'11.5px', fontWeight:700, color:m.c, background:m.bg, border:'none', borderRadius:'999px', padding:'3px 11px', cursor:'pointer', boxShadow: on ? '0 0 0 2px '+m.c : 'none', opacity:(eventSet.size && !on) ? 0.45 : 1 }}>{on && <i className="fa-solid fa-check" style={{ fontSize:'9px' }}></i>}<i className={'fa-solid '+m.ic} style={{ fontSize:'10px' }}></i>{m.label} {c}</button>
+          })}
+        </div>
+      )}
       </div>{/* /sticky header */}
 
-      {capped &&<div style={{ fontSize:'11.5px', color:'#b45309', background:'#fffbeb', border:'1px solid #fde68a', borderRadius:'8px', padding:'7px 11px', marginBottom:'12px' }}>แสดงเหตุการณ์ล่าสุด 5,000 รายการ (มีมากกว่านี้ในระบบ)</div>}
+      {capped &&<div style={{ fontSize:'11.5px', color:'#b45309', background:'#fffbeb', border:'1px solid #fde68a', borderRadius:'8px', padding:'7px 11px', margin:'12px 0' }}>แสดงเหตุการณ์ล่าสุด 5,000 รายการ (มีมากกว่านี้ในระบบ)</div>}
 
       {/* โหลดครั้งแรก */}
       {isInitLoading && <div style={{ display:'flex', flexDirection:'column', gap:'9px' }}>{[0,1,2,3].map(i=><div key={i} className="tb-skel" style={{ height:view==='image'?'120px':'66px', borderRadius:'11px' }}/>)}</div>}
@@ -274,7 +378,11 @@ function ImageLogPage({ headerExtra } = {}) {
         const e = EV[lg.event_type] || { ic:'fa-circle', c:'#6b7280', bg:'#f3f4f6', label:lg.event_type }
         return (
           <div key={lg.id} style={{ display:'flex', gap:'12px', alignItems:'flex-start', background:'#fff', border:'1px solid #e5e7eb', borderRadius:'11px', padding:'11px 13px', marginBottom:'9px' }}>
-            <div style={{ width:'38px', height:'38px', flexShrink:0, borderRadius:'50%', background:e.bg, display:'flex', alignItems:'center', justifyContent:'center' }}><i className={'fa-solid '+e.ic} style={{ fontSize:'16px', color:e.c }}></i></div>
+            {/* รูปย่อ (กดดูได้) + ป้ายชนิดกิจกรรมมุมล่างขวา */}
+            <div style={{ position:'relative', flexShrink:0 }}>
+              <LogThumb url={thumbs[lg.image_id]} status={statusById[lg.image_id]} onOpen={(rect)=> setViewImg({ id:lg.image_id, snapshot:lg.snapshot, patient_name:lg.patient_name, patient_hn:lg.patient_hn, owner_name:lg.owner_name, type:lg.image_type, rect })} />
+              <div title={e.label} style={{ position:'absolute', right:'-4px', bottom:'-4px', width:'21px', height:'21px', borderRadius:'50%', background:e.bg, border:'2px solid #fff', display:'flex', alignItems:'center', justifyContent:'center' }}><i className={'fa-solid '+e.ic} style={{ fontSize:'9px', color:e.c }}></i></div>
+            </div>
             <div style={{ flex:1, minWidth:0 }}>
               <div style={{ display:'flex', alignItems:'center', gap:'8px', flexWrap:'wrap' }}>
                 <span style={{ fontSize:'13.5px', fontWeight:700, color:e.c }}>{e.label}</span>
@@ -282,10 +390,16 @@ function ImageLogPage({ headerExtra } = {}) {
               </div>
               <div style={{ fontSize:'12px', color:'#374151', marginTop:'3px' }}>{lg.patient_name || lg.patient_id || '-'}{lg.patient_hn ? <span style={{ color:'#9ca3af' }}> · HN {lg.patient_hn}</span> : null}</div>
               <div style={{ fontSize:'11.5px', color:'#6b7280', marginTop:'2px', wordBreak:'break-word' }}>
-                โดย {lg.actor_name || '-'}{lg.actor_role ? ' (' + (lg.actor_role === 'admin' ? 'แอดมิน' : 'ผู้ใช้') + ')' : ''}
-                {lg.owner_name ? ' · เจ้าของรูป ' + lg.owner_name : ''}
-                {lg.reason ? ' · เหตุผล: ' + lg.reason : ''}
+                โดย {lg.actor_name || '-'}{roleBadge(lg.actor_role)}
+                {lg.owner_name ? <span> · เจ้าของรูป {lg.owner_name}</span> : null}
+                {noteText(lg.reason)}
               </div>
+              {lg.snapshot && (lg.snapshot.orig_sha256 || lg.snapshot.phash) && (
+                <div style={{ fontSize:'10.5px', color:'#9ca3af', marginTop:'3px', fontFamily:'ui-monospace, monospace', wordBreak:'break-all' }}>
+                  {lg.snapshot.orig_sha256 ? <>SHA-256 {highlightMagic(lg.snapshot.orig_sha256, '#0d9488')}</> : <>pHash {highlightMagic(lg.snapshot.phash, '#0d9488')}</>}
+                </div>
+              )}
+              {(onOpenInGallery || onOpenPatient) && <div style={{ display:'flex', gap:'6px', flexWrap:'wrap', marginTop:'6px' }}>{navButtons(lg.image_id, lg.patient_id, statusById[lg.image_id])}</div>}
             </div>
             <div style={{ textAlign:'right', flexShrink:0 }}>
               <div style={{ fontSize:'11px', color:'#9ca3af', whiteSpace:'nowrap' }}>{fmtWhen(lg.created_at)}</div>
@@ -298,45 +412,59 @@ function ImageLogPage({ headerExtra } = {}) {
       {/* ══════ มุม "ตามรูป" ══════ */}
       {!isInitLoading && view === 'image' && imgShown.map(g => {
         const st = STATUS[g.status]
-        const hs = hashShort(g.hash)
         const dupColor = g.dup ? DUP_COLORS[(g.dup.id - 1) % DUP_COLORS.length] : null
+        const isCol = collapsed.has(g.image_id)
         return (
           <div key={g.image_id} style={{ background:'#fff', border:'1px solid #e5e7eb', borderRadius:'13px', padding:'13px 15px', marginBottom:'11px' }}>
             <div style={{ display:'flex', gap:'12px', alignItems:'flex-start' }}>
-              <div style={{ width:'42px', height:'42px', flexShrink:0, borderRadius:'10px', background:'#f3f4f6', display:'flex', alignItems:'center', justifyContent:'center' }}><i className="fa-solid fa-image" style={{ fontSize:'18px', color:'#9ca3af' }}></i></div>
+              <LogThumb url={thumbs[g.image_id]} status={g.status} onOpen={(rect)=> setViewImg({ id:g.image_id, snapshot:g.snapshot, patient_name:g.patient_name, patient_hn:g.patient_hn, owner_name:g.owner_name, type:g.image_type, rect })} />
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ display:'flex', alignItems:'center', gap:'7px', flexWrap:'wrap' }}>
-                  <span style={{ fontSize:'13px', fontWeight:800, color:'#374151', fontFamily:'ui-monospace, monospace' }}>{shortId(g.image_id)}</span>
+                  <span title="รหัสอ้างอิงรูป (ระบบสุ่มให้ ไม่เกี่ยวกับเนื้อรูป)" style={{ fontSize:'13px', fontWeight:800, color:'#374151', fontFamily:'ui-monospace, monospace' }}>{shortId(g.image_id)}</span>
                   <span style={{ fontSize:'11px', color:'#6b7280', background:'#f3f4f6', borderRadius:'5px', padding:'1px 7px' }}>{TYPE_LABEL[g.image_type] || g.image_type || '-'}</span>
                   {st && <span style={{ fontSize:'11px', fontWeight:700, color:st.c, background:st.bg, borderRadius:'5px', padding:'1px 8px' }}>{st.label}</span>}
-                  {g.dup && <span style={{ fontSize:'11px', fontWeight:700, color:'#fff', background:dupColor, borderRadius:'5px', padding:'1px 8px', display:'inline-flex', alignItems:'center', gap:'4px' }}><i className={'fa-solid '+(g.dup.exact?'fa-clone':'fa-images')} style={{ fontSize:'9px' }}></i>{g.dup.exact ? 'รูปซ้ำ' : 'ภาพคล้าย'} #{g.dup.id}</span>}
+                  {g.dup && <span onClick={(e)=>{ e.stopPropagation(); focusDup(g.dup) }} title={(g.dup.exact ? 'เนื้อไฟล์เหมือนกันเป๊ะกับรูปอื่นในระบบ' : 'ภาพคล้ายกันมากกับรูปอื่นในระบบ') + ' (กลุ่มที่ '+g.dup.id+') — กดเพื่อดูเฉพาะกลุ่มนี้'} style={{ fontSize:'11px', fontWeight:700, color:'#fff', background:dupColor, borderRadius:'5px', padding:'1px 8px', display:'inline-flex', alignItems:'center', gap:'4px', cursor:'pointer' }}><i className={'fa-solid '+(g.dup.exact?'fa-clone':'fa-images')} style={{ fontSize:'9px' }}></i>{g.dup.exact ? 'รูปซ้ำ' : 'ภาพคล้าย'} #{g.dup.id}</span>}
+                  {navButtons(g.image_id, g.patient_id, g.status)}
                 </div>
                 <div style={{ fontSize:'12px', color:'#374151', marginTop:'4px' }}>
                   {g.patient_name || '-'}{g.patient_hn ? <span style={{ color:'#9ca3af' }}> · HN {g.patient_hn}</span> : null}
                   {g.owner_name ? <span style={{ color:'#9ca3af' }}> · เจ้าของ {g.owner_name}</span> : null}
                 </div>
-                {hs && <div style={{ fontSize:'10.5px', color:'#9ca3af', marginTop:'3px', fontFamily:'ui-monospace, monospace', wordBreak:'break-all' }}>{hs.k} {hs.v}</div>}
+                {g.hash.sha256
+                  ? <div style={{ fontSize:'10.5px', color:'#9ca3af', marginTop:'3px', fontFamily:'ui-monospace, monospace', wordBreak:'break-all' }}>SHA-256 {highlightMagic(g.hash.sha256, '#0d9488')}</div>
+                  : g.hash.phash
+                    ? <div style={{ fontSize:'10.5px', color:'#9ca3af', marginTop:'3px', fontFamily:'ui-monospace, monospace', wordBreak:'break-all' }}>pHash {highlightMagic(g.hash.phash, '#0d9488')}</div>
+                    : null}
               </div>
-              <div style={{ fontSize:'11px', color:'#9ca3af', whiteSpace:'nowrap', flexShrink:0 }}>{g.count} เหตุการณ์</div>
+              {/* ปุ่มยุบ/กางรายการกิจกรรม */}
+              <button onClick={()=>toggleCollapse(g.image_id)} className="tb-hovbg" title={isCol ? 'กางรายการกิจกรรม' : 'ยุบรายการกิจกรรม'} style={{ display:'flex', alignItems:'center', gap:'6px', flexShrink:0, border:'none', background:'transparent', borderRadius:'7px', padding:'4px 8px', cursor:'pointer', color:'#9ca3af', fontSize:'11px', whiteSpace:'nowrap', alignSelf:'flex-start' }}>
+                {g.count} เหตุการณ์<i className={'fa-solid '+(isCol?'fa-chevron-down':'fa-chevron-up')} style={{ fontSize:'10px' }}></i>
+              </button>
             </div>
-            <div style={{ borderTop:'1px dashed #e5e7eb', marginTop:'11px', paddingTop:'11px', display:'flex', flexDirection:'column', gap:'10px' }}>
+            {!isCol && (
+            <div style={{ borderTop:'1px dashed #e5e7eb', marginTop:'11px', paddingTop:'8px', display:'flex', flexDirection:'column', gap:'2px' }}>
               {g.events.map(ev => {
                 const e = EV[ev.event_type] || { ic:'fa-circle', c:'#6b7280', bg:'#f3f4f6', label:ev.event_type }
+                const clickable = !!ev.snapshot
                 return (
-                  <div key={ev.id} onClick={()=> ev.snapshot && openSnap(ev)} style={{ display:'flex', gap:'10px', alignItems:'flex-start', cursor: ev.snapshot ? 'pointer' : 'default' }}>
+                  <div key={ev.id} onClick={()=> clickable && openSnap(ev)} className={clickable ? 'tb-hovteal' : undefined} style={{ display:'flex', gap:'10px', alignItems:'flex-start', cursor: clickable ? 'pointer' : 'default', borderRadius:'8px', padding:'6px', margin:'0 -6px' }}>
                     <div style={{ width:'26px', height:'26px', flexShrink:0, borderRadius:'50%', background:e.bg, display:'flex', alignItems:'center', justifyContent:'center' }}><i className={'fa-solid '+e.ic} style={{ fontSize:'11px', color:e.c }}></i></div>
                     <div style={{ flex:1, minWidth:0 }}>
                       <span style={{ fontSize:'12.5px', fontWeight:700, color:e.c }}>{e.label}</span>
                       <div style={{ fontSize:'11.5px', color:'#6b7280', marginTop:'1px', wordBreak:'break-word' }}>
-                        โดย {ev.actor_name || '-'}{ev.actor_role ? ' (' + (ev.actor_role === 'admin' ? 'แอดมิน' : 'ผู้ใช้') + ')' : ''}
-                        {ev.reason ? ' · ' + ev.reason : ''}
+                        โดย {ev.actor_name || '-'}{roleBadge(ev.actor_role)}
+                        {noteText(ev.reason)}
                       </div>
                     </div>
-                    <div style={{ fontSize:'11px', color:'#9ca3af', whiteSpace:'nowrap', flexShrink:0 }}>{fmtWhen(ev.created_at)}</div>
+                    <div style={{ display:'flex', alignItems:'center', gap:'7px', flexShrink:0 }}>
+                      <div style={{ fontSize:'11px', color:'#9ca3af', whiteSpace:'nowrap' }}>{fmtWhen(ev.created_at)}</div>
+                      {clickable && <i className="fa-solid fa-chevron-right" style={{ fontSize:'10px', color:'#cbd5e1' }}></i>}
+                    </div>
                   </div>
                 )
               })}
             </div>
+            )}
           </div>
         )
       })}
@@ -346,6 +474,15 @@ function ImageLogPage({ headerExtra } = {}) {
 
       {/* popup รายละเอียด (ภาษาคน + สลับ JSON ดิบ) */}
       {snap && createPortal(<SnapModal snap={snap} onClose={()=>setSnap(null)} />, document.body)}
+      {/* ดูรูปขนาดใหญ่ (กดจากรูปย่อ) — ตัวดูรูปเดียวกับคลังภาพ: ซูม/ลาก + กันคลิกขวา/บันทึกภาพ · ไม่มีปุ่มดาวน์โหลด */}
+      {viewImg && (() => {
+        const meta = PATIENT_IMG_TYPES[viewImg.type] || PATIENT_IMG_TYPES.other
+        const name = meta.label + ' · ' + (viewImg.patient_name || '-') + (viewImg.patient_hn ? ' (' + viewImg.patient_hn + ')' : '')
+        const info = patientImgInfo(snapToImLike(viewImg), meta, name)
+        return <AvatarLightbox src={fulls[viewImg.id] || thumbs[viewImg.id]} thumb={thumbs[viewImg.id]} originRect={viewImg.rect} info={info}
+          onExpire={async () => { try { const r = await fetch('/api/patient/images/' + viewImg.id + '/url'); if (r.ok) { const d = await r.json(); return d.url } } catch {} return null }}
+          onClose={() => setViewImg(null)} />
+      })()}
     </div>
   )
 }
@@ -384,9 +521,9 @@ function SnapModal({ snap, onClose }) {
         {/* ผู้เกี่ยวข้อง */}
         <div style={{ background:'#f9fafb', border:'1px solid #eef0f2', borderRadius:'11px', padding:'11px 13px', marginBottom:'12px', fontSize:'12.5px', lineHeight:1.9, color:'#374151' }}>
           {row('ผู้ป่วย', (snap.patient_name||'-') + (snap.patient_hn ? ' · HN '+snap.patient_hn : ''))}
-          {isEvent ? row('ผู้ทำ', (snap.actor_name||'-') + (snap.actor_role ? ' ('+(snap.actor_role==='admin'?'แอดมิน':'ผู้ใช้')+')' : '')) : null}
+          {isEvent ? row('ผู้ทำ', <span>{snap.actor_name||'-'}{roleBadge(snap.actor_role)}</span>) : null}
           {row('เจ้าของรูป', snap.owner_name || '-')}
-          {snap.reason ? row('เหตุผล', snap.reason) : null}
+          {snap.reason ? row('หมายเหตุ', snap.reason) : null}
         </div>
 
         {!s && <p style={{ fontSize:'12px', color:'#9ca3af', textAlign:'center', padding:'8px 0' }}>ไม่มีข้อมูลรูปในเหตุการณ์นี้</p>}

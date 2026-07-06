@@ -356,6 +356,7 @@ export function AvatarLightbox({ src, thumb, originRect, info, onExpire, onClose
   const drag = React.useRef(null);
   const touch = React.useRef(null);
   const triedRefresh = React.useRef(false);
+  const imgRef = React.useRef(null);   // อ้างอิงรูปเต็ม → อ่านขนาดที่เรนเดอร์จริง (offsetWidth) สำหรับคำนวณขอบเขตลาก (ถูกทุกชนิด รวม SVG)
   // เลื่อนรูป (ลูกศร) → รีเซ็ตซูม/หมุน + โหลดรูปใหม่ (ไม่ remount → สลับลื่น)
   React.useEffect(() => {
     setScale(1); setTx(0); setTy(0); setRot(0); setFullLoaded(false); setCurSrc(src); setBytes(info?.sizeBytes ?? null); setNoteEditing(false); triedRefresh.current = false;
@@ -378,13 +379,15 @@ export function AvatarLightbox({ src, thumb, originRect, info, onExpire, onClose
   const availW = showInfo ? Math.max(360, vw - panelW) : vw;
   const cx = availW / 2;
   const maxW = availW * 0.92, maxH = vh * 0.84;
-  const fitRatio = dim ? Math.min(maxW / dim.w, maxH / dim.h, 1) : 1;
+  const fitRatio = (dim && dim.w && dim.h) ? Math.min(maxW / dim.w, maxH / dim.h, 1) : 1;
   // ซูม: ล้อ/นิ้ว ลึกได้ถึง ~8000% (เห็นพิกเซล) · ปุ่ม/แถบเลือก สูงสุด 4000%
   const clamp = (s) => Math.max(0.1 / fitRatio, Math.min(80 / fitRatio, s));
 
   // ── ขอบเขตการลาก (กันรูปหลุดออกนอกจอ) ──
   const baseSize = () => {
-    if (!dim) return { w: maxW, h: maxH };
+    const el = imgRef.current;   // ขนาดที่เรนเดอร์จริง (ไม่รวม transform) — ถูกต้องทุกชนิดรูป รวม SVG ที่ naturalWidth ไม่ตรงขนาดจริง
+    if (el && el.offsetWidth && el.offsetHeight) return { w: el.offsetWidth, h: el.offsetHeight };
+    if (!dim || !dim.w || !dim.h) return { w: maxW, h: maxH };
     const r = Math.min(maxW / dim.w, maxH / dim.h, 1);
     return { w: dim.w * r, h: dim.h * r };
   };
@@ -529,8 +532,8 @@ export function AvatarLightbox({ src, thumb, originRect, info, onExpire, onClose
       )}
 
       {/* รูปเต็ม */}
-      <img src={curSrc} alt="" draggable={false}
-        onLoad={e=>{ setDim({ w:e.target.naturalWidth, h:e.target.naturalHeight }); setFullLoaded(true); }}
+      <img ref={imgRef} src={curSrc} alt="" draggable={false}
+        onLoad={e=>{ const nw=e.target.naturalWidth||e.target.offsetWidth||0, nh=e.target.naturalHeight||e.target.offsetHeight||0; setDim(nw>0&&nh>0?{ w:nw, h:nh }:null); setFullLoaded(true); }}   /* เก็บ dim ไว้แสดง % · ขอบเขตลากใช้ offsetWidth จริงจาก imgRef */
         onError={onFullError}
         onWheel={onWheel} onMouseDown={onMouseDown} onClick={stop} onDoubleClick={onDblClick} onContextMenu={e=>e.preventDefault()}
         onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}

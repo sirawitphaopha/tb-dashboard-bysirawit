@@ -31,7 +31,7 @@ const MAGIC_IMAGE = {
   phash: '28938a9297b0705a',
 };
 
-function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onConsumeWant, onGoTrash }) {
+function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onConsumeWant, onGoTrash, onOpenPatient }) {
   const _lc0 = loadCache('tb_libimg');
   const _seed0 = _lc0 ? _lc0.data : (getStoredImgs().length ? getStoredImgs() : null);   // v0.7.20.1 — seed จาก shared store (โหลดในหน้าอื่นแล้ว) กันขึ้น skeleton
   const [images, setImages] = React.useState(_seed0);
@@ -45,6 +45,7 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
   const [uploaderFilter, setUploaderFilter] = React.useState('all');
   const [q, setQ]           = React.useState('');
   const [lightbox, setLightbox] = React.useState(null);
+  const [pendingOpenId, setPendingOpenId] = React.useState(null);   // v0.7.22 — รูปที่จะเปิดหลังกระโดดจากหน้าประวัติมาคลังรูป
   const [detailImg, setDetailImg] = React.useState(null);   // รูปที่กดดูข้อมูล (popup ทับ · จากปุ่มในการ์ด/ตัวดูรูป)
   const [reqTarget, setReqTarget] = React.useState(null);        // v0.7.20 — รูปที่กำลัง "ขอลบ"
   const [reviewTarget, setReviewTarget] = React.useState(null);  // v0.7.20 — {im, action} แอดมินอนุมัติ/ปฏิเสธ
@@ -164,6 +165,21 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
     const idx = displayList.findIndex(x => x.id === im.id);
     if (idx >= 0) setLightbox({ idx, rect });
   };
+  // v0.7.22 — กระโดดจากหน้าประวัติ มาเปิดรูปนี้ในคลังรูป (เคลียร์ตัวกรองที่อาจซ่อนรูป → สลับมุมมอง → เปิดตัวดูรูป)
+  const openImageInGallery = React.useCallback((imageId) => {
+    if (!(images || []).some(x => x.id === imageId)) return;   // รูปถูกลบ/ไม่มีในคลัง — ไม่ทำอะไร
+    setPendingMode(false); setDupMode(false); setMagicMode(false); setTypeSet(new Set());
+    setUploaderFilter('all'); setDateFrom(''); setDateTo(''); setQ('');
+    setLibView('gallery');
+    setPendingOpenId(imageId);
+  }, [images]);
+  // เมื่อสลับมาคลังรูปแล้วและมีรูปรอเปิด → หา index ใน displayList แล้วเปิดตัวดูรูป
+  React.useEffect(() => {
+    if (!pendingOpenId || libView !== 'gallery') return;
+    const idx = displayList.findIndex(x => x.id === pendingOpenId);
+    if (idx >= 0) setLightbox({ idx });
+    setPendingOpenId(null);
+  }, [pendingOpenId, libView, displayList]);
   const openEdit = (im) => { setEditTarget(im); setEditType(im.type); setEditNote(im.note || ''); setErr(''); };
   const doEdit = async () => {
     if (!editTarget) return;
@@ -297,7 +313,7 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
   ) : null;
 
   if (isAdmin && libView === 'log') {
-    return (<ImageLogPage headerExtra={viewToggle}/>);   // ส่ง viewToggle เข้าไปใน sticky header ของหน้าประวัติ (ตรึงรวมกัน)
+    return (<ImageLogPage headerExtra={viewToggle} onOpenInGallery={openImageInGallery} onOpenPatient={onOpenPatient}/>);   // ส่ง viewToggle + ปุ่มกระโดดไปคลังรูป/เวชระเบียน เข้าไปในหน้าประวัติ
   }
 
   return (
@@ -456,6 +472,7 @@ function ImageLibraryPage({ currentUser, pendingImageRequests, wantPending, onCo
         const acts = [];
         if (cur.isMagic) acts.push({ icon:'fa-download', label:'ดาวน์โหลด SVG', onClick:()=>{ try { const a=document.createElement('a'); a.href=cur.url; a.download='magic-number.svg'; document.body.appendChild(a); a.click(); a.remove(); } catch {} } });
         if (!cur.isMagic) {   // 🥚 รูปปลอมเลขวิเศษ = ดูได้อย่างเดียว ลบ/แก้ไม่ได้ (แต่โหลด SVG ได้)
+        if (onOpenPatient && cur.patient_id) acts.push({ icon:'fa-user-doctor', label:'ดูในเวชระเบียน', onClick:()=>onOpenPatient(cur.patient_id) });
         if (canEdit && !pending) acts.push({ icon:'fa-pen', label:'แก้หมวด / คำอธิบาย', onClick:()=>{ openEdit(cur); } });
         if (isAdmin) {
           if (pending) {

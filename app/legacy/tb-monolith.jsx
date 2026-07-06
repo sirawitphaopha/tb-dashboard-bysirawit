@@ -980,7 +980,7 @@ function App() {
           {!dbLoading && nav==='weekly-prep'   && <WeeklyPrep patients={patients.filter(p=>!p.archived)} onOpen={setClinical}/>}
           {!dbLoading && nav==='reports'       && <Reports patients={patients}/>}
           {!dbLoading && nav==='knowledge'     && <KnowledgeBase/>}
-          {!dbLoading && nav==='image-library' && <ImageLibraryPage currentUser={currentUser} pendingImageRequests={pendingImageRequests} wantPending={imgWantPending} onConsumeWant={()=>setImgWantPending(false)} onGoTrash={()=>{ setTrashWantImages(true); setNav('trash'); }}/>}
+          {!dbLoading && nav==='image-library' && <ImageLibraryPage currentUser={currentUser} pendingImageRequests={pendingImageRequests} wantPending={imgWantPending} onConsumeWant={()=>setImgWantPending(false)} onGoTrash={()=>{ setTrashWantImages(true); setNav('trash'); }} onOpenPatient={(pid)=>{ const p = patients.find(x=>x.id===pid); if(p) setClinical(p); }}/>}
           {!dbLoading && nav==='settings'      && <AdminSettings settings={settings} setSettings={setSettings} setNav={setNav} currentUser={currentUser}/>}
           {!dbLoading && nav==='admin-users'   && <AdminUsersTab currentUser={currentUser} onPendingChange={setPendingUserCount} highlightUserId={highlightUserId} onClearHighlight={()=>setHighlightUserId(null)}/>}
           {!dbLoading && nav==='trash'         && <TrashHub currentUser={currentUser} trashCounts={trashCounts} wantImages={trashWantImages} onConsumeWantImages={()=>setTrashWantImages(false)} onRestore={restorePatient} onHardDelete={hardDeletePatient} pendingDeleteRequests={pendingDeleteRequests} onApproveDelete={approveDeleteRequest} onRejectDelete={rejectDeleteRequest} onAcknowledgeCancelled={async () => { await window.acknowledgeCancelledRequests(); setCancelledDeleteCount(0); }}/>}
@@ -1077,8 +1077,8 @@ const DEMO_USER = {
 
 // ───── About / เกี่ยวกับระบบ Modal ─────
 // ⚠️ BUILD_DATE ต้องอัปเดตทุกครั้งที่ push version ใหม่ (คู่กับเลข version)
-const APP_VERSION = '0.7.21.3';
-const BUILD_DATE = '5 ก.ค. 2569';
+const APP_VERSION = '0.7.22.0';
+const BUILD_DATE = '6 ก.ค. 2569';
 // bridge: ให้ parts/* (เช่น changelog.jsx, about.jsx) อ่านเวอร์ชันผ่าน window.* ได้ (เฟส 2 + แยกรอบ 2)
 if (typeof window !== 'undefined') { window.APP_VERSION = APP_VERSION; window.BUILD_DATE = BUILD_DATE; }
 // AboutModal ย้ายไป parts/about.jsx (แยกรอบ 2)
