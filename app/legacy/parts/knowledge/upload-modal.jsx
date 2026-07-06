@@ -5,7 +5,7 @@
 import * as React from 'react'
 import { createPortal } from 'react-dom'
 const { useState, useRef } = React
-import { KNOWLEDGE_CATEGORIES, putWithProgress, fmtFileSize, renderPdfCover } from './helpers'
+import { KNOWLEDGE_CATEGORIES, putWithProgress, fmtFileSize, renderPdfCover, detectDevice } from './helpers'
 
 export function KnowledgeUploadModal({ onClose, onUploaded }) {
   const [file, setFile] = useState(null)
@@ -48,7 +48,7 @@ export function KnowledgeUploadModal({ onClose, onUploaded }) {
       setPhase('save')
       const conf = await fetch('/api/knowledge/confirm', { method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ category, title: title.trim() || null, fileName: file.name, sourceUrl: sourceUrl.trim() || null,
-          key: pd.key, thumbKey, mime: 'application/pdf', size: file.size, pageCount: meta.pageCount }) })
+          key: pd.key, thumbKey, mime: 'application/pdf', size: file.size, pageCount: meta.pageCount, device: detectDevice() }) })
       const cd = await conf.json()
       if (!conf.ok) throw new Error(cd.error || 'บันทึกไม่สำเร็จ')
       if (meta.previewUrl) { try { URL.revokeObjectURL(meta.previewUrl) } catch {} }

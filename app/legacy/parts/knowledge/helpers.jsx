@@ -7,7 +7,7 @@
  *   - getPdfjs / renderPdfCover : โหลด pdf.js แบบ lazy + สร้างรูปหน้าปก (หน้าแรก) + นับจำนวนหน้า
  */
 import * as React from 'react'
-export { putWithProgress, fmtFileSize } from '../patient-images/helpers'
+export { putWithProgress, fmtFileSize, detectDevice } from '../patient-images/helpers'
 export { loadCache, saveCache } from '../shared'
 
 // หมวดเอกสาร — id ตรงกับ check constraint ใน tb_knowledge_docs

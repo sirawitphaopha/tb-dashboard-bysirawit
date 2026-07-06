@@ -6,7 +6,7 @@
 import * as React from 'react'
 import { createPortal } from 'react-dom'
 const { useState, useEffect, useCallback, useMemo } = React
-import { KNOWLEDGE_CATEGORIES, catOf, fmtFileSize, loadCache, saveCache, KNOW_CACHE, invalidateKnowCache } from './helpers'
+import { KNOWLEDGE_CATEGORIES, catOf, fmtFileSize, loadCache, saveCache, KNOW_CACHE, invalidateKnowCache, getPdfjs } from './helpers'
 import { KnowledgeUploadModal } from './upload-modal'
 import { PdfViewer } from './pdf-viewer'
 
@@ -58,6 +58,7 @@ export function KnowledgeLibraryPage({ currentUser, onBack }) {
 
   useEffect(() => { if (!flash) return; const t = setTimeout(() => setFlash(''), 4000); return () => clearTimeout(t) }, [flash])
   const setSize = (i) => { setSizeIdx(i); try { localStorage.setItem('tb_libknow_size', String(i)) } catch {} }
+  useEffect(() => { getPdfjs().catch(() => {}) }, [])   // preload pdf.js ล่วงหน้า → กดการ์ดเปิดทันที
 
   const counts = useMemo(() => {
     const m = { all: docs.length, guideline: 0, trial: 0, other: 0 }
@@ -73,15 +74,7 @@ export function KnowledgeLibraryPage({ currentUser, onBack }) {
     )
   }, [docs, typeFilter, q])
 
-  const openDoc = async (doc) => {
-    setOpening(doc.id)
-    try {
-      const r = await fetch(`/api/knowledge/${doc.id}/url`)
-      const d = await r.json()
-      if (r.ok && d.url) setViewer({ doc, url: d.url, fileName: d.fileName })   // เปิดตัวอ่าน PDF ในเว็บ
-    } catch {}
-    setOpening(null)
-  }
+  const openDoc = (doc) => setViewer(doc)   // เปิดทันที ใช้ doc.url ที่มีอยู่ (viewer ขอ url ใหม่เองถ้าหมดอายุ)
 
   const askDelete = (doc) => { setDelTarget(doc); setDelStep(1) }
   const doDelete = () => {
@@ -216,7 +209,7 @@ export function KnowledgeLibraryPage({ currentUser, onBack }) {
       )}
 
       {/* ── ตัวอ่าน PDF ในเว็บ (3b) ── */}
-      {viewer && <PdfViewer url={viewer.url} title={viewer.doc.title || viewer.doc.file_name} fileName={viewer.fileName || viewer.doc.file_name} onClose={() => setViewer(null)} />}
+      {viewer && <PdfViewer url={viewer.url} docId={viewer.id} doc={viewer} onClose={() => setViewer(null)} />}
 
       {/* ── upload modal (admin) ── */}
       {showUpload && isAdmin && (

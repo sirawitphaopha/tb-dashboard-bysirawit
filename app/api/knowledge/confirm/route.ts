@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
     if (!isApproved) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
     if (!isAdmin) return NextResponse.json({ error: 'forbidden' }, { status: 403 })   // เขียน = แอดมินเท่านั้น
     const b = await req.json().catch(() => ({} as any))
-    const { category, title, fileName, sourceUrl, key, thumbKey, mime, size, pageCount } = b
+    const { category, title, fileName, sourceUrl, key, thumbKey, mime, size, pageCount, device } = b
     if (!key) return NextResponse.json({ error: 'key required' }, { status: 400 })
     const { data, error } = await admin
       .from('tb_knowledge_docs')
@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
         mime: mime || 'application/pdf',
         size_bytes: size || null,
         page_count: pageCount || null,
+        device: device || null,
         uploaded_by: user.id,
       })
       .select()
