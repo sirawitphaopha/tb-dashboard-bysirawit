@@ -39,6 +39,25 @@ window.TB_CHANGELOG = [
         ],
         body: "เป้าหมาย\n- จดผลการระดมไอเดียกับพี่กัน (6 ก.ค. 69) เรื่องระบบ 0.8 (ระบบผู้ป่วย)\n  ที่จะมาแทน Google Sheet ที่ใช้เตรียมเคสก่อนวัน TB Clinic\n- ไม่มีการแตะโค้ด/ฟีเจอร์ใด ๆ เป็นเอกสารวางแผนล้วน\n\nที่ทำ\n- เพิ่มไฟล์ใหม่ docs/idea-0.8.md (เอกสารเต็ม ละเอียด ไม่บีบ) 12 หัวข้อ:\n  1. บริบท workflow จริง (เตรียมเคส -> คัด consult -> ปริ้นกระดาษยื่นหมอ)\n  2. ปลายทาง = ใบ TB Clinic + ถอดศัพท์ยา (H/R/Z/E/Lfx/B6) + ค่าแลป + สูตร\n  3. หน้าที่แอป 3 อย่าง (กรอก/เตือน/ปริ้น) หัวใจ = ระบบเตือนให้มองหาง่าย\n  4. จุดเสียเวลา = สรุปเคส (Detail) + พิมพ์ค่าแลปมือ\n  5. ระบบเตือน + AI 4 ชั้น (เตือน->ส่องจุดบอด->ร่าง consult ตามรสมือ->พี่กันเกลาจบ)\n  6. OCR ค่าแลปจากปริ้นสกรีน + auto คำนวณ CrCl (Cockcroft-Gault)\n  7. Auto-timeline (กรอกครั้งเดียว = สรุปในตัว + กราฟ trend ค่าแลป)\n  8. ระบบติ๊กทำแล้ว (แทนขีดฆ่ากระดาษ)\n  9. เชื่อม Himpro (VB6+MySQL, ไม่มี API, LAN/WiFi รพ., ต้องมีตัวแปล+IT) = ฝันไกล\n  10. ปรัชญาหลัก (จบที่พี่กันเสมอ / ตามรสมือ / แอปไม่ยุ่งเนื้อหา / ระบบกระดาษ)\n  11. คำถามค้าง (ช่องกรอกสูตรยา อิสระ vs แยกช่อง / ลิสต์แลป OCR / AI provider / PDPA)\n  12. ไฟล์อ้างอิง (PDF ใบจริง + สกรีนช็อต Sheet)\n- แก้ docs/ideas.md: เอา section 6 เวอร์ชันบีบออก ใส่ pointer + สรุปสั้น\n  ชี้ไป docs/idea-0.8.md แทน (กันเนื้อหาซ้ำซ้อน 2 ที่)\n\nหมายเหตุ\n- ข้อมูล Himpro ค้นจากเว็บ himpro.info (VB6 ปี 2542 + MySQL backend)\n- ไฟล์ตัวอย่าง (PDF ใบ TB Clinic + สกรีนช็อต) อยู่นอก repo ไม่ได้ commit\n\nต่อไป\n- รอพี่กันสั่งเริ่มทำจริงทีละส่วน (ค่อย ๆ ทำ เดี๋ยวไอเดียมาเอง)",
       },
+      {
+        version: "0.8.0.0",
+        date: "6 ก.ค. 2569",
+        commit: "ea78046",
+        commitFull: "ea780466651f109defb536af4c71a53fbf003d23",
+        title: "คลังความรู้วัณโรค (ระบบ PDF) — ฐานราก Step 1 (ตาราง DB + ติดตั้ง pdf.js)",
+        changes: [
+          { tag: "feature", text: "ไม่มี soft-delete: ลบจริง (hard) เพราะไม่ใช่ข้อมูลผู้ป่วย · index (category, uploaded_at desc)" },
+          { tag: "security", text: "RLS: is_approved() อ่านได้ทุกคน / is_admin() insert-update-delete (SECURITY DEFINER helper เดิม กัน recursion 42P17)" },
+          { tag: "security", text: "รันจริงใน Supabase ผ่าน MCP แล้ว (verify: 12 คอลัมน์ · RLS on · 4 policies)" },
+          { tag: "backend", text: "package.json: + dependency pdfjs-dist 6.1.200 (pin เป๊ะ ไม่ใส่ ^ กัน worker/API version หลุดกันจนตัวอ่าน PDF จอเปล่า)" },
+          { tag: "ui", text: "+ scripts copy-pdf-worker / postinstall / prebuild" },
+          { tag: "feature", text: ".gitignore: + public/pdf.worker.min.mjs (auto-gen จาก node_modules ไม่ต้อง commit)" },
+          { tag: "ui", text: "app/legacy/tb-monolith.jsx: APP_VERSION 0.7.22.0 -> 0.8.0.0 (BUILD_DATE คงเดิม '6 ก.ค. 2569' = วัน push)" },
+          { tag: "feature", text: "app/login/page.tsx: Version 0.7.22.0 -> 0.8.0.0" },
+          { tag: "ui", text: "0.8.0.2 = หน้าเว็บ (parts/knowledge/* library-page/upload-modal/pdf-viewer + barrel + แก้ tb-monolith) ก่อน deploy: สร้าง R2 bucket + ใส่ env R2_BUCKET_LIBRARY (.env.local + Cloudflare Pages Runtime)" },
+        ],
+        body: "เป้าหมาย:\nเริ่มฟีเจอร์ใหม่ = คลังความรู้วัณโรค · แอดมิน (พี่กัน) อัปโหลดไฟล์ PDF (ไกด์ไลน์/งานวิจัย)\nเก็บบน Cloudflare R2 แล้วผู้ใช้ที่ล็อกอินทุกคนกดอ่านในเว็บได้ด้วยตัวอ่าน pdf.js เต็มรูปแบบ\n(ต่อยอดแท็บ placeholder KnowledgeBase เดิม · ตามแผนที่ approve · ทำทีละ step แยก commit กันเขียนโค้ดขาด)\nStep 1 = ฐานราก (DB schema + dependency) เท่านั้น · ยังไม่มี API/UI (มาใน 0.8.0.1 / 0.8.0.2)\n\nที่ทำ (file-by-file):\n- scripts/add-knowledge-library.sql (ใหม่): สร้างตาราง tb_knowledge_docs เก็บ metadata ของไฟล์ PDF\n  (category guideline/trial/other, title, file_name, source_url, storage_key = library/<uuid>.pdf,\n  thumb_key รูปหน้าปก, mime, size_bytes, page_count, uploaded_by, uploaded_at)\n  · ไม่มี soft-delete: ลบจริง (hard) เพราะไม่ใช่ข้อมูลผู้ป่วย · index (category, uploaded_at desc)\n  · RLS: is_approved() อ่านได้ทุกคน / is_admin() insert-update-delete (SECURITY DEFINER helper เดิม กัน recursion 42P17)\n  · รันจริงใน Supabase ผ่าน MCP แล้ว (verify: 12 คอลัมน์ · RLS on · 4 policies)\n- package.json: + dependency pdfjs-dist 6.1.200 (pin เป๊ะ ไม่ใส่ ^ กัน worker/API version หลุดกันจนตัวอ่าน PDF จอเปล่า)\n  · + scripts copy-pdf-worker / postinstall / prebuild\n- scripts/copy-pdf-worker.mjs (ใหม่): คัดลอก pdf.worker.min.mjs จาก node_modules/pdfjs-dist เข้า public/\n  ให้ worker ตรงเวอร์ชัน API เสมอ (โหลด same-origin ผ่าน CSP worker-src 'self')\n  รันอัตโนมัติตอน npm install (postinstall) + build (prebuild) ทั้งเครื่อง dev และ Cloudflare\n- .gitignore: + public/pdf.worker.min.mjs (auto-gen จาก node_modules ไม่ต้อง commit)\n- app/legacy/tb-monolith.jsx: APP_VERSION 0.7.22.0 -> 0.8.0.0 (BUILD_DATE คงเดิม '6 ก.ค. 2569' = วัน push)\n- app/login/page.tsx: Version 0.7.22.0 -> 0.8.0.0\n\nCSP: ไม่แตะ next.config.js — worker-src 'self' blob: / connect-src *.r2.cloudflarestorage.com /\n  wasm-unsafe-eval มีครบแล้ว (ตรวจแล้ว) · viewer จะเรียก getDocument({isEvalSupported:false}) (มาใน step ถัดไป)\n\nversion: 0.8.0.0 (Step 1/3 · ฐานราก)\nต่อไป: 0.8.0.1 = API (app/api/knowledge/* presign/confirm/list/[id]/url/[id] DELETE + lib/knowledge-helpers.ts)\n  · 0.8.0.2 = หน้าเว็บ (parts/knowledge/* library-page/upload-modal/pdf-viewer + barrel + แก้ tb-monolith)\nก่อน deploy: สร้าง R2 bucket + ใส่ env R2_BUCKET_LIBRARY (.env.local + Cloudflare Pages Runtime)",
+      },
     ],
   },
   {
@@ -278,7 +297,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.19.7",
-        date: "4 ก.ค. 2569",
+        date: "3 ก.ค. 2569",
         commit: "be14abc",
         commitFull: "be14abcd43bd1e4deb279b40dc01d5bc05173d36",
         title: "ยกเครื่อง scrollbar ทั้งเว็บเป็น custom overlay (ลอยทับ/ละมุน/ลากได้) + จัด sidebar ยุบ (hover สมมาตร/ปุ่มโปร่งใส) + แถบเลื่อนติดขอบจอทุกหน้า",
@@ -748,7 +767,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.19.5",
-        date: "3 ก.ค. 2569",
+        date: "2 ก.ค. 2569",
         commit: "01ee271",
         commitFull: "01ee27196e81d06492740a799c032e3850274c45",
         title: "ระบบวัดพื้นที่จัดเก็บ (Storage usage) สำหรับแอดมิน + จัด sidebar ยุบให้ icon อยู่กลาง",
@@ -1084,7 +1103,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.16.1",
-        date: "1 มิ.ย. 2569",
+        date: "31 พ.ค. 2569",
         commit: "9ae1eab",
         commitFull: "9ae1eab266bf0326bcd9887f2c4a3f360846bb83",
         title: "Phase 3 Step 2 — Teal Skeleton Loading (ลด perceived blank time เหลือ 0)",
@@ -1108,7 +1127,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.16.0",
-        date: "1 มิ.ย. 2569",
+        date: "31 พ.ค. 2569",
         commit: "b958385",
         commitFull: "b958385e4d7ebf190f0a11ac7d3007de8c653cb9",
         title: "Phase 3 Step 1 — Pre-compile JSX (ลบ Babel 2.1 MB จาก prod) ลด first load ~30%",
@@ -1132,7 +1151,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.15.5",
-        date: "1 มิ.ย. 2569",
+        date: "31 พ.ค. 2569",
         commit: "4da584c",
         commitFull: "4da584c1bcec7a3c040f5f50e94e40bc5402f670",
         title: "Phase 2 Step 4 — Style refactor Comment card (inline → CSS class · ลด React allocation 50%)",
@@ -1156,7 +1175,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.15.4",
-        date: "1 มิ.ย. 2569",
+        date: "31 พ.ค. 2569",
         commit: "297dad2",
         commitFull: "297dad2138a8d3b53288a817e5a3c61609a79960",
         title: "Phase 2 Step 3 — Keep mounted CommentSection (เปิดปิดคอมเม้น instant ครั้งถัดไป)",
@@ -1180,7 +1199,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.15.3",
-        date: "1 มิ.ย. 2569",
+        date: "31 พ.ค. 2569",
         commit: "468134b",
         commitFull: "468134b933c7697c27159a745b54903a640d0424",
         title: "Phase 2 Step 2 — RLS strict tb_changelog_comments + pg_cron auto-refresh MV ทุก 5 นาที",
@@ -1204,7 +1223,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.15.2",
-        date: "1 มิ.ย. 2569",
+        date: "31 พ.ค. 2569",
         commit: "c19894d",
         commitFull: "c19894da6f5e468928a297147f33d318cdb610d2",
         title: "Phase 2 Step 1 — Materialized View บันทึกกิจกรรม + KPI border 4 อัน + Virtual scroll content-visibility",
@@ -1396,7 +1415,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.14.4",
-        date: "31 พ.ค. 2569",
+        date: "30 พ.ค. 2569",
         commit: "73757b9",
         commitFull: "73757b97a72e259f29695370a1257fa617b08137",
         title: "Brand visual refresh — icon ปอด 3 สี + Font Manrope + Plus Jakarta Sans + Sidebar ขยาย",
@@ -1420,7 +1439,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.14.3",
-        date: "31 พ.ค. 2569",
+        date: "30 พ.ค. 2569",
         commit: "4c8dbc7",
         commitFull: "4c8dbc72395ce185faa012aced099c5acd276a1a",
         title: "Patch รวม UX/bug fixes — icon ปอด-ไวรัส, เคอร์เซอร์, search popup, bulk fetch comments, click-outside",
@@ -1444,7 +1463,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.14.2",
-        date: "31 พ.ค. 2569",
+        date: "30 พ.ค. 2569",
         commit: "b9e10ae",
         commitFull: "b9e10ae10f78ab9ecbada5524be416d4881e9686",
         title: "Changelog: ระบบ Comment ต่อ version (DB + API + Email) + ป้าย \"New\" บน sidebar + Housekeeping + UX polish รอบใหญ่",
@@ -2576,7 +2595,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.4",
-        date: "17 พ.ค. 2569",
+        date: "16 พ.ค. 2569",
         commit: "64637d6",
         commitFull: "64637d6b3e91b4fb32f0354ddc163fc44e511961",
         title: "ระบบถังขยะ + Admin notifications + แก้ 3 บั๊ก infrastructure",
@@ -2624,7 +2643,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.2.4",
-        date: "16 พ.ค. 2569",
+        date: "15 พ.ค. 2569",
         commit: "bfe274a",
         commitFull: "bfe274a2117c6a6a801ad9ff7a04b52bcc084812",
         title: "rename index.html to app.html กัน Cloudflare เสิร์ฟ static ข้าม Next.js auth",
@@ -2643,7 +2662,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.2.3",
-        date: "16 พ.ค. 2569",
+        date: "15 พ.ค. 2569",
         commit: "f67023e",
         commitFull: "f67023e44d833324c2e6f191cf154e878df1a241",
         title: "server-side auth check ใน root page กัน bypass login บน Cloudflare",
@@ -2667,7 +2686,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.2.2",
-        date: "16 พ.ค. 2569",
+        date: "15 พ.ค. 2569",
         commit: "a2de01d",
         commitFull: "a2de01d19e2720e41f77c17dc6b06dcf4d758b1b",
         title: "force-dynamic บน auth pages กัน prerender crash บน Cloudflare",
@@ -2689,7 +2708,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.2.1",
-        date: "16 พ.ค. 2569",
+        date: "15 พ.ค. 2569",
         commit: "e436055",
         commitFull: "e43605560882f76209988b0afd1c6a8656ce9006",
         title: "bump version to v0.7.2.1 (hotfix release tag)",
@@ -2700,7 +2719,7 @@ window.TB_CHANGELOG = [
       },
       {
         version: "0.7.2",
-        date: "16 พ.ค. 2569",
+        date: "15 พ.ค. 2569",
         commit: "092d2b5",
         commitFull: "092d2b5f6ecf618831f4c27c8ffab62e2733bcf3",
         title: "Phase 1 Backend Complete (Supabase Auth จริง + Resend Email + Admin Approval + Profile Real Data)",
@@ -2777,12 +2796,12 @@ window.TB_CHANGELOG = [
     era: "First Real Build",
     icon: "🚀",
     color: "#0891b2",
-    period: "11 พ.ค. – 15 พ.ค. 2569",
+    period: "11 พ.ค. – 14 พ.ค. 2569",
     description: "Full App Build ครั้งแรก — Dashboard, Patient List, Modal ทุกอย่างเปิดตัวพร้อมกัน",
     versions: [
       {
         version: "0.6.21",
-        date: "15 พ.ค. 2569",
+        date: "14 พ.ค. 2569",
         commit: "33d4281",
         commitFull: "33d4281996112d2f254f51b727f1a772fa75f63c",
         title: "UI overhaul: login, charts, table, sidebar, search",
